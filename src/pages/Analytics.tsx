@@ -28,7 +28,7 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
 export default function Analytics() {
   const { profile } = useAuth();
-  const canAccessAdmin = profile?.role === 'admin' || profile?.role === 'owner';
+  const canAccessAdmin = profile?.role === 'owner';
 
   const { data: analytics, isLoading } = useQuery({
     queryKey: ['admin-analytics'],

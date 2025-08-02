@@ -36,7 +36,7 @@ export default function UserManagement() {
   const [creditAmount, setCreditAmount] = useState("");
 
   // Check if user can access admin
-  const canAccessAdmin = profile?.role === 'admin' || profile?.role === 'owner';
+  const canAccessAdmin = profile?.role === 'owner';
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users'],
@@ -53,7 +53,7 @@ export default function UserManagement() {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: async ({ userId, updates }: { userId: string; updates: Partial<UserProfile> }) => {
+    mutationFn: async ({ userId, updates }: { userId: string; updates: any }) => {
       const { error } = await supabase
         .from('profiles')
         .update(updates)
@@ -275,7 +275,7 @@ export default function UserManagement() {
                             <SelectItem value="sales_rep">Sales Rep</SelectItem>
                             <SelectItem value="manager">Manager</SelectItem>
                             <SelectItem value="owner">Owner</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
+                            
                           </SelectContent>
                         </Select>
                       </TableCell>
