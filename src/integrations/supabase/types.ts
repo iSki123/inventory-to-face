@@ -59,6 +59,111 @@ export type Database = {
         }
         Relationships: []
       }
+      vehicles: {
+        Row: {
+          condition: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          description: string | null
+          drivetrain: string | null
+          engine: string | null
+          exterior_color: string | null
+          facebook_post_id: string | null
+          facebook_post_status: string | null
+          features: string[] | null
+          fuel_type: string | null
+          id: string
+          images: string[] | null
+          interior_color: string | null
+          is_featured: boolean | null
+          last_posted_at: string | null
+          lead_count: number | null
+          location: string | null
+          make: string
+          mileage: number | null
+          model: string
+          original_price: number | null
+          price: number
+          status: string | null
+          transmission: string | null
+          trim: string | null
+          updated_at: string
+          user_id: string
+          view_count: number | null
+          vin: string | null
+          year: number
+        }
+        Insert: {
+          condition?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          description?: string | null
+          drivetrain?: string | null
+          engine?: string | null
+          exterior_color?: string | null
+          facebook_post_id?: string | null
+          facebook_post_status?: string | null
+          features?: string[] | null
+          fuel_type?: string | null
+          id?: string
+          images?: string[] | null
+          interior_color?: string | null
+          is_featured?: boolean | null
+          last_posted_at?: string | null
+          lead_count?: number | null
+          location?: string | null
+          make: string
+          mileage?: number | null
+          model: string
+          original_price?: number | null
+          price: number
+          status?: string | null
+          transmission?: string | null
+          trim?: string | null
+          updated_at?: string
+          user_id: string
+          view_count?: number | null
+          vin?: string | null
+          year: number
+        }
+        Update: {
+          condition?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          description?: string | null
+          drivetrain?: string | null
+          engine?: string | null
+          exterior_color?: string | null
+          facebook_post_id?: string | null
+          facebook_post_status?: string | null
+          features?: string[] | null
+          fuel_type?: string | null
+          id?: string
+          images?: string[] | null
+          interior_color?: string | null
+          is_featured?: boolean | null
+          last_posted_at?: string | null
+          lead_count?: number | null
+          location?: string | null
+          make?: string
+          mileage?: number | null
+          model?: string
+          original_price?: number | null
+          price?: number
+          status?: string | null
+          transmission?: string | null
+          trim?: string | null
+          updated_at?: string
+          user_id?: string
+          view_count?: number | null
+          vin?: string | null
+          year?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
