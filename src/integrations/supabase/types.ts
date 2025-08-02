@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      facebook_posting_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          facebook_post_id: string | null
+          id: string
+          max_retries: number
+          retry_count: number
+          scheduled_at: string
+          started_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          facebook_post_id?: string | null
+          id?: string
+          max_retries?: number
+          retry_count?: number
+          scheduled_at?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          vehicle_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          facebook_post_id?: string | null
+          id?: string
+          max_retries?: number
+          retry_count?: number
+          scheduled_at?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facebook_posting_jobs_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_messages: {
         Row: {
           ai_model: string | null
@@ -204,6 +260,45 @@ export type Database = {
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      vehicle_sources: {
+        Row: {
+          created_at: string
+          dealership_name: string
+          id: string
+          last_scraped_at: string | null
+          octoparse_task_id: string | null
+          scraping_enabled: boolean
+          scraping_frequency: number
+          updated_at: string
+          user_id: string
+          website_url: string
+        }
+        Insert: {
+          created_at?: string
+          dealership_name: string
+          id?: string
+          last_scraped_at?: string | null
+          octoparse_task_id?: string | null
+          scraping_enabled?: boolean
+          scraping_frequency?: number
+          updated_at?: string
+          user_id: string
+          website_url: string
+        }
+        Update: {
+          created_at?: string
+          dealership_name?: string
+          id?: string
+          last_scraped_at?: string | null
+          octoparse_task_id?: string | null
+          scraping_enabled?: boolean
+          scraping_frequency?: number
+          updated_at?: string
+          user_id?: string
+          website_url?: string
         }
         Relationships: []
       }

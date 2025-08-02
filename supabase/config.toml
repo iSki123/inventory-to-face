@@ -1,1 +1,17 @@
 project_id = "urdkaedsfnscgtyvcwlf"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[functions.generate-lead-response]
+verify_jwt = false
+
+[functions.octoparse-scraper]
+verify_jwt = false
+
+[functions.facebook-poster]
+verify_jwt = false
