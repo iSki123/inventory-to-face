@@ -6,9 +6,41 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import Dashboard from "./pages/Dashboard";
+import Inventory from "./pages/Inventory";
+import Leads from "./pages/Leads";
+import Billing from "./pages/Billing";
 import NotFound from "./pages/NotFound";
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { useAuth } from "@/hooks/useAuth";
 
 const queryClient = new QueryClient();
+
+function AppRoutes() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
+
+  return (
+    <Routes>
+      <Route path="/auth" element={<Auth />} />
+      {user ? (
+        <>
+          <Route path="/" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
+          <Route path="/dashboard" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
+          <Route path="/inventory" element={<DashboardLayout><Inventory /></DashboardLayout>} />
+          <Route path="/leads" element={<DashboardLayout><Leads /></DashboardLayout>} />
+          <Route path="/billing" element={<DashboardLayout><Billing /></DashboardLayout>} />
+        </>
+      ) : (
+        <Route path="/" element={<Index />} />
+      )}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -17,12 +49,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<Auth />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <AppRoutes />
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
