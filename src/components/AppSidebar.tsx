@@ -30,8 +30,8 @@ const mainItems = [
 ];
 
 const adminItems = [
-  { title: "User Management", url: "/admin/users", icon: Users },
-  { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
+  { title: "User Management", url: "/users", icon: Users },
+  { title: "Analytics", url: "/analytics", icon: BarChart3 },
 ];
 
 const secondaryItems = [

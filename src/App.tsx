@@ -10,6 +10,8 @@ import Dashboard from "./pages/Dashboard";
 import Inventory from "./pages/Inventory";
 import Leads from "./pages/Leads";
 import Billing from "./pages/Billing";
+import UserManagement from "./pages/UserManagement";
+import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
@@ -33,6 +35,8 @@ function AppRoutes() {
           <Route path="/inventory" element={<DashboardLayout><Inventory /></DashboardLayout>} />
           <Route path="/leads" element={<DashboardLayout><Leads /></DashboardLayout>} />
           <Route path="/billing" element={<DashboardLayout><Billing /></DashboardLayout>} />
+          <Route path="/users" element={<DashboardLayout><UserManagement /></DashboardLayout>} />
+          <Route path="/analytics" element={<DashboardLayout><Analytics /></DashboardLayout>} />
         </>
       ) : (
         <Route path="/" element={<Index />} />
