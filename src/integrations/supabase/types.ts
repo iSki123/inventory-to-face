@@ -14,6 +14,154 @@ export type Database = {
   }
   public: {
     Tables: {
+      lead_messages: {
+        Row: {
+          ai_model: string | null
+          ai_prompt: string | null
+          attachments: string[] | null
+          created_at: string
+          generation_cost: number | null
+          id: string
+          is_ai_generated: boolean | null
+          is_read: boolean | null
+          is_sent: boolean | null
+          lead_id: string
+          message_content: string
+          message_type: string | null
+          sender_type: string
+          sent_at: string | null
+        }
+        Insert: {
+          ai_model?: string | null
+          ai_prompt?: string | null
+          attachments?: string[] | null
+          created_at?: string
+          generation_cost?: number | null
+          id?: string
+          is_ai_generated?: boolean | null
+          is_read?: boolean | null
+          is_sent?: boolean | null
+          lead_id: string
+          message_content: string
+          message_type?: string | null
+          sender_type: string
+          sent_at?: string | null
+        }
+        Update: {
+          ai_model?: string | null
+          ai_prompt?: string | null
+          attachments?: string[] | null
+          created_at?: string
+          generation_cost?: number | null
+          id?: string
+          is_ai_generated?: boolean | null
+          is_read?: boolean | null
+          is_sent?: boolean | null
+          lead_id?: string
+          message_content?: string
+          message_type?: string | null
+          sender_type?: string
+          sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_messages_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          assigned_to: string | null
+          created_at: string
+          customer_email: string | null
+          customer_name: string
+          customer_phone: string | null
+          estimated_value: number | null
+          expected_close_date: string | null
+          facebook_post_id: string | null
+          facebook_thread_id: string | null
+          id: string
+          initial_message: string
+          is_qualified: boolean | null
+          last_contact_at: string | null
+          lead_score: number | null
+          next_follow_up_at: string | null
+          notes: string | null
+          priority: string | null
+          response_count: number | null
+          source: string | null
+          status: string | null
+          tags: string[] | null
+          updated_at: string
+          user_id: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          created_at?: string
+          customer_email?: string | null
+          customer_name: string
+          customer_phone?: string | null
+          estimated_value?: number | null
+          expected_close_date?: string | null
+          facebook_post_id?: string | null
+          facebook_thread_id?: string | null
+          id?: string
+          initial_message: string
+          is_qualified?: boolean | null
+          last_contact_at?: string | null
+          lead_score?: number | null
+          next_follow_up_at?: string | null
+          notes?: string | null
+          priority?: string | null
+          response_count?: number | null
+          source?: string | null
+          status?: string | null
+          tags?: string[] | null
+          updated_at?: string
+          user_id: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string
+          customer_phone?: string | null
+          estimated_value?: number | null
+          expected_close_date?: string | null
+          facebook_post_id?: string | null
+          facebook_thread_id?: string | null
+          id?: string
+          initial_message?: string
+          is_qualified?: boolean | null
+          last_contact_at?: string | null
+          lead_score?: number | null
+          next_follow_up_at?: string | null
+          notes?: string | null
+          priority?: string | null
+          response_count?: number | null
+          source?: string | null
+          status?: string | null
+          tags?: string[] | null
+          updated_at?: string
+          user_id?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
