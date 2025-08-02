@@ -20,7 +20,7 @@ interface UserProfile {
   email: string;
   first_name: string;
   last_name: string;
-  role: string;
+  role: 'owner' | 'manager' | 'sales_rep' | 'admin';
   dealership_name: string;
   credits: number;
   is_active: boolean;
@@ -132,10 +132,10 @@ export default function UserManagement() {
     });
   };
 
-  const handleRoleChange = (user: UserProfile, newRole: string) => {
+  const handleRoleChange = (user: UserProfile, newRole: 'owner' | 'manager' | 'sales_rep' | 'admin') => {
     updateUserMutation.mutate({
       userId: user.user_id,
-      updates: { role: newRole as any }
+      updates: { role: newRole }
     });
   };
 
@@ -266,7 +266,7 @@ export default function UserManagement() {
                       <TableCell>
                         <Select
                           value={user.role}
-                          onValueChange={(value) => handleRoleChange(user, value)}
+                          onValueChange={(value) => handleRoleChange(user, value as 'owner' | 'manager' | 'sales_rep' | 'admin')}
                         >
                           <SelectTrigger className="w-32">
                             <SelectValue />

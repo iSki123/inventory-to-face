@@ -9,7 +9,7 @@ interface Profile {
   email: string;
   first_name: string | null;
   last_name: string | null;
-  role: 'owner' | 'manager' | 'sales_rep';
+  role: 'owner' | 'manager' | 'sales_rep' | 'admin';
   credits: number;
   dealership_name: string | null;
   phone: string | null;
