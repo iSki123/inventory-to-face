@@ -79,9 +79,9 @@ async function startScraping(supabaseClient: any, sourceId: string, userId: stri
     throw new Error('Vehicle source not found');
   }
 
-  const apiKey = Deno.env.get('OCTOPARSE_API_KEY');
-  if (!apiKey) {
-    throw new Error('Octoparse API key not configured');
+  const accessToken = Deno.env.get('OCTOPARSE_API_KEY');
+  if (!accessToken) {
+    throw new Error('Octoparse access token not configured');
   }
 
   try {
@@ -90,7 +90,7 @@ async function startScraping(supabaseClient: any, sourceId: string, userId: stri
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
         taskId: source.octoparse_task_id || 'default-task-id',
@@ -163,8 +163,8 @@ async function getScrapingStatus(supabaseClient: any, sourceId: string) {
     throw new Error('Source not found');
   }
 
-  const apiKey = Deno.env.get('OCTOPARSE_API_KEY');
-  if (!apiKey || !source.octoparse_task_id) {
+  const accessToken = Deno.env.get('OCTOPARSE_API_KEY');
+  if (!accessToken || !source.octoparse_task_id) {
     return new Response(
       JSON.stringify({ 
         success: true,
@@ -181,7 +181,7 @@ async function getScrapingStatus(supabaseClient: any, sourceId: string) {
     const response = await fetch(`https://api.octoparse.com/v1/tasks/${source.octoparse_task_id}/status`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${accessToken}`,
       },
     });
 
@@ -229,16 +229,16 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
     throw new Error('Vehicle source not found');
   }
 
-  const apiKey = Deno.env.get('OCTOPARSE_API_KEY');
+  const accessToken = Deno.env.get('OCTOPARSE_API_KEY');
   let vehicleData = [];
 
-  if (apiKey && source.octoparse_task_id) {
+  if (accessToken && source.octoparse_task_id) {
     try {
       // Fetch scraped data from Octoparse API
       const response = await fetch(`https://api.octoparse.com/v1/tasks/${source.octoparse_task_id}/data`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
@@ -289,7 +289,7 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
       insertedCount: insertedVehicles.length,
       vehicles: insertedVehicles,
       message: `Successfully imported ${insertedVehicles.length} vehicles`,
-      dataSource: apiKey && source.octoparse_task_id ? 'octoparse' : 'mock'
+      dataSource: accessToken && source.octoparse_task_id ? 'octoparse' : 'mock'
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
