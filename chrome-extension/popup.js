@@ -257,46 +257,30 @@ class SalesonatorExtension {
       // Send vehicle data to content script
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       
-      chrome.tabs.sendMessage(tab.id, {
-        action: 'postVehicle',
-        vehicle: vehicle
-      }, (response) => {
+      // First, try to ping the content script to see if it's loaded
+      chrome.tabs.sendMessage(tab.id, { action: 'ping' }, async (pingResponse) => {
         if (chrome.runtime.lastError) {
-          const errorMessage = chrome.runtime.lastError.message || JSON.stringify(chrome.runtime.lastError);
-          console.error('Error posting vehicle:', errorMessage);
-          statusEl.textContent = `Error: ${errorMessage}`;
-          this.stopPosting();
-          return;
-        }
-
-        console.log('Vehicle posting response:', response);
-
-        if (response && response.success) {
-          console.log(`Successfully posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}`);
-          statusEl.textContent = `Posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}`;
+          console.log('Content script not loaded, attempting to inject...');
           
-          this.currentVehicleIndex++;
-          const delay = parseInt(document.getElementById('delay').value) * 1000;
-          
-          // Check if there are more vehicles to post
-          if (this.currentVehicleIndex < this.vehicles.length) {
-            statusEl.textContent = `Waiting ${delay/1000}s before next vehicle...`;
+          // Try to inject the content script manually
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              files: ['content.js']
+            });
             
-            // Wait before posting next vehicle
+            // Wait a moment for the script to initialize
             setTimeout(() => {
-              if (this.isPosting) {
-                this.postNextVehicle();
-              }
-            }, delay);
-          } else {
-            // All vehicles posted
-            statusEl.textContent = 'All vehicles posted successfully!';
+              this.sendVehicleToContentScript(tab.id, vehicle, statusEl);
+            }, 1000);
+          } catch (injectError) {
+            console.error('Failed to inject content script:', injectError);
+            statusEl.textContent = 'Error: Could not load automation script. Please refresh Facebook page.';
             this.stopPosting();
           }
         } else {
-          console.error('Failed to post vehicle:', response?.error || 'Unknown error');
-          statusEl.textContent = `Failed: ${response?.error || 'Unknown error'}`;
-          this.stopPosting();
+          // Content script is loaded, proceed with posting
+          this.sendVehicleToContentScript(tab.id, vehicle, statusEl);
         }
       });
 
@@ -305,6 +289,51 @@ class SalesonatorExtension {
       statusEl.textContent = `Error: ${error.message}`;
       this.stopPosting();
     }
+  }
+
+  sendVehicleToContentScript(tabId, vehicle, statusEl) {
+    chrome.tabs.sendMessage(tabId, {
+      action: 'postVehicle',
+      vehicle: vehicle
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        const errorMessage = chrome.runtime.lastError.message || JSON.stringify(chrome.runtime.lastError);
+        console.error('Error posting vehicle:', errorMessage);
+        statusEl.textContent = `Error: ${errorMessage}`;
+        this.stopPosting();
+        return;
+      }
+
+      console.log('Vehicle posting response:', response);
+
+      if (response && response.success) {
+        console.log(`Successfully posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}`);
+        statusEl.textContent = `Posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}`;
+        
+        this.currentVehicleIndex++;
+        const delay = parseInt(document.getElementById('delay').value) * 1000;
+        
+        // Check if there are more vehicles to post
+        if (this.currentVehicleIndex < this.vehicles.length) {
+          statusEl.textContent = `Waiting ${delay/1000}s before next vehicle...`;
+          
+          // Wait before posting next vehicle
+          setTimeout(() => {
+            if (this.isPosting) {
+              this.postNextVehicle();
+            }
+          }, delay);
+        } else {
+          // All vehicles posted
+          statusEl.textContent = 'All vehicles posted successfully!';
+          this.stopPosting();
+        }
+      } else {
+        console.error('Failed to post vehicle:', response?.error || 'Unknown error');
+        statusEl.textContent = `Failed: ${response?.error || 'Unknown error'}`;
+        this.stopPosting();
+      }
+    });
   }
 
   async saveSettings() {

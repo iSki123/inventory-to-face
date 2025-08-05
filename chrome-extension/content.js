@@ -7,7 +7,9 @@ class FacebookMarketplaceAutomation {
   init() {
     // Listen for messages from popup
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-      if (request.action === 'checkLogin') {
+      if (request.action === 'ping') {
+        sendResponse({ success: true, message: 'Content script is loaded' });
+      } else if (request.action === 'checkLogin') {
         sendResponse({ loggedIn: this.isLoggedIn() });
       } else if (request.action === 'postVehicle') {
         this.postVehicle(request.vehicle).then(sendResponse);
