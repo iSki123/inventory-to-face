@@ -26,13 +26,8 @@ class SalesonatorBackground {
         apiUrl: 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster'
       });
       
-      // Open welcome page or show notification
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icon48.png',
-        title: 'Salesonator Extension Installed',
-        message: 'Click the extension icon to get started with Facebook Marketplace automation!'
-      });
+      // Show console message instead of notification since we don't have icons
+      console.log('Salesonator Extension Installed - Click the extension icon to get started!');
     }
   }
 
