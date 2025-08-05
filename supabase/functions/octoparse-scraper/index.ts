@@ -677,6 +677,15 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
         }
 
         console.log(`Inserting vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+        console.log('Vehicle data to insert:', JSON.stringify({
+          year: vehicle.year,
+          make: vehicle.make,
+          model: vehicle.model,
+          price: vehicle.price,
+          mileage: vehicle.mileage,
+          user_id: userId
+        }, null, 2));
+        
         const { data: inserted, error } = await supabaseClient
           .from('vehicles')
           .insert([{
@@ -708,9 +717,11 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
           .select()
           .single();
 
+        console.log('Database insertion result:', { data: inserted, error: error });
+        
         if (!error && inserted) {
           insertedVehicles.push(inserted);
-          console.log(`Successfully inserted vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+          console.log(`Successfully inserted vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} with ID: ${inserted.id}`);
         } else {
           console.error(`Failed to insert vehicle ${vehicle.year} ${vehicle.make} ${vehicle.model}:`, error);
           errors.push({ vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`, error: error?.message });
