@@ -519,6 +519,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
 
   try {
     console.log(`Importing data from task ID: ${taskId}`);
+    console.log(`Using Octoparse API URL: https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${taskId}&offset=0&size=1000`);
     
     // Fetch scraped data from Octoparse API using specific task ID
     const response = await fetch(`https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${taskId}&offset=0&size=1000`, {
@@ -530,9 +531,18 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
 
     let vehicleData = [];
     
+    console.log(`Octoparse API response status: ${response.status}`);
+    console.log(`Octoparse API response headers:`, Object.fromEntries(response.headers.entries()));
+    
     if (response.ok) {
       const result = await response.json();
       console.log('Octoparse API response for task import:', JSON.stringify(result, null, 2));
+      
+      // Check if we have an error in the response
+      if (result.error && result.error !== 'success') {
+        console.error('Octoparse API returned error:', result.error, result.error_Description);
+        throw new Error(`Octoparse API error: ${result.error} - ${result.error_Description || 'No description'}`);
+      }
       
       // Handle Octoparse response format
       const rawData = result.data?.dataList || result.dataList || result.data || [];
