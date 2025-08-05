@@ -463,11 +463,14 @@ class SalesonatorAutomator {
       const allOptions = document.querySelectorAll('[role="option"]');
       console.log('[YEAR DEBUG] Found options after click:', allOptions.length);
       allOptions.forEach((opt, i) => {
-        console.log(`[YEAR DEBUG] Option ${i}:`, opt.textContent?.trim(), opt);
+        if (i < 20) { // Only log first 20 to avoid truncation
+          console.log(`[YEAR DEBUG] Option ${i}:`, opt.textContent?.trim(), opt);
+        }
       });
       
       // Find the specific year option from the list we already discovered
-      console.log(`[YEAR DEBUG] Looking for year option: ${year}`);
+      console.log(`[YEAR DEBUG] ✨ NOW SEARCHING FOR YEAR OPTION: ${year} ✨`);
+      console.log(`[YEAR DEBUG] Total options to search through: ${allOptions.length}`);
       let yearFound = false;
       let targetOption = null;
       
