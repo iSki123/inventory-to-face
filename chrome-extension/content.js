@@ -797,7 +797,7 @@ class SalesonatorAutomator {
     }
   }
 
-  // Enhanced image upload handling with CORS workaround
+  // Enhanced image upload handling with pre-downloaded images
   async handleImageUploads(images) {
     try {
       this.log('📸 Starting image upload process...');
@@ -830,43 +830,17 @@ class SalesonatorAutomator {
       const fileInput = await this.waitForElement(fileInputSelectors, 3000);
       this.log('📸 Found file input:', fileInput);
       
-      // Convert image URLs to File objects with CORS workaround via background script
-      this.log(`📸 Converting ${images.length} image URLs to files...`);
-      const filePromises = images.map(async (imageUrl, index) => {
-        try {
-          this.log(`📸 Processing image ${index + 1}: ${imageUrl}`);
-          
-          // Use background script to fetch images with proper headers
-          return new Promise((resolve) => {
-            chrome.runtime.sendMessage({
-              action: 'fetchImage',
-              url: imageUrl
-            }, (response) => {
-              if (response && response.success) {
-                // Convert base64 to blob
-                const byteCharacters = atob(response.data.split(',')[1]);
-                const byteNumbers = new Array(byteCharacters.length);
-                for (let i = 0; i < byteCharacters.length; i++) {
-                  byteNumbers[i] = byteCharacters.charCodeAt(i);
-                }
-                const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], { type: 'image/jpeg' });
-                const file = new File([blob], `vehicle_image_${index + 1}.jpg`, { type: 'image/jpeg' });
-                resolve(file);
-              } else {
-                this.log(`⚠️ Could not process image ${index + 1}: ${imageUrl}`, response?.error);
-                resolve(null);
-              }
-            });
-          });
-          
-        } catch (error) {
-          this.log(`⚠️ Could not process image ${index + 1}: ${imageUrl}`, error);
-          return null;
-        }
-      });
+      // Check if images are already pre-downloaded in storage
+      this.log(`📸 Checking for pre-downloaded images...`);
+      const files = await this.getPreDownloadedImages(images);
       
-      const files = await Promise.all(filePromises);
+      if (files.length === 0) {
+        this.log('📸 No pre-downloaded images found, downloading now...');
+        // Fallback: download images now via background script
+        const downloadedFiles = await this.downloadImagesViaBackground(images);
+        files.push(...downloadedFiles);
+      }
+      
       const validFiles = files.filter(file => file !== null);
       
       this.log(`📸 Successfully processed ${validFiles.length} out of ${images.length} images`);
@@ -898,6 +872,75 @@ class SalesonatorAutomator {
       this.log('⚠️ Image upload failed:', error);
       return false;
     }
+  }
+
+  // Get pre-downloaded images from storage
+  async getPreDownloadedImages(imageUrls) {
+    const files = [];
+    for (let i = 0; i < imageUrls.length; i++) {
+      const imageUrl = imageUrls[i];
+      const storageKey = `image_${btoa(imageUrl).substring(0, 20)}`;
+      
+      try {
+        const result = await chrome.storage.local.get(storageKey);
+        if (result[storageKey]) {
+          this.log(`📸 Found pre-downloaded image ${i + 1}`);
+          const blob = this.base64ToBlob(result[storageKey], 'image/jpeg');
+          const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
+          files.push(file);
+        } else {
+          this.log(`📸 No pre-downloaded image found for ${i + 1}`);
+          files.push(null);
+        }
+      } catch (error) {
+        this.log(`⚠️ Error retrieving pre-downloaded image ${i + 1}:`, error);
+        files.push(null);
+      }
+    }
+    return files;
+  }
+
+  // Download images via background script as fallback
+  async downloadImagesViaBackground(imageUrls) {
+    const files = [];
+    for (let i = 0; i < imageUrls.length; i++) {
+      const imageUrl = imageUrls[i];
+      try {
+        this.log(`📸 Downloading image ${i + 1}: ${imageUrl}`);
+        
+        const response = await new Promise((resolve) => {
+          chrome.runtime.sendMessage({
+            action: 'fetchImage',
+            url: imageUrl
+          }, resolve);
+        });
+        
+        if (response && response.success) {
+          this.log(`📸 Successfully downloaded image ${i + 1}`);
+          const blob = this.base64ToBlob(response.data, 'image/jpeg');
+          const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
+          files.push(file);
+        } else {
+          this.log(`⚠️ Failed to download image ${i + 1}:`, response?.error);
+          files.push(null);
+        }
+      } catch (error) {
+        this.log(`⚠️ Error downloading image ${i + 1}:`, error);
+        files.push(null);
+      }
+    }
+    return files;
+  }
+
+  // Utility function to convert base64 to blob
+  base64ToBlob(base64Data, contentType) {
+    const byteCharacters = atob(base64Data.split(',')[1] || base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: contentType });
   }
 
   // Enhanced form submission with verification

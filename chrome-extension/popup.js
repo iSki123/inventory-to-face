@@ -354,7 +354,12 @@ class SalesonatorExtension {
         countEl.textContent = `${this.vehicles.length} vehicles ready to post`;
         startBtn.disabled = this.vehicles.length === 0;
         statusEl.className = 'status connected';
-        statusEl.textContent = 'Vehicles loaded successfully';
+        statusEl.textContent = 'Vehicles loaded, pre-downloading images...';
+        
+        // Pre-download all vehicle images
+        await this.preDownloadAllImages();
+        
+        statusEl.textContent = 'Vehicles and images ready for posting';
       } else {
         throw new Error(data.error || 'Failed to fetch vehicles');
       }
@@ -517,6 +522,44 @@ class SalesonatorExtension {
   async logout() {
     await chrome.storage.sync.remove(['userToken', 'userEmail']);
     await this.checkAuthentication();
+  }
+
+  // Pre-download all vehicle images when vehicles are fetched
+  async preDownloadAllImages() {
+    try {
+      console.log('Pre-downloading images for all vehicles...');
+      
+      const allImageUrls = [];
+      this.vehicles.forEach(vehicle => {
+        if (vehicle.images && Array.isArray(vehicle.images)) {
+          allImageUrls.push(...vehicle.images);
+        }
+      });
+      
+      if (allImageUrls.length === 0) {
+        console.log('No images to pre-download');
+        return;
+      }
+      
+      console.log(`Pre-downloading ${allImageUrls.length} images...`);
+      
+      // Use background script to pre-download images
+      const response = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({
+          action: 'preDownloadImages',
+          images: allImageUrls
+        }, resolve);
+      });
+      
+      if (response && response.success) {
+        console.log(`✅ Pre-downloaded ${response.successCount}/${response.totalCount} images`);
+      } else {
+        console.log('⚠️ Image pre-download failed:', response?.error);
+      }
+      
+    } catch (error) {
+      console.error('Error pre-downloading images:', error);
+    }
   }
 }
 

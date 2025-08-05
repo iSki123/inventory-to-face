@@ -51,7 +51,9 @@ class SalesonatorBackground {
         fetch(request.url, {
           method: 'GET',
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'image/*',
+            'Cache-Control': 'no-cache'
           }
         })
         .then(response => {
@@ -83,6 +85,22 @@ class SalesonatorBackground {
             error: error.message
           });
         });
+        
+        return true; // Keep message channel open for async response
+      }
+      
+      if (request.action === 'preDownloadImages') {
+        // Pre-download and store images for later use
+        console.log('Pre-downloading images:', request.images);
+        
+        this.preDownloadImages(request.images)
+          .then(result => {
+            sendResponse(result);
+          })
+          .catch(error => {
+            console.error('Pre-download failed:', error);
+            sendResponse({ success: false, error: error.message });
+          });
         
         return true; // Keep message channel open for async response
       }
@@ -166,6 +184,73 @@ class SalesonatorBackground {
     } catch (error) {
       console.error('Error checking auth:', error);
       return false;
+    }
+  }
+
+  // Pre-download images and store them in extension storage
+  async preDownloadImages(imageUrls) {
+    try {
+      console.log('Starting pre-download of', imageUrls.length, 'images');
+      const results = [];
+      
+      for (let i = 0; i < imageUrls.length; i++) {
+        const imageUrl = imageUrls[i];
+        const storageKey = `image_${btoa(imageUrl).substring(0, 20)}`;
+        
+        try {
+          console.log(`Pre-downloading image ${i + 1}:`, imageUrl);
+          
+          const response = await fetch(imageUrl, {
+            method: 'GET',
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+              'Accept': 'image/*',
+              'Cache-Control': 'no-cache'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const blob = await response.blob();
+          const base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          
+          // Store in chrome storage
+          await chrome.storage.local.set({
+            [storageKey]: base64
+          });
+          
+          console.log(`Successfully pre-downloaded and stored image ${i + 1}`);
+          results.push({ index: i, success: true, storageKey });
+          
+        } catch (error) {
+          console.error(`Failed to pre-download image ${i + 1}:`, error);
+          results.push({ index: i, success: false, error: error.message });
+        }
+      }
+      
+      const successCount = results.filter(r => r.success).length;
+      console.log(`Pre-download completed: ${successCount}/${imageUrls.length} images successful`);
+      
+      return {
+        success: true,
+        results,
+        successCount,
+        totalCount: imageUrls.length
+      };
+      
+    } catch (error) {
+      console.error('Pre-download process failed:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   }
 }
