@@ -801,8 +801,6 @@ async function listAvailableTasks() {
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );
   }
-
-  }
 }
 
 function generateVIN() {
