@@ -44,61 +44,96 @@ class SalesonatorExtension {
 
   async checkWebAppAuthentication() {
     try {
+      console.log('Checking for web app authentication...');
+      
       // Check all open tabs for Salesonator
       const allTabs = await chrome.tabs.query({});
+      console.log('Found tabs:', allTabs.length);
+      
       for (const tab of allTabs) {
         if (tab.url && 
             (tab.url.includes('lovableproject.com') || 
              tab.url.includes('localhost:3000') ||
-             tab.url.includes('salesonator'))) {
+             tab.url.includes('salesonator') ||
+             tab.url.includes('inventory-to-face'))) {
+          
+          console.log('Checking Salesonator tab:', tab.url);
           
           try {
             // Inject and execute a script to check for authentication
             const results = await chrome.scripting.executeScript({
               target: { tabId: tab.id },
               func: () => {
-                // Check localStorage for Supabase auth
-                const authKey = Object.keys(localStorage).find(key => 
-                  key.startsWith('sb-') && key.includes('auth-token')
+                console.log('Checking localStorage for auth data...');
+                
+                // Log all localStorage keys for debugging
+                const allKeys = Object.keys(localStorage);
+                console.log('All localStorage keys:', allKeys);
+                
+                // Check for multiple possible auth key patterns
+                const authKeys = allKeys.filter(key => 
+                  (key.startsWith('sb-') && key.includes('auth-token')) ||
+                  key.includes('supabase.auth.token') ||
+                  key.includes('auth-token')
                 );
                 
-                if (authKey) {
+                console.log('Found potential auth keys:', authKeys);
+                
+                for (const authKey of authKeys) {
                   const authData = localStorage.getItem(authKey);
+                  console.log('Checking key:', authKey, 'Data length:', authData?.length);
+                  
                   if (authData) {
                     try {
                       const parsed = JSON.parse(authData);
-                      return {
-                        token: parsed.access_token,
-                        user: parsed.user,
-                        expires_at: parsed.expires_at
-                      };
+                      console.log('Parsed auth data keys:', Object.keys(parsed));
+                      
+                      if (parsed.access_token && parsed.user) {
+                        console.log('Found valid auth data with access_token');
+                        return {
+                          token: parsed.access_token,
+                          user: parsed.user,
+                          expires_at: parsed.expires_at
+                        };
+                      }
                     } catch (e) {
-                      return null;
+                      console.log('Failed to parse auth data for key:', authKey, e);
                     }
                   }
                 }
+                
+                console.log('No valid auth data found');
                 return null;
               }
             });
             
             const authData = results[0]?.result;
+            console.log('Script execution result:', authData);
+            
             if (authData && authData.token) {
               console.log('Found authentication data in tab:', tab.url);
+              console.log('User ID:', authData.user.id);
               
               // Check if token is still valid and user has admin role
               try {
-                const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/profiles?select=role&user_id=eq.' + authData.user.id, {
+                const profileUrl = `https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/profiles?select=role&user_id=eq.${authData.user.id}`;
+                console.log('Checking profile at:', profileUrl);
+                
+                const response = await fetch(profileUrl, {
                   headers: {
                     'Authorization': `Bearer ${authData.token}`,
                     'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
                   }
                 });
                 
+                console.log('Profile response status:', response.status);
+                
                 if (response.ok) {
                   const profileData = await response.json();
+                  console.log('Profile data:', profileData);
                   const userRole = profileData[0]?.role;
                   
-                  if (userRole === 'Owner' || userRole === 'Manager') {
+                  if (userRole === 'Owner' || userRole === 'Manager' || userRole === 'Admin') {
                     console.log('User has admin role:', userRole);
                     this.showWebAppAuthSuccess();
                     return { token: authData.token, user: authData.user };
@@ -108,19 +143,20 @@ class SalesonatorExtension {
                     return null;
                   }
                 } else {
-                  console.log('Failed to verify user role');
+                  console.log('Failed to verify user role, response:', await response.text());
                 }
               } catch (error) {
                 console.warn('Error verifying user role:', error);
               }
             }
           } catch (error) {
-            // Tab might not allow script injection, skip
+            console.log('Script injection failed for tab:', tab.url, error);
             continue;
           }
         }
       }
       
+      console.log('No admin authentication found');
       return null;
     } catch (error) {
       console.warn('Error checking web app authentication:', error);
