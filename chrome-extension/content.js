@@ -86,26 +86,26 @@ class SalesonatorAutomator {
         // ARIA label selector
         if (selector.startsWith('aria:')) {
           const ariaLabel = selector.replace('aria:', '');
-          const element = parentElement.querySelector(`[aria-label="${ariaLabel}"]`);
+          const element = parentElement.querySelector(`[aria-label*="${ariaLabel}"]`);
           if (element) return element;
         }
         
         // Placeholder selector
-        if (selector.startsWith('placeholder:')) {
+        else if (selector.startsWith('placeholder:')) {
           const placeholder = selector.replace('placeholder:', '');
-          const element = parentElement.querySelector(`[placeholder="${placeholder}"]`);
+          const element = parentElement.querySelector(`[placeholder*="${placeholder}"]`);
           if (element) return element;
         }
         
         // Role selector
-        if (selector.startsWith('role:')) {
+        else if (selector.startsWith('role:')) {
           const role = selector.replace('role:', '');
           const element = parentElement.querySelector(`[role="${role}"]`);
           if (element) return element;
         }
         
         // Text content selector (XPath)
-        if (selector.startsWith('text:')) {
+        else if (selector.startsWith('text:')) {
           const text = selector.replace('text:', '');
           const xpath = `.//*[contains(text(), "${text}")]`;
           const result = document.evaluate(xpath, parentElement, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
@@ -113,8 +113,10 @@ class SalesonatorAutomator {
         }
         
         // Regular CSS selector
-        const element = parentElement.querySelector(selector);
-        if (element) return element;
+        else {
+          const element = parentElement.querySelector(selector);
+          if (element) return element;
+        }
         
       } catch (error) {
         this.log('Selector failed:', selector, error);
@@ -378,6 +380,9 @@ class SalesonatorAutomator {
   async fillVehicleForm(vehicleData) {
     this.log('📝 Filling vehicle form with enhanced automation...');
     
+    // FIRST: Handle vehicle type dropdown selection
+    await this.selectVehicleType();
+    
     const formFields = [
       {
         field: 'title',
@@ -479,9 +484,53 @@ class SalesonatorAutomator {
       }
     }
     
-    // Handle file uploads if images are provided
-    if (vehicleData.images && vehicleData.images.length > 0) {
-      await this.handleImageUploads(vehicleData.images);
+    // Skip image uploads for now due to CORS issues
+    // if (vehicleData.images && vehicleData.images.length > 0) {
+    //   await this.handleImageUploads(vehicleData.images);
+    // }
+  }
+
+  // Vehicle type dropdown selection
+  async selectVehicleType() {
+    try {
+      this.log('🚗 Selecting vehicle type dropdown first...');
+      
+      const vehicleDropdownSelectors = [
+        'aria:Vehicle type',
+        '[aria-label*="Vehicle type"]', 
+        '[data-testid*="vehicle"]',
+        'select',
+        '[role="combobox"]'
+      ];
+      
+      const dropdown = await this.waitForElement(vehicleDropdownSelectors, 8000);
+      await this.scrollIntoView(dropdown);
+      await this.delay(this.randomDelay(500, 1000));
+      
+      // Click to open dropdown
+      dropdown.click();
+      await this.delay(this.randomDelay(1000, 2000));
+      
+      // Look for Car/Truck option
+      const carTruckSelectors = [
+        'text:Car/Truck',
+        'text:Car',
+        'text:Vehicle',
+        '[role="option"]'
+      ];
+      
+      const option = await this.waitForElement(carTruckSelectors, 5000);
+      await this.scrollIntoView(option);
+      await this.delay(this.randomDelay(300, 600));
+      option.click();
+      
+      await this.delay(this.randomDelay(1000, 2000));
+      this.log('✅ Successfully selected vehicle type');
+      return true;
+      
+    } catch (error) {
+      this.log('⚠️ Could not select vehicle type:', error);
+      return false;
     }
   }
 
