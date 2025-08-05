@@ -7,9 +7,8 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
 interface City {
-  city_name: string;
-  state_name: string;
-  full_name: string;
+  name: string;
+  state: string;
 }
 
 interface CityAutocompleteProps {
@@ -33,25 +32,32 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
   // Debounced search function
   useEffect(() => {
     const searchCities = async () => {
+      console.log('Searching for:', searchQuery, 'Length:', searchQuery.length);
+      
       if (searchQuery.length < 2) {
+        console.log('Query too short, clearing cities');
         setCities([]);
         return;
       }
 
+      console.log('Making RPC call with search_term:', searchQuery);
       setIsLoading(true);
       try {
-        const { data, error } = await supabase.rpc('search_us_cities' as any, {
+        const { data, error } = await supabase.rpc('search_us_cities', {
           search_term: searchQuery
         });
+
+        console.log('RPC response - data:', data, 'error:', error);
 
         if (error) {
           console.error('Error searching cities:', error);
           setCities([]);
         } else {
+          console.log('Setting cities to:', data);
           setCities(data || []);
         }
       } catch (error) {
-        console.error('Error searching cities:', error);
+        console.error('Caught error searching cities:', error);
         setCities([]);
       } finally {
         setIsLoading(false);
@@ -62,8 +68,9 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
-  const handleSelect = (fullName: string) => {
-    onChange(fullName);
+  const handleSelect = (cityName: string, stateName: string) => {
+    const cityStateString = `${cityName}, ${stateName}`;
+    onChange(cityStateString);
     setOpen(false);
     setSearchQuery("");
   };
@@ -98,19 +105,20 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
             )}
             <CommandGroup>
               {cities.map((city) => {
+                const cityStateString = `${city.name}, ${city.state}`;
                 return (
                   <CommandItem
-                    key={`${city.city_name}-${city.state_name}`}
-                    value={city.full_name}
-                    onSelect={() => handleSelect(city.full_name)}
+                    key={`${city.name}-${city.state}`}
+                    value={cityStateString}
+                    onSelect={() => handleSelect(city.name, city.state)}
                   >
                     <Check
                       className={cn(
                         "mr-2 h-4 w-4",
-                        value === city.full_name ? "opacity-100" : "opacity-0"
+                        value === cityStateString ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    {city.full_name}
+                    {cityStateString}
                   </CommandItem>
                 );
               })}
