@@ -383,111 +383,150 @@ class SalesonatorAutomator {
     // FIRST: Handle vehicle type dropdown selection
     await this.selectVehicleType();
     
-    const formFields = [
-      {
-        field: 'title',
-        value: `${vehicleData.year} ${vehicleData.make} ${vehicleData.model}`,
-        selectors: [
-          'aria:Title',
-          'placeholder:What are you selling?',
-          'placeholder:Title',
-          'input[name="title"]',
-          '[data-testid*="title"]'
-        ]
-      },
-      {
-        field: 'price',
-        value: vehicleData.price?.toString() || '0',
-        selectors: [
-          'aria:Price',
-          'placeholder:Price',
-          'input[name="price"]',
-          '[data-testid*="price"]',
-          'input[type="number"]'
-        ]
-      },
-      {
-        field: 'description',
-        value: vehicleData.description || `${vehicleData.year} ${vehicleData.make} ${vehicleData.model} for sale. Contact for more details.`,
-        selectors: [
-          'aria:Description',
-          'placeholder:Description',
-          'textarea[name="description"]',
-          '[data-testid*="description"]',
-          'textarea'
-        ]
-      },
-      {
-        field: 'location',
-        value: vehicleData.location || 'Aurora, Illinois',
-        selectors: [
-          'aria:Location',
-          'placeholder:Location',
-          'input[name="location"]',
-          '[data-testid*="location"]'
-        ]
-      },
-      {
-        field: 'year',
-        value: vehicleData.year?.toString(),
-        selectors: [
-          'aria:Year',
-          'placeholder:Year',
-          'input[name="year"]',
-          '[data-testid*="year"]'
-        ]
-      },
-      {
-        field: 'make',
-        value: vehicleData.make,
-        selectors: [
-          'aria:Make',
-          'placeholder:Make',
-          'input[name="make"]',
-          '[data-testid*="make"]'
-        ]
-      },
-      {
-        field: 'model',
-        value: vehicleData.model,
-        selectors: [
-          'aria:Model',
-          'placeholder:Model',
-          'input[name="model"]',
-          '[data-testid*="model"]'
-        ]
-      }
-    ];
+    // SECOND: Fill Year dropdown
+    await this.selectYear(vehicleData.year);
     
-    // Fill each field with enhanced error recovery
-    for (const fieldConfig of formFields) {
-      if (!fieldConfig.value) continue;
-      
-      try {
-        this.log(`📝 Filling ${fieldConfig.field}:`, fieldConfig.value);
-        
-        const element = await this.waitForElement(fieldConfig.selectors, 5000);
-        
-        if (element.tagName.toLowerCase() === 'select' || element.getAttribute('role') === 'combobox') {
-          // Handle dropdown/select elements
-          await this.selectDropdownOption(fieldConfig.selectors, fieldConfig.value);
-        } else {
-          // Handle input/textarea elements
-          await this.typeHumanLike(element, fieldConfig.value);
-        }
-        
-        await this.delay(this.randomDelay(300, 800));
-        
-      } catch (error) {
-        this.log(`⚠️ Could not fill ${fieldConfig.field}:`, error);
-        // Continue with other fields
-      }
+    // THIRD: Fill Make dropdown  
+    await this.selectMake(vehicleData.make);
+    
+    // FOURTH: Fill Model input
+    await this.fillModel(vehicleData.model);
+    
+    // FIFTH: Fill Mileage if available
+    if (vehicleData.mileage) {
+      await this.fillMileage(vehicleData.mileage);
     }
     
-    // Skip image uploads for now due to CORS issues
-    // if (vehicleData.images && vehicleData.images.length > 0) {
-    //   await this.handleImageUploads(vehicleData.images);
-    // }
+    // SIXTH: Fill Price
+    await this.fillPrice(vehicleData.price);
+    
+    // SEVENTH: Fill Description (this one works)
+    const description = vehicleData.description || `${vehicleData.year} ${vehicleData.make} ${vehicleData.model} for sale. Contact for more details.`;
+    await this.fillDescription(description);
+    
+    this.log('✅ Form filling sequence completed');
+  }
+
+  // Select Year dropdown
+  async selectYear(year) {
+    try {
+      this.log(`🗓️ Selecting year: ${year}`);
+      
+      const yearDropdown = await this.waitForElement(['[aria-label*="Year"]', 'text:Year'], 5000);
+      await this.scrollIntoView(yearDropdown);
+      await this.delay(this.randomDelay(300, 600));
+      
+      yearDropdown.click();
+      await this.delay(this.randomDelay(1000, 1500));
+      
+      // Find the year option
+      const yearOption = await this.waitForElement([`text:${year}`], 3000);
+      await this.scrollIntoView(yearOption);
+      await this.delay(this.randomDelay(200, 400));
+      yearOption.click();
+      
+      await this.delay(this.randomDelay(500, 1000));
+      this.log(`✅ Successfully selected year: ${year}`);
+      return true;
+    } catch (error) {
+      this.log(`⚠️ Could not select year: ${year}`, error);
+      return false;
+    }
+  }
+
+  // Select Make dropdown  
+  async selectMake(make) {
+    try {
+      this.log(`🏭 Selecting make: ${make}`);
+      
+      const makeDropdown = await this.waitForElement(['[aria-label*="Make"]', 'text:Make'], 5000);
+      await this.scrollIntoView(makeDropdown);
+      await this.delay(this.randomDelay(300, 600));
+      
+      makeDropdown.click();
+      await this.delay(this.randomDelay(1000, 1500));
+      
+      // Find the make option
+      const makeOption = await this.waitForElement([`text:${make}`], 3000);
+      await this.scrollIntoView(makeOption);
+      await this.delay(this.randomDelay(200, 400));
+      makeOption.click();
+      
+      await this.delay(this.randomDelay(500, 1000));
+      this.log(`✅ Successfully selected make: ${make}`);
+      return true;
+    } catch (error) {
+      this.log(`⚠️ Could not select make: ${make}`, error);
+      return false;
+    }
+  }
+
+  // Fill Model input
+  async fillModel(model) {
+    try {
+      this.log(`🚗 Filling model: ${model}`);
+      
+      const modelInput = await this.waitForElement(['[aria-label*="Model"]', 'input[placeholder*="Model"]'], 5000);
+      await this.scrollIntoView(modelInput);
+      await this.typeHumanLike(modelInput, model);
+      
+      this.log(`✅ Successfully filled model: ${model}`);
+      return true;
+    } catch (error) {
+      this.log(`⚠️ Could not fill model: ${model}`, error);
+      return false;
+    }
+  }
+
+  // Fill Mileage input
+  async fillMileage(mileage) {
+    try {
+      this.log(`📏 Filling mileage: ${mileage}`);
+      
+      const mileageInput = await this.waitForElement(['[aria-label*="Mileage"]', 'input[placeholder*="Mileage"]'], 5000);
+      await this.scrollIntoView(mileageInput);
+      await this.typeHumanLike(mileageInput, mileage.toString());
+      
+      this.log(`✅ Successfully filled mileage: ${mileage}`);
+      return true;
+    } catch (error) {
+      this.log(`⚠️ Could not fill mileage: ${mileage}`, error);
+      return false;
+    }
+  }
+
+  // Fill Price input
+  async fillPrice(price) {
+    try {
+      this.log(`💰 Filling price: ${price}`);
+      
+      const priceInput = await this.waitForElement(['[aria-label*="Price"]', 'input[placeholder*="Price"]'], 5000);
+      await this.scrollIntoView(priceInput);
+      await this.typeHumanLike(priceInput, price.toString());
+      
+      this.log(`✅ Successfully filled price: ${price}`);
+      return true;
+    } catch (error) {
+      this.log(`⚠️ Could not fill price: ${price}`, error);
+      return false;
+    }
+  }
+
+  // Fill Description textarea
+  async fillDescription(description) {
+    try {
+      this.log(`📝 Filling description: ${description}`);
+      
+      const descriptionInput = await this.waitForElement(['[aria-label*="Description"]', 'textarea'], 5000);
+      await this.scrollIntoView(descriptionInput);
+      await this.typeHumanLike(descriptionInput, description);
+      
+      this.log(`✅ Successfully filled description`);
+      return true;
+    } catch (error) {
+      this.log(`⚠️ Could not fill description`, error);
+      return false;
+    }
   }
 
   // Vehicle type dropdown selection
