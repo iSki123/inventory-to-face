@@ -153,13 +153,14 @@ class SalesonatorAutomator {
     // Fill Year
     console.log('Filling year...');
     try {
-      const yearDropdown = await this.waitForElement('div[role="combobox"]:has-text("Year"), div[role="button"]:has-text("Year"), [aria-label*="Year" i]', 5000);
+      const yearDropdown = await this.waitForElement('input[placeholder*="Year" i], div[role="combobox"] input, select', 5000);
       await this.delay(500);
+      yearDropdown.focus();
       yearDropdown.click();
       await this.delay(1000);
       
-      // Look for the year option
-      const yearOption = await this.waitForElement(`div[role="option"]:has-text("${vehicle.year}"), li:has-text("${vehicle.year}")`, 5000);
+      // If it's a dropdown, look for the year option
+      const yearOption = await this.waitForElement(`div[role="option"]:has-text("${vehicle.year}"), li:has-text("${vehicle.year}")`, 3000);
       yearOption.click();
       await this.delay(1000);
     } catch (error) {
@@ -169,18 +170,20 @@ class SalesonatorAutomator {
     // Fill Make
     console.log('Filling make...');
     try {
-      const makeInput = await this.waitForElement('input[placeholder*="Make" i], input[aria-label*="Make" i]', 5000);
+      const makeDropdown = await this.waitForElement('input[placeholder*="Make" i], div[role="combobox"]:nth-of-type(2) input', 5000);
       await this.delay(500);
-      makeInput.focus();
-      makeInput.value = '';
-      makeInput.dispatchEvent(new Event('input', { bubbles: true }));
-      await this.delay(200);
+      makeDropdown.focus();
+      makeDropdown.click();
+      await this.delay(1000);
       
-      const makeText = vehicle.make.trim();
-      for (const char of makeText) {
-        makeInput.value += char;
-        makeInput.dispatchEvent(new Event('input', { bubbles: true }));
-        await this.delay(this.getRandomDelay(50, 150));
+      // Look for make in dropdown or type it
+      try {
+        const makeOption = await this.waitForElement(`div[role="option"]:has-text("${vehicle.make.trim()}")`, 2000);
+        makeOption.click();
+      } catch {
+        // If no dropdown option found, type the make
+        makeDropdown.value = vehicle.make.trim();
+        makeDropdown.dispatchEvent(new Event('input', { bubbles: true }));
       }
       await this.delay(1000);
     } catch (error) {
@@ -190,22 +193,39 @@ class SalesonatorAutomator {
     // Fill Model
     console.log('Filling model...');
     try {
-      const modelInput = await this.waitForElement('input[placeholder*="Model" i], input[aria-label*="Model" i]', 5000);
+      const modelDropdown = await this.waitForElement('input[placeholder*="Model" i], div[role="combobox"]:nth-of-type(3) input', 5000);
       await this.delay(500);
-      modelInput.focus();
-      modelInput.value = '';
-      modelInput.dispatchEvent(new Event('input', { bubbles: true }));
-      await this.delay(200);
+      modelDropdown.focus();
+      modelDropdown.click();
+      await this.delay(1000);
       
       const modelText = `${vehicle.model} ${vehicle.trim || ''}`.trim();
-      for (const char of modelText) {
-        modelInput.value += char;
-        modelInput.dispatchEvent(new Event('input', { bubbles: true }));
-        await this.delay(this.getRandomDelay(50, 150));
+      try {
+        const modelOption = await this.waitForElement(`div[role="option"]:has-text("${modelText}")`, 2000);
+        modelOption.click();
+      } catch {
+        // If no dropdown option found, type the model
+        modelDropdown.value = modelText;
+        modelDropdown.dispatchEvent(new Event('input', { bubbles: true }));
       }
       await this.delay(1000);
     } catch (error) {
       console.warn('Could not fill model field:', error);
+    }
+    
+    // Fill Mileage
+    console.log('Filling mileage...');
+    try {
+      if (vehicle.mileage) {
+        const mileageInput = await this.waitForElement('input[placeholder*="Mileage" i], input[aria-label*="Mileage" i]', 3000);
+        mileageInput.focus();
+        await this.delay(500);
+        mileageInput.value = vehicle.mileage.toString();
+        mileageInput.dispatchEvent(new Event('input', { bubbles: true }));
+        await this.delay(1000);
+      }
+    } catch (error) {
+      console.warn('Could not fill mileage field:', error);
     }
     
     return true;
