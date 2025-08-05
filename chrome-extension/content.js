@@ -140,8 +140,12 @@ class SalesonatorAutomator {
     element.focus();
     await this.delay(this.randomDelay(100, 300));
     
-    // Clear existing content
-    element.select();
+    // Clear existing content safely
+    if (element.select && typeof element.select === 'function') {
+      element.select();
+    } else {
+      element.value = '';
+    }
     await this.delay(this.randomDelay(50, 150));
     
     const speedMultipliers = {
@@ -463,7 +467,22 @@ class SalesonatorAutomator {
       await this.delay(this.randomDelay(300, 600));
       
       this.log(`📅 Found year option ${year}, clicking...`);
-      yearOption.click();
+      // Use multiple click strategies for Facebook dropdowns
+      yearOption.focus();
+      await this.delay(this.randomDelay(200, 400));
+      
+      // Try MouseEvent click first
+      const clickEvent = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window
+      });
+      yearOption.dispatchEvent(clickEvent);
+      
+      // Fallback to regular click
+      if (yearOption.click) {
+        yearOption.click();
+      }
       
       await this.delay(this.randomDelay(1000, 2000));
       
