@@ -49,29 +49,81 @@ class SalesonatorAutomator {
   async selectCategory() {
     console.log('Selecting vehicle category...');
     
-    try {
-      // Wait for and click vehicle category
-      const vehicleCategory = await this.waitForElement('[data-testid="category-vehicles"]', 5000);
-      vehicleCategory.click();
-      await this.delay(this.getRandomDelay(1500, 2500));
-      return true;
-    } catch (error) {
-      console.warn('Could not find specific vehicle category, trying generic approach...');
-      
-      // Fallback: look for any category that might be vehicles
-      const categories = document.querySelectorAll('[role="button"]');
-      for (let category of categories) {
-        if (category.textContent.toLowerCase().includes('vehicle') || 
-            category.textContent.toLowerCase().includes('car') ||
-            category.textContent.toLowerCase().includes('auto')) {
-          category.click();
+    // Multiple selector strategies for finding vehicle category
+    const selectors = [
+      '[data-testid="category-vehicles"]',
+      '[data-testid="category-item-vehicles"]', 
+      '[aria-label*="Vehicle" i]',
+      '[aria-label*="Car" i]',
+      'div[role="button"]:has-text("Vehicle")',
+      'div[role="button"]:has-text("Car")',
+      'div[role="button"]:has-text("Auto")'
+    ];
+    
+    // Try each selector
+    for (let selector of selectors) {
+      try {
+        console.log(`Trying selector: ${selector}`);
+        const element = await this.waitForElement(selector, 3000);
+        if (element) {
+          console.log(`Found category element with selector: ${selector}`);
+          element.click();
           await this.delay(this.getRandomDelay(1500, 2500));
           return true;
         }
+      } catch (error) {
+        console.log(`Selector failed: ${selector}`);
+        continue;
       }
-      
-      throw new Error('Could not find vehicle category');
     }
+    
+    // Enhanced fallback approach
+    console.warn('Trying enhanced fallback approach...');
+    
+    // Look for category buttons with broader search
+    const possibleSelectors = [
+      'div[role="button"]',
+      'button',
+      '[aria-label]',
+      '[data-testid*="category"]',
+      'div[tabindex="0"]'
+    ];
+    
+    const vehicleKeywords = ['vehicle', 'car', 'auto', 'motorcycle', 'truck', 'suv'];
+    
+    for (let selector of possibleSelectors) {
+      const elements = document.querySelectorAll(selector);
+      console.log(`Checking ${elements.length} elements with selector: ${selector}`);
+      
+      for (let element of elements) {
+        const text = (element.textContent || element.getAttribute('aria-label') || '').toLowerCase();
+        console.log(`Checking element text: "${text.substring(0, 50)}..."`);
+        
+        for (let keyword of vehicleKeywords) {
+          if (text.includes(keyword)) {
+            console.log(`Found vehicle category with keyword "${keyword}": ${text.substring(0, 100)}`);
+            element.click();
+            await this.delay(this.getRandomDelay(1500, 2500));
+            return true;
+          }
+        }
+      }
+    }
+    
+    // Last resort: look for any clickable element that might lead to categories
+    console.warn('Trying last resort approach - looking for category selection area...');
+    const categoryAreas = document.querySelectorAll('div[data-testid*="category"], div[aria-label*="categor" i], div:has-text("What are you selling")');
+    
+    if (categoryAreas.length > 0) {
+      console.log(`Found ${categoryAreas.length} potential category areas`);
+      categoryAreas[0].click();
+      await this.delay(2000);
+      
+      // After clicking, try to find vehicle category again
+      return this.selectCategory();
+    }
+    
+    throw new Error('Could not find vehicle category after trying all approaches');
   }
 
   async fillTitle(vehicle) {
