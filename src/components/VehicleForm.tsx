@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Vehicle } from "@/hooks/useVehicles";
+import { useAuth } from "@/hooks/useAuth";
 
 interface VehicleFormProps {
   open: boolean;
@@ -22,6 +23,7 @@ const conditions = ['new', 'used', 'certified'];
 const statuses = ['available', 'pending', 'sold', 'draft'];
 
 export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }: VehicleFormProps) {
+  const { profile } = useAuth();
   const [formData, setFormData] = useState<Partial<Vehicle>>({
     year: new Date().getFullYear(),
     make: '',
@@ -40,6 +42,7 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
     if (vehicle) {
       setFormData(vehicle);
     } else {
+      // When creating a new vehicle, populate with profile info
       setFormData({
         year: new Date().getFullYear(),
         make: '',
@@ -50,9 +53,11 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
         transmission: 'automatic',
         status: 'available',
         features: [],
+        contact_phone: profile?.phone || '',
+        location: profile?.location || '',
       });
     }
-  }, [vehicle]);
+  }, [vehicle, profile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,6 +101,7 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
       await onSubmit(submissionData);
       onOpenChange(false);
       if (!isEditing) {
+        // Reset form with profile info for new vehicles
         setFormData({
           year: new Date().getFullYear(),
           make: '',
@@ -106,6 +112,8 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
           transmission: 'automatic',
           status: 'available',
           features: [],
+          contact_phone: profile?.phone || '',
+          location: profile?.location || '',
         });
       }
     } catch (error) {

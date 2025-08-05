@@ -283,6 +283,12 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
     vehicleData = generateMockVehicleData();
   }
   
+  // Get user profile information for contact details
+  const { data: userProfile } = await supabaseClient
+    .from('profiles')
+    .select('phone, location')
+    .eq('user_id', userId)
+    .single();
   const insertedVehicles = [];
 
   for (const vehicle of vehicleData) {
@@ -325,10 +331,10 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
           vin: vehicle.vin,
           features: vehicle.features,
           images: vehicle.images,
-          trim: vehicle.trim,
-          location: vehicle.location,
-          contact_phone: vehicle.contact_phone,
-          contact_email: vehicle.contact_email,
+           trim: vehicle.trim,
+           location: vehicle.location || userProfile?.location || '',
+           contact_phone: vehicle.contact_phone || userProfile?.phone || '',
+           contact_email: vehicle.contact_email,
           user_id: userId,
           status: 'available',
           facebook_post_status: 'draft',
