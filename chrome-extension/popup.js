@@ -133,16 +133,17 @@ class SalesonatorExtension {
         return;
       }
       
-      // Inject mapping script
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        function: this.initFieldMapping
+      // Send message to start mapping in content script
+      chrome.tabs.sendMessage(tab.id, { action: 'startFieldMapping' }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Error starting mapping:', chrome.runtime.lastError);
+          this.showStatus('Error: Could not communicate with Facebook page. Try refreshing.', 'disconnected');
+          this.stopMapping();
+        } else {
+          this.nextField();
+          this.showStatus('🎯 Field mapping started! Follow the instructions.', 'connected');
+        }
       });
-      
-      // Start with first field
-      this.nextField();
-      
-      this.showStatus('🎯 Field mapping started! Follow the instructions.', 'connected');
       
     } catch (error) {
       console.error('Error starting mapping:', error);
@@ -160,12 +161,11 @@ class SalesonatorExtension {
       document.getElementById('stopMapping').style.display = 'none';
       document.getElementById('mappingProgress').style.display = 'none';
       
-      // Get active tab and remove mapping mode
+      // Get active tab and send stop message
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        function: this.stopFieldMapping
+      chrome.tabs.sendMessage(tab.id, { action: 'stopFieldMapping' }, () => {
+        // Ignore errors here since tab might be closed
       });
       
       // Remove pending status from all fields
@@ -210,6 +210,8 @@ class SalesonatorExtension {
         action: 'setCurrentField',
         fieldName: fieldName,
         fieldLabel: fieldLabel
+      }, () => {
+        // Ignore errors if tab is not ready
       });
     });
   }
