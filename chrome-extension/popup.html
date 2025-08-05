@@ -248,8 +248,9 @@
         6. Save your mappings for perfect automation!
       </div>
       
+      
       <button id="startMapping" class="btn btn-success">
-        🎯 Start Field Mapping
+        🎯 Start Auto Mapping
       </button>
       <button id="stopMapping" class="btn btn-danger" style="display: none;">
         ⏹️ Stop Mapping
@@ -257,6 +258,23 @@
       <button id="clearMappings" class="btn btn-secondary">
         🗑️ Clear All Mappings
       </button>
+      
+      <div class="mapping-instructions" style="margin-top: 10px;">
+        <strong>Manual Field Selection:</strong><br>
+        <select id="manualFieldSelect" style="width: 100%; padding: 5px; margin: 5px 0;">
+          <option value="">Select a field to map...</option>
+          <option value="vehicle-type">🚗 Vehicle Type</option>
+          <option value="year">📅 Year</option>
+          <option value="make">🏭 Make</option>
+          <option value="model">🚙 Model</option>
+          <option value="mileage">📏 Mileage</option>
+          <option value="price">💰 Price</option>
+          <option value="description">📝 Description</option>
+        </select>
+        <button id="startManualMapping" class="btn btn-success" style="margin-top: 5px;">
+          🎯 Map Selected Field
+        </button>
+      </div>
       
       <div id="mappingProgress" class="mapping-progress" style="display: none;">
         Click on the highlighted field...

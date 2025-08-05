@@ -41,6 +41,7 @@ class SalesonatorExtension {
     document.getElementById('startMapping').addEventListener('click', () => this.startMapping());
     document.getElementById('stopMapping').addEventListener('click', () => this.stopMapping());
     document.getElementById('clearMappings').addEventListener('click', () => this.clearMappings());
+    document.getElementById('startManualMapping').addEventListener('click', () => this.startManualMapping());
     
     // Load saved mappings
     await this.loadSavedMappings();
@@ -117,6 +118,11 @@ class SalesonatorExtension {
 
   async startMapping() {
     try {
+      // Stop any manual mapping first
+      if (document.getElementById('startManualMapping').textContent.includes('Stop')) {
+        await this.stopManualMapping();
+      }
+
       this.isMapping = true;
       this.currentFieldIndex = 0;
       
@@ -140,8 +146,9 @@ class SalesonatorExtension {
           this.showStatus('Error: Could not communicate with Facebook page. Try refreshing.', 'disconnected');
           this.stopMapping();
         } else {
+          console.log('Field mapping started successfully');
           this.nextField();
-          this.showStatus('🎯 Field mapping started! Follow the instructions.', 'connected');
+          this.showStatus('🎯 Auto field mapping started!', 'connected');
         }
       });
       
@@ -202,18 +209,26 @@ class SalesonatorExtension {
     
     // Update progress display
     const progressEl = document.getElementById('mappingProgress');
-    progressEl.textContent = `Step ${this.currentFieldIndex + 1}/${this.fieldQueue.length}: Click on the ${fieldLabel} field on Facebook`;
+    progressEl.textContent = `Step ${this.currentFieldIndex + 1}/${this.fieldQueue.length}: Mapping ${fieldLabel}`;
     
     // Send message to content script about current field
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      chrome.tabs.sendMessage(tabs[0].id, {
-        action: 'setCurrentField',
-        fieldName: fieldName,
-        fieldLabel: fieldLabel
-      }, () => {
-        // Ignore errors if tab is not ready
-      });
+      if (tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: 'setCurrentField',
+          fieldName: fieldName,
+          fieldLabel: fieldLabel
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log('Error setting current field:', chrome.runtime.lastError);
+          } else {
+            console.log('Successfully set current field:', fieldName);
+          }
+        });
+      }
     });
+    
+    this.showStatus(`🎯 Ready to map: ${fieldLabel}`, 'connected');
   }
 
   handleFieldMapped(fieldName, selector) {
@@ -222,17 +237,91 @@ class SalesonatorExtension {
     if (selector === null) {
       // Field was skipped
       console.log('Field skipped:', fieldName);
+      this.showStatus(`⏭️ Skipped ${fieldName}`, 'warning');
     } else {
       // Field was mapped
       this.updateFieldDisplay(fieldName, selector);
+      this.showStatus(`✅ Mapped ${fieldName}`, 'connected');
     }
     
+    // Automatically move to next field
     this.currentFieldIndex++;
     setTimeout(() => {
-      if (this.isMapping) {
+      if (this.isMapping && this.currentFieldIndex < this.fieldQueue.length) {
         this.nextField();
+      } else if (this.isMapping) {
+        // Completed all fields
+        this.stopMapping();
+        this.showStatus('🎉 All fields mapped successfully!', 'connected');
       }
-    }, 1500); // Give more time for user to see the result
+    }, 2000); // Give user time to see the result
+  }
+
+  async startManualMapping() {
+    const selectedField = document.getElementById('manualFieldSelect').value;
+    if (!selectedField) {
+      this.showStatus('⚠️ Please select a field to map', 'warning');
+      return;
+    }
+
+    try {
+      // Stop any auto mapping
+      if (this.isMapping) {
+        await this.stopMapping();
+      }
+
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      if (!tab.url.includes('facebook.com/marketplace')) {
+        this.showStatus('Please navigate to Facebook Marketplace first', 'disconnected');
+        return;
+      }
+      
+      // Set up manual mapping mode
+      this.isMapping = true;
+      this.currentMappingField = selectedField;
+      
+      // Update UI
+      document.getElementById('startManualMapping').textContent = '⏹️ Stop Manual Mapping';
+      document.getElementById('startManualMapping').onclick = () => this.stopManualMapping();
+      
+      // Send message to start mapping specific field
+      chrome.tabs.sendMessage(tab.id, { action: 'startFieldMapping' }, (response) => {
+        if (chrome.runtime.lastError) {
+          this.showStatus('Error: Could not communicate with Facebook page. Try refreshing.', 'disconnected');
+          this.stopManualMapping();
+        } else {
+          // Set the current field
+          chrome.tabs.sendMessage(tab.id, {
+            action: 'setCurrentField',
+            fieldName: selectedField,
+            fieldLabel: this.fieldLabels[selectedField]
+          });
+          
+          this.showStatus(`🎯 Manual mapping: ${this.fieldLabels[selectedField]}`, 'connected');
+        }
+      });
+      
+    } catch (error) {
+      console.error('Error starting manual mapping:', error);
+      this.showStatus('Error starting manual mapping: ' + error.message, 'disconnected');
+    }
+  }
+
+  async stopManualMapping() {
+    this.isMapping = false;
+    
+    // Reset UI
+    document.getElementById('startManualMapping').textContent = '🎯 Map Selected Field';
+    document.getElementById('startManualMapping').onclick = () => this.startManualMapping();
+    
+    // Stop mapping in content script
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    chrome.tabs.sendMessage(tab.id, { action: 'stopFieldMapping' }, () => {
+      // Ignore errors
+    });
+    
+    this.showStatus('🛑 Manual mapping stopped', 'warning');
   }
 
   async clearMappings() {
