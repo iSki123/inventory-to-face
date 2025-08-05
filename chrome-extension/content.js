@@ -104,12 +104,25 @@ class SalesonatorAutomator {
           if (element) return element;
         }
         
-        // Text content selector (XPath)
+        // Text content selector using multiple approaches
         else if (selector.startsWith('text:')) {
           const text = selector.replace('text:', '');
-          const xpath = `.//*[contains(text(), "${text}")]`;
-          const result = document.evaluate(xpath, parentElement, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-          if (result.singleNodeValue) return result.singleNodeValue;
+          
+          // Method 1: XPath approach (most reliable)
+          try {
+            const xpath = `.//*[contains(normalize-space(text()), "${text}")]`;
+            const result = document.evaluate(xpath, parentElement, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+            if (result.singleNodeValue) return result.singleNodeValue;
+          } catch (e) {}
+          
+          // Method 2: Manual text search fallback
+          const elements = Array.from(parentElement.querySelectorAll('*'));
+          const found = elements.find(el => {
+            const textContent = el.textContent?.trim() || '';
+            const innerText = el.innerText?.trim() || '';
+            return textContent.includes(text) || innerText.includes(text);
+          });
+          if (found) return found;
         }
         
         // Regular CSS selector
@@ -423,16 +436,23 @@ class SalesonatorAutomator {
     this.log('✅ Form filling sequence completed');
   }
 
-  // Select Year dropdown
+  // Select Year dropdown with improved detection
   async selectYear(year) {
     try {
       this.log(`🗓️ Selecting year: ${year}`);
       console.log(`[YEAR DEBUG] Starting year selection for: ${year}`);
       
-      // Look for year dropdown more specifically using XPath and standard selectors
+      // Enhanced year dropdown selectors based on reverse engineering findings
       const yearDropdownSelectors = [
-        'text:Year', // This will use XPath
-        '[aria-label*="Year"]',
+        'text:Year', // XPath text search (most reliable)
+        'aria:Year', // ARIA label approach
+        'text:Select year', // Alternative text
+        'placeholder:Year',
+        '[aria-label*="Year" i]', // Case insensitive
+        '[data-testid*="year" i]',
+        'select[name*="year" i]',
+        'div[role="button"]:has-text("Year")', // Role with text context
+        'div[role="combobox"]:has-text("Year")',
         'div[role="button"]', // Generic fallback
         'select'
       ];
@@ -468,14 +488,18 @@ class SalesonatorAutomator {
         }
       });
       
-      // Use the EXACT same approach as make selection - this works!
-      console.log(`[YEAR DEBUG] 🎯 Using same method as make selection...`);
+      // Enhanced option selection with multiple approaches
+      console.log(`[YEAR DEBUG] 🎯 Using enhanced option selection...`);
       
       const yearOptionSelectors = [
-        `text:${year}`, // Use XPath for text content - SAME AS MAKE
-        `text:${year.toString().trim()}`,
-        `[data-value*="${year}"]`,
-        `[role="option"]`
+        `text:${year}`, // XPath exact text match
+        `text:${year.toString().trim()}`, // Trimmed version
+        `aria:${year}`, // ARIA approach
+        `[data-value="${year}"]`, // Exact data-value
+        `[data-value*="${year}"]`, // Contains data-value
+        `[value="${year}"]`, // Standard value attribute
+        `[role="option"][aria-label*="${year}"]`, // Role with ARIA
+        `[role="option"]` // Generic option fallback
       ];
       
       console.log(`[YEAR DEBUG] Searching for year option with selectors:`, yearOptionSelectors);
@@ -919,59 +943,63 @@ class SalesonatorAutomator {
     return loginIndicators.some(selector => document.querySelector(selector) !== null);
   }
 
-  // Specialized click method for Facebook React dropdowns
+  // Specialized click method for Facebook React dropdowns - Enhanced with reverse engineering insights
   async performFacebookDropdownClick(element) {
     try {
-      console.log(`[FACEBOOK CLICK] Starting React-compatible click sequence...`);
+      console.log(`[FACEBOOK CLICK] Starting enhanced React-compatible click sequence...`);
       
       // Ensure element is in view and focused
       await this.scrollIntoView(element);
-      await this.delay(200);
-      
-      // Focus the element first
+      await this.delay(this.randomDelay(200, 400));
+
+      // Pre-click preparation - mimic human behavior
       element.focus();
-      await this.delay(100);
-      
-      // Method 1: Standard click with focus
-      console.log(`[FACEBOOK CLICK] Method 1: Standard click...`);
-      element.click();
-      await this.delay(300);
-      
-      // Method 2: Mouse events sequence (what React often expects)
-      console.log(`[FACEBOOK CLICK] Method 2: Mouse event sequence...`);
-      const mouseDown = new MouseEvent('mousedown', {
-        view: window,
-        bubbles: true,
-        cancelable: true,
-        button: 0
-      });
-      
-      const mouseUp = new MouseEvent('mouseup', {
-        view: window,
-        bubbles: true,
-        cancelable: true,
-        button: 0
-      });
-      
-      const click = new MouseEvent('click', {
-        view: window,
-        bubbles: true,
-        cancelable: true,
-        button: 0
-      });
-      
-      element.dispatchEvent(mouseDown);
-      await this.delay(50);
-      element.dispatchEvent(mouseUp);
-      await this.delay(50);
-      element.dispatchEvent(click);
-      
-      console.log(`[FACEBOOK CLICK] ✅ React-compatible click sequence completed`);
-      return true;
+      await this.delay(this.randomDelay(100, 300));
+
+      // Enhanced event sequence based on reverse engineering findings
+      const eventSequence = [
+        new MouseEvent('mouseenter', { bubbles: true, cancelable: true }),
+        new MouseEvent('mouseover', { bubbles: true, cancelable: true }),
+        new FocusEvent('focusin', { bubbles: true }),
+        new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }),
+        new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0 }),
+        new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }),
+        new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId: 1 }),
+        new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerId: 1 }),
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+        new KeyboardEvent('keyup', { key: 'Enter', bubbles: true, cancelable: true })
+      ];
+
+      // Dispatch events with realistic delays
+      for (const event of eventSequence) {
+        try {
+          element.dispatchEvent(event);
+          await this.delay(this.randomDelay(20, 80));
+        } catch (e) {
+          console.warn(`[FACEBOOK CLICK] Event ${event.type} failed:`, e);
+        }
+      }
+
+      // Additional React synthetic event triggers
+      try {
+        // Trigger React's onChange and other synthetic events
+        if (element.tagName === 'INPUT' || element.tagName === 'SELECT') {
+          this.setNativeValue(element, element.value);
+        }
+      } catch (e) {
+        console.warn(`[FACEBOOK CLICK] Synthetic event trigger failed:`, e);
+      }
+
+      console.log(`[FACEBOOK CLICK] Enhanced React-compatible click sequence completed`);
       
     } catch (error) {
-      console.error(`[FACEBOOK CLICK] ❌ Click sequence failed:`, error);
-      return false;
+      console.error(`[FACEBOOK CLICK] Error in enhanced React click sequence:`, error);
+      // Multi-level fallback
+      try {
+        element.click();
+      } catch (fallbackError) {
+        console.error(`[FACEBOOK CLICK] Even simple click failed:`, fallbackError);
+      }
     }
   }
 }
