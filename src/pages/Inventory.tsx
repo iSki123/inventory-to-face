@@ -335,13 +335,13 @@ export default function Inventory() {
               </div>
             </Card>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               {filteredVehicles.map((vehicle) => {
                 const postStatus = getPostStatus(vehicle.facebook_post_status || 'draft');
                 
                 return (
                   <Card key={vehicle.id} className="overflow-hidden">
-                    <div className="h-48 bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center relative overflow-hidden">
+                    <div className="aspect-square bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center relative overflow-hidden">
                       <Checkbox
                         checked={selectedVehicles.includes(vehicle.id)}
                         onCheckedChange={() => toggleVehicleSelection(vehicle.id)}
