@@ -40,7 +40,7 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
 
       setIsLoading(true);
       try {
-        const { data, error } = await supabase.rpc('search_us_cities', {
+        const { data, error } = await supabase.rpc('search_us_cities' as any, {
           search_term: searchQuery
         });
 
