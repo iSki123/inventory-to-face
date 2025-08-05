@@ -7,12 +7,15 @@
     "activeTab",
     "storage",
     "scripting",
-    "notifications"
+    "notifications",
+    "tabs"
   ],
   "host_permissions": [
     "https://www.facebook.com/*",
     "https://facebook.com/*",
-    "https://urdkaedsfnscgtyvcwlf.supabase.co/*"
+    "https://urdkaedsfnscgtyvcwlf.supabase.co/*",
+    "https://*.lovableproject.com/*",
+    "http://localhost:3000/*"
   ],
   "background": {
     "service_worker": "background.js"

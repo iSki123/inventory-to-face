@@ -8,6 +8,8 @@ class SalesonatorExtension {
   }
 
   async init() {
+    console.log('Initializing Salesonator Extension...');
+    
     // Load saved settings
     const settings = await chrome.storage.sync.get(['apiUrl', 'delay', 'userToken']);
     
@@ -25,11 +27,102 @@ class SalesonatorExtension {
     document.getElementById('delay').addEventListener('change', () => this.saveSettings());
     document.getElementById('login').addEventListener('click', () => this.showLoginForm());
 
-    // Check authentication status
+    // Check for existing web app authentication first
+    const webAppAuth = await this.checkWebAppAuthentication();
+    if (webAppAuth) {
+      console.log('Found web app authentication, using it for extension');
+      await chrome.storage.sync.set({ userToken: webAppAuth.token });
+      // Continue with normal flow using the detected token
+    }
+    
+    // Check authentication status (including any newly detected token)
     await this.checkAuthentication();
     
     // Check connection status
     this.checkConnection();
+  }
+
+  async checkWebAppAuthentication() {
+    try {
+      // Check if we're on a Salesonator tab and can access web app auth
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      const currentTab = tabs[0];
+      
+      if (currentTab && currentTab.url && 
+          (currentTab.url.includes('lovableproject.com') || 
+           currentTab.url.includes('localhost:3000') ||
+           currentTab.url.includes('salesonator'))) {
+        
+        // Try to get auth from the current tab
+        const response = await chrome.tabs.sendMessage(currentTab.id, { action: 'checkWebAppAuth' });
+        
+        if (response && response.auth && response.auth.token) {
+          console.log('Found web app authentication in current tab');
+          
+          // Verify admin role
+          const roleResponse = await chrome.tabs.sendMessage(currentTab.id, { 
+            action: 'verifyAdminRole', 
+            token: response.auth.token 
+          });
+          
+          if (roleResponse && roleResponse.isAdmin) {
+            console.log('User has admin role, using web app authentication');
+            this.showWebAppAuthSuccess();
+            return response.auth;
+          } else {
+            console.log('User does not have admin role');
+            this.showError('Admin access required for auto-posting extension');
+            return null;
+          }
+        }
+      }
+      
+      // Also check other open tabs for Salesonator
+      const allTabs = await chrome.tabs.query({});
+      for (const tab of allTabs) {
+        if (tab.url && 
+            (tab.url.includes('lovableproject.com') || 
+             tab.url.includes('localhost:3000') ||
+             tab.url.includes('salesonator'))) {
+          
+          try {
+            const response = await chrome.tabs.sendMessage(tab.id, { action: 'checkWebAppAuth' });
+            if (response && response.auth && response.auth.token) {
+              const roleResponse = await chrome.tabs.sendMessage(tab.id, { 
+                action: 'verifyAdminRole', 
+                token: response.auth.token 
+              });
+              
+              if (roleResponse && roleResponse.isAdmin) {
+                console.log('Found admin authentication in another tab');
+                this.showWebAppAuthSuccess();
+                return response.auth;
+              }
+            }
+          } catch (error) {
+            // Tab might not have content script loaded, skip
+            continue;
+          }
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.warn('Error checking web app authentication:', error);
+      return null;
+    }
+  }
+
+  showWebAppAuthSuccess() {
+    const statusEl = document.getElementById('status');
+    statusEl.className = 'status connected';
+    statusEl.textContent = '✅ Auto-authenticated via Salesonator web app!';
+  }
+
+  showError(message) {
+    const statusEl = document.getElementById('status');
+    statusEl.className = 'status disconnected';
+    statusEl.textContent = message;
   }
 
   async checkAuthentication() {

@@ -105,6 +105,24 @@
       margin: 10px 0;
       font-size: 12px;
     }
+    .web-app-auth-notice {
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      color: white;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-size: 13px;
+    }
+    .notice-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+    .notice-icon {
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
@@ -114,6 +132,15 @@
 
   <!-- Login Section (shown when not authenticated) -->
   <div id="loginSection" class="login-section" style="display: none;">
+    <div class="web-app-auth-notice">
+      <div class="notice-header">
+        <span class="notice-icon">🔐</span>
+        <strong>Auto-Login Available</strong>
+      </div>
+      <p>If you're logged into Salesonator as an admin, the extension will automatically detect and use your session!</p>
+      <p>Otherwise, please log in below:</p>
+    </div>
+    
     <div class="error-message">
       You need to log in to Salesonator to use this extension.
     </div>

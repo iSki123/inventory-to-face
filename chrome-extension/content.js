@@ -18,10 +18,10 @@ class SalesonatorAutomator {
     const startTime = Date.now();
     while (Date.now() - startTime < timeout) {
       const element = document.querySelector(selector);
-      if (element) return element;
+      if (element && element.offsetParent !== null) return element; // Element must be visible
       await this.delay(500);
     }
-    throw new Error(`Element not found: ${selector}`);
+    throw new Error(`Element not found or not visible: ${selector}`);
   }
 
   getRandomDelay(min, max) {
