@@ -53,76 +53,97 @@ class SalesonatorAutomator {
       // Wait for page to load fully
       await this.delay(3000);
       
-      // Enhanced dropdown detection with better Facebook compatibility
-      console.log('Looking for Vehicle type dropdown...');
+      console.log('Analyzing page structure for vehicle type dropdown...');
+      
+      // Skip category selection since we're already on the vehicle page
+      console.log('Already on vehicle creation page, checking if category selection is needed...');
+      
+      // Look for actual vehicle type dropdown that might need to be opened
       let vehicleTypeDropdown = null;
       
-      // Method 1: Look for modern Facebook dropdown selectors
-      const modernSelectors = [
-        'div[role="combobox"]',
-        'div[aria-haspopup="listbox"]',
-        'div[aria-expanded="false"][role="button"]',
-        'input[role="combobox"]',
-        'select[aria-label*="Category"]',
-        'div[data-testid*="category"]',
-        'div[data-testid*="type"]'
+      // Method 1: Look for specific vehicle type dropdown selectors
+      const vehicleDropdownSelectors = [
+        'select[name*="vehicle_type"]',
+        'select[aria-label*="Vehicle type"]',
+        'div[role="combobox"][aria-label*="Vehicle type"]',
+        'div[role="combobox"][aria-label*="vehicle"]',
+        'input[role="combobox"][placeholder*="Vehicle type"]',
+        'div[data-testid*="vehicle-type"]'
       ];
       
-      for (let selector of modernSelectors) {
-        const elements = document.querySelectorAll(selector);
-        for (let element of elements) {
-          const ariaLabel = element.getAttribute('aria-label') || '';
-          const placeholder = element.getAttribute('placeholder') || '';
-          const text = (element.textContent || '').toLowerCase();
-          
-          if (ariaLabel.toLowerCase().includes('category') ||
-              ariaLabel.toLowerCase().includes('type') ||
-              placeholder.toLowerCase().includes('category') ||
-              text.includes('category') ||
-              text.includes('type') ||
-              text.includes('select')) {
+      for (let selector of vehicleDropdownSelectors) {
+        vehicleTypeDropdown = document.querySelector(selector);
+        if (vehicleTypeDropdown) {
+          console.log('Found vehicle type dropdown with selector:', selector);
+          break;
+        }
+      }
+      
+      // Method 2: Look for any remaining category selection dropdown
+      if (!vehicleTypeDropdown) {
+        console.log('Looking for category selection dropdown...');
+        
+        // Look for category dropdowns that might appear before vehicle details
+        const categorySelectors = [
+          'select[aria-label*="Category"]',
+          'div[role="combobox"][aria-label*="Category"]',
+          'div[role="button"][aria-haspopup="listbox"]',
+          'select:first-of-type',
+          'div[role="combobox"]:first-of-type'
+        ];
+        
+        for (let selector of categorySelectors) {
+          const elements = document.querySelectorAll(selector);
+          for (let element of elements) {
+            // Skip disabled elements and navigation elements
+            if (element.getAttribute('aria-disabled') === 'true' || 
+                element.getAttribute('aria-hidden') === 'true' ||
+                element.getAttribute('aria-label')?.includes('Back to') ||
+                element.getAttribute('aria-label')?.includes('navigation')) {
+              continue;
+            }
+            
             vehicleTypeDropdown = element;
-            console.log('Found dropdown with modern selector:', selector);
+            console.log('Found category dropdown:', element.getAttribute('aria-label') || element.className);
             break;
           }
-        }
-        if (vehicleTypeDropdown) break;
-      }
-      
-      // Method 2: Find by text content relationships  
-      if (!vehicleTypeDropdown) {
-        const labels = document.querySelectorAll('label, span, div, h1, h2, h3, h4');
-        for (let label of labels) {
-          const text = (label.textContent || '').toLowerCase().trim();
-          if (text.includes('vehicle') || text.includes('category') || text.includes('what are you selling')) {
-            console.log('Found related label:', text);
-            const container = label.closest('div[data-testid], div[role], section, form') || label.parentElement;
-            if (container) {
-              const dropdown = container.querySelector('div[role="button"], div[role="combobox"], input[role="combobox"], select') ||
-                             container.parentElement?.querySelector('div[role="button"], div[role="combobox"], input[role="combobox"], select');
-              if (dropdown) {
-                vehicleTypeDropdown = dropdown;
-                console.log('Found dropdown near related text');
-                break;
-              }
-            }
-          }
+          if (vehicleTypeDropdown) break;
         }
       }
       
-      // Method 3: Find first interactive dropdown in main content area
+      // Method 3: Since we're on /marketplace/create/vehicle, check if category is already selected
       if (!vehicleTypeDropdown) {
-        console.log('Looking for first dropdown in main area...');
-        const mainAreas = ['[role="main"]', 'main', 'form', '[data-testid*="form"]', '.marketplace'];
-        for (let areaSelector of mainAreas) {
-          const area = document.querySelector(areaSelector);
-          if (area) {
-            vehicleTypeDropdown = area.querySelector('div[role="button"][aria-haspopup], div[role="combobox"], select, input[role="combobox"]');
-            if (vehicleTypeDropdown) {
-              console.log('Found first dropdown in:', areaSelector);
-              break;
-            }
-          }
+        console.log('No dropdown found - checking if vehicle category is already pre-selected...');
+        
+        // Check if we can find vehicle-specific form fields (year, make, model)
+        const vehicleFields = document.querySelectorAll([
+          'input[placeholder*="Year" i]',
+          'input[placeholder*="Make" i]', 
+          'input[placeholder*="Model" i]',
+          'select[aria-label*="Year"]',
+          'select[aria-label*="Make"]',
+          'select[aria-label*="Model"]'
+        ].join(', '));
+        
+        if (vehicleFields.length > 0) {
+          console.log('Found vehicle form fields - category appears to be pre-selected');
+          return true; // Skip category selection, proceed to vehicle details
+        }
+      }
+      
+      if (!vehicleTypeDropdown) {
+        console.log('No vehicle type dropdown found and no vehicle fields detected');
+        console.log('Page might not be ready or category selection might not be needed');
+        
+        // Try to find any visible dropdown/combobox that's not disabled
+        const anyDropdown = document.querySelector('div[role="combobox"]:not([aria-disabled="true"]):not([aria-hidden="true"]), select:not([disabled])');
+        if (anyDropdown) {
+          console.log('Found generic dropdown as fallback');
+          vehicleTypeDropdown = anyDropdown;
+        } else {
+          // If still no dropdown, assume category is pre-selected
+          console.log('No dropdown needed - assuming vehicle category is pre-selected');
+          return true;
         }
       }
       
