@@ -622,11 +622,21 @@ class SalesonatorAutomator {
     this.log('🎯 Field mapping mode activated');
     this.currentMappingField = null;
     
+    // Clean up any existing markers
+    document.querySelectorAll('[data-salesonator-clicked]').forEach(el => {
+      el.removeAttribute('data-salesonator-clicked');
+      const origStyle = el.getAttribute('data-salesonator-original-style');
+      if (origStyle !== null) {
+        el.style.cssText = origStyle;
+        el.removeAttribute('data-salesonator-original-style');
+      }
+    });
+    
     // Remove existing indicator
     const existingIndicator = document.getElementById('salesonator-mapping-indicator');
     if (existingIndicator) existingIndicator.remove();
     
-    // Add visual indicator
+    // Add visual indicator with improved instructions
     const indicator = document.createElement('div');
     indicator.id = 'salesonator-mapping-indicator';
     indicator.style.cssText = `
@@ -635,16 +645,26 @@ class SalesonatorAutomator {
       right: 20px;
       background: linear-gradient(135deg, #1877f2, #166fe5);
       color: white;
-      padding: 12px 16px;
-      border-radius: 8px;
+      padding: 15px 18px;
+      border-radius: 10px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 14px;
+      font-size: 13px;
+      line-height: 1.4;
       z-index: 10000;
-      box-shadow: 0 4px 20px rgba(24, 119, 242, 0.3);
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      max-width: 300px;
+      box-shadow: 0 6px 25px rgba(24, 119, 242, 0.4);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      max-width: 320px;
     `;
-    indicator.innerHTML = '🎯 <strong>Field Mapping Mode</strong><br><small>Waiting for instructions...</small>';
+    indicator.innerHTML = `
+      🎯 <strong>Field Mapping Mode Active</strong><br>
+      <small>
+        <strong>Color Guide:</strong><br>
+        🔵 Blue = Selected for exploration<br>
+        🟢 Green = Successfully mapped<br>
+        🔴 Red = Skipped field<br><br>
+        Waiting for instructions...
+      </small>
+    `;
     document.body.appendChild(indicator);
     
     // Add click listener for field mapping
@@ -653,6 +673,16 @@ class SalesonatorAutomator {
 
   stopFieldMapping() {
     this.log('🎯 Field mapping mode deactivated');
+    
+    // Clean up all markers and styles
+    document.querySelectorAll('[data-salesonator-clicked]').forEach(el => {
+      el.removeAttribute('data-salesonator-clicked');
+      const origStyle = el.getAttribute('data-salesonator-original-style');
+      if (origStyle !== null) {
+        el.style.cssText = origStyle;
+        el.removeAttribute('data-salesonator-original-style');
+      }
+    });
     
     // Remove indicator
     const indicator = document.getElementById('salesonator-mapping-indicator');
@@ -668,28 +698,98 @@ class SalesonatorAutomator {
   updateMappingIndicator(fieldLabel) {
     const indicator = document.getElementById('salesonator-mapping-indicator');
     if (indicator) {
-      indicator.innerHTML = `🎯 <strong>Mapping: ${fieldLabel}</strong><br><small>Click on this field now!</small>`;
+      indicator.innerHTML = `
+        🎯 <strong>Mapping: ${fieldLabel}</strong><br>
+        <small>
+          🔵 <strong>First click:</strong> Open/explore field<br>
+          🟢 <strong>Second click:</strong> Map this field<br>
+          🔴 <strong>Shift+Click:</strong> Skip this field
+        </small>
+      `;
     }
   }
 
   handleFieldClick(event) {
     if (!this.currentMappingField) return;
     
+    const element = event.target;
+    
+    // Handle skip with Shift+Click
+    if (event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      
+      this.log('⏭️ Skipping field:', this.currentMappingField);
+      
+      // Update indicator
+      const indicator = document.getElementById('salesonator-mapping-indicator');
+      if (indicator) {
+        indicator.innerHTML = `⏭️ <strong>Skipped: ${this.currentMappingField}</strong><br><small>Moving to next field...</small>`;
+      }
+      
+      // Send skip message to popup
+      chrome.runtime.sendMessage({
+        type: 'FIELD_MAPPED',
+        fieldName: this.currentMappingField,
+        selector: null // null indicates skip
+      });
+      
+      return;
+    }
+    
+    // Check if this element was already clicked once (has our marker)
+    const wasAlreadyClicked = element.hasAttribute('data-salesonator-clicked');
+    
+    if (!wasAlreadyClicked) {
+      // First click - just mark it and allow normal behavior
+      element.setAttribute('data-salesonator-clicked', 'true');
+      
+      // Add visual indicator for first click
+      const originalStyle = element.style.cssText;
+      element.style.cssText += 'border: 3px solid #007bff !important; background-color: rgba(0, 123, 255, 0.1) !important;';
+      
+      // Store original style for cleanup
+      element.setAttribute('data-salesonator-original-style', originalStyle);
+      
+      // Update indicator
+      const indicator = document.getElementById('salesonator-mapping-indicator');
+      if (indicator) {
+        indicator.innerHTML = `
+          🔵 <strong>Field Selected</strong><br>
+          <small>Click again to map this field, or click elsewhere to explore</small>
+        `;
+      }
+      
+      this.log('🔵 First click on element - exploring:', element);
+      return; // Allow normal click behavior
+    }
+    
+    // Second click - map the field
     event.preventDefault();
     event.stopPropagation();
     
-    const element = event.target;
     const selector = this.getElementSelector(element);
     
-    this.log('🎯 Field clicked:', element, 'Selector:', selector);
+    this.log('🎯 Second click - mapping field:', element, 'Selector:', selector);
     
-    // Highlight the clicked element briefly
-    const originalStyle = element.style.cssText;
-    element.style.cssText += 'border: 3px solid #28a745 !important; background-color: rgba(40, 167, 69, 0.1) !important;';
+    // Change to green to show mapping
+    const originalStyle = element.getAttribute('data-salesonator-original-style') || '';
+    element.style.cssText = originalStyle + 'border: 3px solid #28a745 !important; background-color: rgba(40, 167, 69, 0.1) !important;';
     
+    // Clean up all clicked markers
+    document.querySelectorAll('[data-salesonator-clicked]').forEach(el => {
+      el.removeAttribute('data-salesonator-clicked');
+      const origStyle = el.getAttribute('data-salesonator-original-style');
+      if (origStyle !== null) {
+        el.style.cssText = origStyle;
+        el.removeAttribute('data-salesonator-original-style');
+      }
+    });
+    
+    // Reset the mapped element after a delay
     setTimeout(() => {
       element.style.cssText = originalStyle;
-    }, 1500);
+    }, 2000);
     
     // Save to storage immediately
     this.saveFieldMapping(this.currentMappingField, selector);
@@ -704,7 +804,7 @@ class SalesonatorAutomator {
     // Update indicator
     const indicator = document.getElementById('salesonator-mapping-indicator');
     if (indicator) {
-      indicator.innerHTML = `✅ <strong>Mapped: ${this.currentMappingField}</strong><br><small>Saved successfully!</small>`;
+      indicator.innerHTML = `✅ <strong>Mapped: ${this.currentMappingField}</strong><br><small>Saved successfully! Moving to next field...</small>`;
     }
   }
 

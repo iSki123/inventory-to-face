@@ -218,14 +218,21 @@ class SalesonatorExtension {
 
   handleFieldMapped(fieldName, selector) {
     console.log('Field mapped:', fieldName, selector);
-    this.updateFieldDisplay(fieldName, selector);
+    
+    if (selector === null) {
+      // Field was skipped
+      console.log('Field skipped:', fieldName);
+    } else {
+      // Field was mapped
+      this.updateFieldDisplay(fieldName, selector);
+    }
     
     this.currentFieldIndex++;
     setTimeout(() => {
       if (this.isMapping) {
         this.nextField();
       }
-    }, 1000);
+    }, 1500); // Give more time for user to see the result
   }
 
   async clearMappings() {
