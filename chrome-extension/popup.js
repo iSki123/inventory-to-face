@@ -44,40 +44,7 @@ class SalesonatorExtension {
 
   async checkWebAppAuthentication() {
     try {
-      // Check if we're on a Salesonator tab and can access web app auth
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      const currentTab = tabs[0];
-      
-      if (currentTab && currentTab.url && 
-          (currentTab.url.includes('lovableproject.com') || 
-           currentTab.url.includes('localhost:3000') ||
-           currentTab.url.includes('salesonator'))) {
-        
-        // Try to get auth from the current tab
-        const response = await chrome.tabs.sendMessage(currentTab.id, { action: 'checkWebAppAuth' });
-        
-        if (response && response.auth && response.auth.token) {
-          console.log('Found web app authentication in current tab');
-          
-          // Verify admin role
-          const roleResponse = await chrome.tabs.sendMessage(currentTab.id, { 
-            action: 'verifyAdminRole', 
-            token: response.auth.token 
-          });
-          
-          if (roleResponse && roleResponse.isAdmin) {
-            console.log('User has admin role, using web app authentication');
-            this.showWebAppAuthSuccess();
-            return response.auth;
-          } else {
-            console.log('User does not have admin role');
-            this.showError('Admin access required for auto-posting extension');
-            return null;
-          }
-        }
-      }
-      
-      // Also check other open tabs for Salesonator
+      // Check all open tabs for Salesonator
       const allTabs = await chrome.tabs.query({});
       for (const tab of allTabs) {
         if (tab.url && 
@@ -86,21 +53,69 @@ class SalesonatorExtension {
              tab.url.includes('salesonator'))) {
           
           try {
-            const response = await chrome.tabs.sendMessage(tab.id, { action: 'checkWebAppAuth' });
-            if (response && response.auth && response.auth.token) {
-              const roleResponse = await chrome.tabs.sendMessage(tab.id, { 
-                action: 'verifyAdminRole', 
-                token: response.auth.token 
-              });
+            // Inject and execute a script to check for authentication
+            const results = await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              func: () => {
+                // Check localStorage for Supabase auth
+                const authKey = Object.keys(localStorage).find(key => 
+                  key.startsWith('sb-') && key.includes('auth-token')
+                );
+                
+                if (authKey) {
+                  const authData = localStorage.getItem(authKey);
+                  if (authData) {
+                    try {
+                      const parsed = JSON.parse(authData);
+                      return {
+                        token: parsed.access_token,
+                        user: parsed.user,
+                        expires_at: parsed.expires_at
+                      };
+                    } catch (e) {
+                      return null;
+                    }
+                  }
+                }
+                return null;
+              }
+            });
+            
+            const authData = results[0]?.result;
+            if (authData && authData.token) {
+              console.log('Found authentication data in tab:', tab.url);
               
-              if (roleResponse && roleResponse.isAdmin) {
-                console.log('Found admin authentication in another tab');
-                this.showWebAppAuthSuccess();
-                return response.auth;
+              // Check if token is still valid and user has admin role
+              try {
+                const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/profiles?select=role&user_id=eq.' + authData.user.id, {
+                  headers: {
+                    'Authorization': `Bearer ${authData.token}`,
+                    'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+                  }
+                });
+                
+                if (response.ok) {
+                  const profileData = await response.json();
+                  const userRole = profileData[0]?.role;
+                  
+                  if (userRole === 'Owner' || userRole === 'Manager') {
+                    console.log('User has admin role:', userRole);
+                    this.showWebAppAuthSuccess();
+                    return { token: authData.token, user: authData.user };
+                  } else {
+                    console.log('User does not have admin role:', userRole);
+                    this.showError('Admin access required for auto-posting extension');
+                    return null;
+                  }
+                } else {
+                  console.log('Failed to verify user role');
+                }
+              } catch (error) {
+                console.warn('Error verifying user role:', error);
               }
             }
           } catch (error) {
-            // Tab might not have content script loaded, skip
+            // Tab might not allow script injection, skip
             continue;
           }
         }
