@@ -118,6 +118,7 @@ class SalesonatorExtension {
               try {
                 const profileUrl = `https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/profiles?select=role&user_id=eq.${authData.user.id}`;
                 console.log('Checking profile at:', profileUrl);
+                console.log('Using token:', authData.token.substring(0, 20) + '...');
                 
                 const response = await fetch(profileUrl, {
                   headers: {
@@ -127,26 +128,34 @@ class SalesonatorExtension {
                 });
                 
                 console.log('Profile response status:', response.status);
+                console.log('Profile response headers:', response.headers);
                 
                 if (response.ok) {
                   const profileData = await response.json();
-                  console.log('Profile data:', profileData);
+                  console.log('Profile data received:', profileData);
+                  console.log('Profile data length:', profileData.length);
                   const userRole = profileData[0]?.role;
+                  console.log('Extracted user role:', userRole);
                   
                   if (userRole === 'Owner' || userRole === 'Manager' || userRole === 'Admin') {
-                    console.log('User has admin role:', userRole);
+                    console.log('✅ User has admin role:', userRole);
+                    console.log('Setting up auto-authentication...');
                     this.showWebAppAuthSuccess();
                     return { token: authData.token, user: authData.user };
                   } else {
-                    console.log('User does not have admin role:', userRole);
+                    console.log('❌ User does not have admin role:', userRole);
                     this.showError('Admin access required for auto-posting extension');
                     return null;
                   }
                 } else {
-                  console.log('Failed to verify user role, response:', await response.text());
+                  const errorText = await response.text();
+                  console.log('❌ Failed to verify user role, status:', response.status);
+                  console.log('❌ Error response:', errorText);
+                  this.showError('Failed to verify user permissions');
                 }
               } catch (error) {
-                console.warn('Error verifying user role:', error);
+                console.error('❌ Error verifying user role:', error);
+                this.showError('Error checking user permissions');
               }
             }
           } catch (error) {
