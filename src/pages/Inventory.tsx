@@ -341,14 +341,29 @@ export default function Inventory() {
                 
                 return (
                   <Card key={vehicle.id} className="overflow-hidden">
-                    <div className="h-48 bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center relative">
+                    <div className="h-48 bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center relative overflow-hidden">
                       <Checkbox
                         checked={selectedVehicles.includes(vehicle.id)}
                         onCheckedChange={() => toggleVehicleSelection(vehicle.id)}
                         className="absolute top-2 left-2 z-10"
                       />
-                      <div className="text-muted-foreground text-sm">
-                        {vehicle.images && vehicle.images.length > 0 ? 'Image Available' : 'No Image'}
+                       {vehicle.images && vehicle.images.length > 0 ? (
+                        <img 
+                          src={vehicle.images[0]} 
+                          alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const img = e.currentTarget as HTMLImageElement;
+                            img.style.display = 'none';
+                            const fallback = img.nextElementSibling as HTMLElement;
+                            if (fallback) fallback.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      <div 
+                        className={`text-muted-foreground text-sm absolute inset-0 flex items-center justify-center ${vehicle.images && vehicle.images.length > 0 ? 'hidden' : ''}`}
+                      >
+                        No Image
                       </div>
                     </div>
                     <CardHeader className="pb-3">
