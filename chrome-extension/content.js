@@ -974,6 +974,7 @@ class SalesonatorAutomator {
       return false;
     }
   }
+}
 
 // Initialize the enhanced automator
 const salesonatorAutomator = new SalesonatorAutomator();
