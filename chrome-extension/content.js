@@ -495,10 +495,45 @@ class SalesonatorAutomator {
       
       await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
       
-      // Verify selection worked
+      // Verify selection worked - check multiple ways
       console.log('[YEAR DEBUG] Verifying year selection...');
       const selectedValue = yearDropdown.textContent?.trim() || yearDropdown.value;
-      console.log('[YEAR DEBUG] Selected value:', selectedValue);
+      console.log('[YEAR DEBUG] Dropdown selected value:', selectedValue);
+      
+      // Check if any input fields have the year value
+      const yearInputs = document.querySelectorAll('input[type="text"], input[type="number"], input[name*="year"], [aria-label*="Year"]');
+      console.log('[YEAR DEBUG] Checking year inputs:', yearInputs.length);
+      yearInputs.forEach((input, i) => {
+        console.log(`[YEAR DEBUG] Input ${i} value:`, input.value, 'name:', input.name, 'aria-label:', input.getAttribute('aria-label'));
+      });
+      
+      // Check if the dropdown still shows the placeholder or selected value
+      const dropdownText = yearDropdown.textContent?.trim();
+      const dropdownValue = yearDropdown.getAttribute('data-value') || yearDropdown.value;
+      console.log('[YEAR DEBUG] Final dropdown text:', dropdownText);
+      console.log('[YEAR DEBUG] Final dropdown data-value:', dropdownValue);
+      
+      // More aggressive verification - check if year appears anywhere in the form
+      const formContainer = yearDropdown.closest('form') || document.querySelector('form');
+      if (formContainer) {
+        const yearInForm = formContainer.textContent?.includes(year.toString());
+        console.log('[YEAR DEBUG] Year appears in form:', yearInForm);
+      }
+      
+      // Check if this looks like success (either dropdown shows year or some input has year)
+      const hasYearInDropdown = dropdownText?.includes(year.toString()) || dropdownValue?.includes(year.toString());
+      const hasYearInInput = Array.from(yearInputs).some(input => input.value?.includes(year.toString()));
+      const selectionSuccess = hasYearInDropdown || hasYearInInput;
+      
+      console.log('[YEAR DEBUG] Year in dropdown:', hasYearInDropdown);
+      console.log('[YEAR DEBUG] Year in input:', hasYearInInput);
+      console.log('[YEAR DEBUG] Overall success:', selectionSuccess);
+      
+      if (!selectionSuccess) {
+        console.warn('[YEAR DEBUG] Year selection may have failed - no evidence of selection found');
+        this.log(`⚠️ Year selection verification failed for: ${year}`);
+        return false;
+      }
       
       this.log(`✅ Successfully selected year: ${year}`);
       console.log(`[YEAR DEBUG] Year selection completed successfully`);
