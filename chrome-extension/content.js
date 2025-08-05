@@ -444,21 +444,57 @@ class SalesonatorAutomator {
       yearDropdown.click();
       await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
       
-      // Look for year option more specifically using XPath - EXACT same as vehicle type
+      // Try multiple approaches for year option selection
+      this.log(`📅 Looking for year option: ${year}`);
       const yearOptionSelectors = [
         `text:${year}`, // Use XPath for text content
+        `//div[text()="${year}"]`, // Direct XPath
+        `//span[text()="${year}"]`, // XPath for span
+        `//*[text()="${year}"]`, // Any element with this text
         `[data-value="${year}"]`,
-        `[role="option"]`
+        `div:contains("${year}")`,
+        `span:contains("${year}")`
       ];
       
-      const yearOption = await this.waitForElement(yearOptionSelectors, 5000);
-      await this.scrollIntoView(yearOption);
-      await this.delay(this.randomDelay(300, 600));
-      yearOption.click();
+      let yearOption = null;
+      for (const selector of yearOptionSelectors) {
+        try {
+          this.log(`📅 Trying selector: ${selector}`);
+          yearOption = await this.waitForElement([selector], 2000);
+          if (yearOption) {
+            this.log(`📅 Found year option with selector: ${selector}`);
+            break;
+          }
+        } catch (e) {
+          // Continue to next selector
+        }
+      }
       
-      await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
-      this.log(`✅ Successfully selected year: ${year}`);
-      return true;
+      if (!yearOption) {
+        this.log('📅 Could not find year option, trying fallback...');
+        // Fallback: look for any clickable element containing the year
+        const allOptions = document.querySelectorAll('[role="option"], div[data-value], .option, li');
+        for (const option of allOptions) {
+          if (option.textContent && option.textContent.trim() === year.toString()) {
+            yearOption = option;
+            this.log(`📅 Found year option via fallback: ${option.textContent}`);
+            break;
+          }
+        }
+      }
+      
+      if (yearOption) {
+        await this.scrollIntoView(yearOption);
+        await this.delay(this.randomDelay(300, 600));
+        yearOption.click();
+        
+        await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
+        this.log(`✅ Successfully selected year: ${year}`);
+        return true;
+      } else {
+        this.log(`❌ Could not find year option: ${year}`);
+        return false;
+      }
       
     } catch (error) {
       this.log(`⚠️ Could not select year: ${year}`, error);
