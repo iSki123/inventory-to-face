@@ -241,12 +241,14 @@ class FacebookMarketplaceAutomation {
   async fillPrice(price) {
     if (!price) return;
     
-    const priceValue = (price / 100).toString();
+    // Price is already in dollars, not cents
+    const priceValue = price.toString();
     const selectors = [
       'input[placeholder*="rice"]',
       'input[data-testid*="price"]',
       'input[name*="price"]',
-      'input[type="number"]'
+      'input[type="number"]',
+      'input[aria-label*="rice"]'
     ];
 
     await this.tryFillInput(selectors, priceValue, 'price');
@@ -450,9 +452,15 @@ class FacebookMarketplaceAutomation {
   async fillDescription(vehicle) {
     let description = vehicle.ai_description || vehicle.description;
     
-    // Generate a better description if none exists
-    if (!description) {
-      description = this.generateDescription(vehicle);
+    // Generate AI description if none exists
+    if (!description || description.length < 50) {
+      console.log('Generating AI description for vehicle...');
+      try {
+        description = await this.generateAIDescription(vehicle);
+      } catch (error) {
+        console.warn('Failed to generate AI description, using fallback:', error);
+        description = this.generateDescription(vehicle);
+      }
     }
 
     const selectors = [
@@ -465,6 +473,35 @@ class FacebookMarketplaceAutomation {
     ];
 
     await this.tryFillTextarea(selectors, description, 'description');
+  }
+
+  async generateAIDescription(vehicle) {
+    try {
+      const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/generate-vehicle-description', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+        },
+        body: JSON.stringify({ vehicle })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.description) {
+        console.log('Generated AI description successfully');
+        return data.description;
+      } else {
+        throw new Error(data.error || 'Failed to generate AI description');
+      }
+    } catch (error) {
+      console.error('Error generating AI description:', error);
+      throw error;
+    }
   }
 
   generateDescription(vehicle) {
@@ -525,19 +562,24 @@ class FacebookMarketplaceAutomation {
 
   async uploadImageFiles(input, imageUrls) {
     try {
+      // Remove duplicates and limit to first 3 unique images
+      const uniqueUrls = [...new Set(imageUrls)].slice(0, 3);
+      console.log('Uploading unique images:', uniqueUrls);
+      
       // Download images and convert to File objects
       const files = [];
       
-      for (let i = 0; i < Math.min(imageUrls.length, 10); i++) { // Limit to 10 images
+      for (let i = 0; i < uniqueUrls.length; i++) {
         try {
-          const response = await fetch(imageUrls[i], { mode: 'cors' });
+          const response = await fetch(uniqueUrls[i], { mode: 'cors' });
           if (response.ok) {
             const blob = await response.blob();
             const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
             files.push(file);
+            console.log(`Downloaded image ${i + 1}:`, uniqueUrls[i]);
           }
         } catch (error) {
-          console.warn(`Failed to fetch image ${imageUrls[i]}:`, error);
+          console.warn(`Failed to fetch image ${uniqueUrls[i]}:`, error);
         }
       }
 
@@ -549,7 +591,7 @@ class FacebookMarketplaceAutomation {
         input.files = dt.files;
         input.dispatchEvent(new Event('change', { bubbles: true }));
         
-        console.log(`Uploaded ${files.length} images`);
+        console.log(`Uploaded ${files.length} unique images`);
       }
     } catch (error) {
       console.error('Error uploading images:', error);
