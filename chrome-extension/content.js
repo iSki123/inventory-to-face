@@ -438,51 +438,21 @@ class SalesonatorAutomator {
       yearDropdown.click();
       await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
       
-      // Look for the specific year option within dropdown containers
-      let yearOption = null;
+      // Look for the specific year option - simplified approach like vehicle type
+      const yearOptionSelectors = [
+        `text:${year}`, // Use XPath for text content
+        `[data-value="${year}"]`,
+        `option[value="${year}"]`
+      ];
       
-      // First, try to find the dropdown container that just opened
-      const dropdownContainers = document.querySelectorAll('[role="listbox"], [role="menu"], .dropdown-menu, [data-testid*="dropdown"]');
+      const yearOption = await this.waitForElement(yearOptionSelectors, 5000);
       
-      for (const container of dropdownContainers) {
-        yearOption = this.findElementByText(year.toString(), ['div', 'li', 'button', 'span', 'option'], container);
-        if (yearOption) {
-          this.log(`📅 Found year ${year} in dropdown container`);
-          break;
-        }
-      }
-      
-      if (!yearOption) {
-        // Broader search with more specific selectors
-        const yearOptionSelectors = [
-          `//div[contains(text(), "${year}") and (@role="option" or parent::*[@role="listbox"])]`,
-          `[data-value="${year}"]`,
-          `option[value="${year}"]`,
-          `li:contains("${year}")`,
-          `div[role="option"]:contains("${year}")`
-        ];
-        yearOption = await this.waitForElement(yearOptionSelectors, 3000);
-      }
+      // CRITICAL: Scroll the year option into view within the dropdown
       await this.scrollIntoView(yearOption);
       await this.delay(this.randomDelay(300, 600));
       
       this.log(`📅 Found year option ${year}, clicking...`);
-      // Use multiple click strategies for Facebook dropdowns
-      yearOption.focus();
-      await this.delay(this.randomDelay(200, 400));
-      
-      // Try MouseEvent click first
-      const clickEvent = new MouseEvent('click', {
-        bubbles: true,
-        cancelable: true,
-        view: window
-      });
-      yearOption.dispatchEvent(clickEvent);
-      
-      // Fallback to regular click
-      if (yearOption.click) {
-        yearOption.click();
-      }
+      yearOption.click(); // Simple click like vehicle type
       
       await this.delay(this.randomDelay(1000, 2000));
       
