@@ -28,14 +28,25 @@ class SalesonatorExtension {
     document.getElementById('login').addEventListener('click', () => this.showLoginForm());
 
     // Check for existing web app authentication first
+    console.log('🔍 Starting web app authentication check...');
     const webAppAuth = await this.checkWebAppAuthentication();
     if (webAppAuth) {
-      console.log('Found web app authentication, using it for extension');
+      console.log('✅ Found web app authentication, using it for extension');
+      console.log('🔐 Storing token in extension storage...');
       await chrome.storage.sync.set({ userToken: webAppAuth.token });
-      // Continue with normal flow using the detected token
+      console.log('✅ Token stored successfully');
+      
+      // Show success immediately and skip further checks
+      this.showWebAppAuthSuccess();
+      document.getElementById('loginSection').style.display = 'none';
+      document.getElementById('mainSection').style.display = 'block';
+      return; // Exit early, don't run checkAuthentication
+    } else {
+      console.log('❌ No web app authentication found');
     }
     
-    // Check authentication status (including any newly detected token)
+    // Check authentication status (only if web app auth wasn't found)
+    console.log('🔍 Checking stored authentication...');
     await this.checkAuthentication();
     
     // Check connection status
