@@ -151,16 +151,20 @@ class FacebookMarketplaceAutomation {
     // Wait for the form to be fully loaded
     await this.delay(2000);
 
+    // Standardize vehicle data with proper capitalization
+    const standardizedVehicle = this.standardizeVehicleData(vehicle);
+    console.log('Standardized vehicle data:', standardizedVehicle);
+
     // Fill vehicle type first (if dropdown exists)
     await this.selectVehicleType();
 
     // Fill basic fields with multiple selector strategies
-    await this.fillPrice(vehicle.price);
-    await this.fillYear(vehicle.year);
-    await this.fillMake(vehicle.make);
-    await this.fillModel(vehicle.model);
-    await this.fillLocation(vehicle.location);
-    await this.fillDescription(vehicle);
+    await this.fillPrice(standardizedVehicle.price);
+    await this.fillYear(standardizedVehicle.year);
+    await this.fillMake(standardizedVehicle.make);
+    await this.fillModel(standardizedVehicle.model);
+    await this.fillLocation(standardizedVehicle.location);
+    await this.fillDescription(standardizedVehicle);
     
     // Upload images if available
     if (vehicle.images && vehicle.images.length > 0) {
@@ -168,6 +172,26 @@ class FacebookMarketplaceAutomation {
     }
 
     console.log('Form filling completed');
+  }
+
+  standardizeVehicleData(vehicle) {
+    const standardized = { ...vehicle };
+    
+    // Capitalize first letter of make and model
+    if (standardized.make) {
+      standardized.make = standardized.make.charAt(0).toUpperCase() + standardized.make.slice(1).toLowerCase();
+    }
+    
+    if (standardized.model) {
+      standardized.model = standardized.model.charAt(0).toUpperCase() + standardized.model.slice(1).toLowerCase();
+    }
+    
+    // Ensure year is a string
+    if (standardized.year) {
+      standardized.year = standardized.year.toString();
+    }
+    
+    return standardized;
   }
 
   async selectVehicleType() {
@@ -235,12 +259,29 @@ class FacebookMarketplaceAutomation {
 
     const selectors = [
       'input[placeholder*="ake"]',
+      'input[aria-label*="ake"]',
       '[data-testid*="make"]',
       '[aria-label*="Make"]',
-      'input[name*="make"]'
+      'input[name*="make"]',
+      'input[placeholder="Make"]',
+      'input[id*="make"]',
+      'input[class*="make"]'
     ];
 
-    await this.tryFillInput(selectors, make, 'make');
+    const success = await this.tryFillInput(selectors, make, 'make');
+    if (!success) {
+      // Try alternative approach - look for any text input and check if it's the make field
+      const allInputs = document.querySelectorAll('input[type="text"]');
+      for (let input of allInputs) {
+        const parent = input.closest('div');
+        if (parent && (parent.innerText.toLowerCase().includes('make') || 
+                      input.placeholder.toLowerCase().includes('make'))) {
+          console.log('Found make field via alternative method');
+          await this.simulateTyping(input, make);
+          return;
+        }
+      }
+    }
   }
 
   async fillModel(model) {
@@ -248,12 +289,29 @@ class FacebookMarketplaceAutomation {
 
     const selectors = [
       'input[placeholder*="odel"]',
+      'input[aria-label*="odel"]',
       '[data-testid*="model"]',
       '[aria-label*="Model"]',
-      'input[name*="model"]'
+      'input[name*="model"]',
+      'input[placeholder="Model"]',
+      'input[id*="model"]',
+      'input[class*="model"]'
     ];
 
-    await this.tryFillInput(selectors, model, 'model');
+    const success = await this.tryFillInput(selectors, model, 'model');
+    if (!success) {
+      // Try alternative approach - look for any text input and check if it's the model field
+      const allInputs = document.querySelectorAll('input[type="text"]');
+      for (let input of allInputs) {
+        const parent = input.closest('div');
+        if (parent && (parent.innerText.toLowerCase().includes('model') || 
+                      input.placeholder.toLowerCase().includes('model'))) {
+          console.log('Found model field via alternative method');
+          await this.simulateTyping(input, model);
+          return;
+        }
+      }
+    }
   }
 
   async fillLocation(location) {
