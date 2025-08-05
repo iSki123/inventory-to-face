@@ -311,6 +311,12 @@ class SalesonatorAutomator {
           await this.fillVehicleForm(vehicleData);
           await this.delay(1000, attempt);
           
+          // Handle image uploads if images are provided
+          if (vehicleData.images && vehicleData.images.length > 0) {
+            await this.handleImageUploads(vehicleData.images);
+            await this.delay(1000, attempt);
+          }
+          
           // Submit with verification
           const success = await this.submitListing();
           
@@ -438,7 +444,17 @@ class SalesonatorAutomator {
       yearDropdown.click();
       await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
       
-      // Look for the specific year option - simplified approach like vehicle type
+      // Look for the specific year option - but first scroll dropdown to bottom for recent years
+      this.log(`📅 Scrolling dropdown to find year ${year}...`);
+      
+      // Find the dropdown container first
+      const dropdownContainer = document.querySelector('[role="listbox"], [role="menu"], .dropdown-menu, [data-testid*="dropdown"]');
+      if (dropdownContainer) {
+        // Scroll to bottom of dropdown where recent years like 2024 would be
+        dropdownContainer.scrollTop = dropdownContainer.scrollHeight;
+        await this.delay(this.randomDelay(500, 1000));
+      }
+      
       const yearOptionSelectors = [
         `text:${year}`, // Use XPath for text content
         `[data-value="${year}"]`,
