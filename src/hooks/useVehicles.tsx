@@ -22,6 +22,7 @@ export interface Vehicle {
   original_price?: number;
   condition?: 'new' | 'used' | 'certified';
   description?: string;
+  ai_description?: string;
   features?: string[];
   images?: string[];
   facebook_post_id?: string;

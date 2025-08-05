@@ -308,11 +308,27 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
           </div>
 
           {/* Description */}
-          <div>
+          <div className="space-y-3">
             <Label htmlFor="description">Description</Label>
+            {vehicle?.ai_description && (
+              <div className="p-3 bg-muted/50 rounded-md border">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-muted-foreground">AI Generated Description</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => updateField('description', vehicle.ai_description || '')}
+                  >
+                    Use AI Description
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground">{vehicle.ai_description}</p>
+              </div>
+            )}
             <Textarea
               id="description"
-              value={formData.description || ''}
+              value={formData.description || formData.ai_description || ''}
               onChange={(e) => updateField('description', e.target.value)}
               placeholder="Detailed description of the vehicle..."
               rows={4}

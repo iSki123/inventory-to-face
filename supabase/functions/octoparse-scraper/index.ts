@@ -360,31 +360,108 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
 
 function parseOctoparseData(rawData: any[]): any[] {
   console.log('Raw data from Octoparse:', JSON.stringify(rawData, null, 2));
+  console.log(`Total items to process: ${rawData.length}`);
   
   // Parse and transform Octoparse data to our vehicle format
   return rawData.map((item: any, index: number) => {
-    console.log(`Processing item ${index}:`, JSON.stringify(item, null, 2));
+    console.log(`\n=== Processing item ${index} ===`);
+    console.log('Raw item data:', JSON.stringify(item, null, 2));
     
-    // Extract price and convert to cents
+    // Log all available field names to understand the data structure
+    const fieldNames = Object.keys(item || {});
+    console.log('Available field names:', fieldNames);
+    
+    // More flexible field extraction - check all possible variations
+    const getFieldValue = (fieldNames: string[], defaultValue: any = null) => {
+      for (const field of fieldNames) {
+        const lowerField = field.toLowerCase();
+        for (const key of Object.keys(item)) {
+          if (key.toLowerCase() === lowerField || key.toLowerCase().includes(lowerField)) {
+            const value = item[key];
+            if (value !== null && value !== undefined && value !== '') {
+              return value;
+            }
+          }
+        }
+      }
+      return defaultValue;
+    };
+    
+    // Extract price and convert to cents - try multiple field variations
     let price = 0;
-    if (item.price || item.Price || item.PRICE) {
-      const priceStr = String(item.price || item.Price || item.PRICE);
+    const priceValue = getFieldValue(['price', 'msrp', 'cost', 'amount', 'value']) ||
+                     item.price || item.Price || item.PRICE || item.msrp || item.MSRP ||
+                     item.cost || item.Cost || item.amount || item.Amount;
+    
+    if (priceValue) {
+      console.log('Found price value:', priceValue);
+      const priceStr = String(priceValue);
       const numericPrice = parseFloat(priceStr.replace(/[^0-9.]/g, ''));
       price = (numericPrice || 0) * 100;
+      console.log('Processed price (cents):', price);
+    } else {
+      console.log('No price found in data');
     }
     
-    // Extract mileage
+    // Extract mileage - try multiple field variations
     let mileage = 0;
-    if (item.mileage || item.Mileage || item.MILEAGE) {
-      const mileageStr = String(item.mileage || item.Mileage || item.MILEAGE);
+    const mileageValue = getFieldValue(['mileage', 'miles', 'odometer', 'km']) ||
+                        item.mileage || item.Mileage || item.MILEAGE || item.miles || item.Miles ||
+                        item.odometer || item.Odometer || item.km || item.KM;
+    
+    if (mileageValue) {
+      console.log('Found mileage value:', mileageValue);
+      const mileageStr = String(mileageValue);
       mileage = parseInt(mileageStr.replace(/[^0-9]/g, '')) || 0;
+      console.log('Processed mileage:', mileage);
     }
     
-    // Extract year
+    // Extract year - try multiple field variations
     let year = new Date().getFullYear();
-    if (item.year || item.Year || item.YEAR) {
-      year = parseInt(String(item.year || item.Year || item.YEAR)) || year;
+    const yearValue = getFieldValue(['year', 'model_year', 'yr']) ||
+                     item.year || item.Year || item.YEAR || item.model_year || item.modelYear;
+    
+    if (yearValue) {
+      console.log('Found year value:', yearValue);
+      year = parseInt(String(yearValue)) || year;
+      console.log('Processed year:', year);
     }
+    
+    // Extract make - try multiple field variations
+    const make = getFieldValue(['make', 'brand', 'manufacturer']) ||
+                item.make || item.Make || item.MAKE || item.brand || item.Brand || 
+                item.manufacturer || item.Manufacturer || 'Unknown';
+    console.log('Found make:', make);
+    
+    // Extract model - try multiple field variations  
+    const model = getFieldValue(['model', 'model_name']) ||
+                 item.model || item.Model || item.MODEL || item.model_name || item.modelName || 'Unknown';
+    console.log('Found model:', model);
+    
+    // Extract VIN - try multiple field variations
+    const vin = getFieldValue(['vin', 'vehicle_id', 'serial']) ||
+               item.vin || item.VIN || item.vehicle_id || item.vehicleId || generateVIN();
+    console.log('Found/generated VIN:', vin);
+    
+    // Extract trim - try multiple field variations
+    const trim = getFieldValue(['trim', 'trim_level', 'package']) ||
+                item.trim || item.Trim || item.trim_level || item.trimLevel || item.package || '';
+    console.log('Found trim:', trim);
+    
+    // Extract colors
+    const exterior_color = getFieldValue(['exterior_color', 'color', 'ext_color']) ||
+                          item.exterior_color || item.color || item.Color || item.ext_color || 'Unknown';
+    const interior_color = getFieldValue(['interior_color', 'int_color']) ||
+                          item.interior_color || item.interiorColor || item.int_color || 'Unknown';
+    
+    // Extract condition
+    const condition = getFieldValue(['condition', 'status']) ||
+                     item.condition || item.Condition || item.status || 'used';
+    
+    // Extract description
+    const description = getFieldValue(['description', 'desc', 'details', 'notes']) ||
+                       item.description || item.Description || item.desc || item.details ||
+                       `${year} ${make} ${model}`;
     
     // Extract images - check multiple possible field names and detect image URLs
     const extractImages = (data: any): string[] => {
@@ -398,7 +475,7 @@ function parseOctoparseData(rawData: any[]): any[] {
       };
       
       // Check common image field names
-      const imageFields = ['images', 'image', 'Image', 'IMAGES', 'photos', 'Photos', 'PHOTOS', 'picture', 'Picture', 'PICTURE', 'pic', 'Pic', 'PIC'];
+      const imageFields = ['images', 'image', 'Image', 'IMAGES', 'photos', 'Photos', 'PHOTOS', 'picture', 'Picture', 'PICTURE', 'pic', 'Pic', 'PIC', 'img', 'IMG'];
       
       for (const field of imageFields) {
         if (data[field]) {
@@ -437,26 +514,26 @@ function parseOctoparseData(rawData: any[]): any[] {
     
     const vehicle = {
       year,
-      make: item.make || item.Make || item.MAKE || item.brand || item.Brand || 'Unknown',
-      model: item.model || item.Model || item.MODEL || 'Unknown',
+      make,
+      model,
       price,
       mileage,
-      exterior_color: item.exterior_color || item.color || item.Color || 'Unknown',
-      interior_color: item.interior_color || item.interiorColor || 'Unknown',
-      condition: item.condition || item.Condition || 'used',
-      fuel_type: item.fuel_type || item.fuelType || 'gasoline',
-      transmission: item.transmission || item.Transmission || 'automatic',
-      description: item.description || item.Description || `${year} ${item.make || item.Make || 'Unknown'} ${item.model || item.Model || 'Unknown'}`,
-      vin: item.vin || item.VIN || generateVIN(),
+      exterior_color,
+      interior_color,
+      condition,
+      fuel_type: getFieldValue(['fuel_type', 'fuel', 'engine_type']) || item.fuel_type || item.fuelType || item.fuel || 'gasoline',
+      transmission: getFieldValue(['transmission', 'trans']) || item.transmission || item.Transmission || item.trans || 'automatic',
+      description,
+      vin,
       features: Array.isArray(item.features) ? item.features : [],
       images: extractImages(item),
-      trim: item.trim || item.Trim || '',
-      location: item.location || item.Location || '',
-      contact_phone: item.phone || item.Phone || '',
-      contact_email: item.email || item.Email || ''
+      trim,
+      location: getFieldValue(['location', 'city', 'state', 'address']) || item.location || item.Location || '',
+      contact_phone: getFieldValue(['phone', 'contact_phone', 'telephone']) || item.phone || item.Phone || '',
+      contact_email: getFieldValue(['email', 'contact_email']) || item.email || item.Email || ''
     };
     
-    console.log(`Processed vehicle ${index}:`, vehicle);
+    console.log(`Processed vehicle ${index}:`, JSON.stringify(vehicle, null, 2));
     return vehicle;
   }).filter(vehicle => vehicle.make !== 'Unknown' && vehicle.model !== 'Unknown');
 }
@@ -724,6 +801,9 @@ async function listAvailableTasks() {
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );
   }
+
+  }
+}
 
 function generateVIN() {
   const chars = 'ABCDEFGHJKLMNPRSTUVWXYZ1234567890';
