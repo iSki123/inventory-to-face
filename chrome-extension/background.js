@@ -44,6 +44,49 @@ class SalesonatorBackground {
         return true; // Will respond asynchronously
       }
       
+      if (request.action === 'fetchImage') {
+        // Handle CORS-protected image fetching
+        console.log('Fetching image with CORS bypass:', request.url);
+        
+        fetch(request.url, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          }
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          return response.blob();
+        })
+        .then(blob => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            sendResponse({
+              success: true,
+              data: reader.result
+            });
+          };
+          reader.onerror = () => {
+            sendResponse({
+              success: false,
+              error: 'Failed to convert blob to base64'
+            });
+          };
+          reader.readAsDataURL(blob);
+        })
+        .catch(error => {
+          console.error('Image fetch failed:', error);
+          sendResponse({
+            success: false,
+            error: error.message
+          });
+        });
+        
+        return true; // Keep message channel open for async response
+      }
+      
       if (request.action === 'logActivity') {
         // Log activity for debugging
         console.log('Salesonator Activity:', request.data);

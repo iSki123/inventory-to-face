@@ -112,21 +112,42 @@ class SalesonatorAutomator {
           try {
             const xpath = `.//*[contains(normalize-space(text()), "${text}")]`;
             const result = document.evaluate(xpath, parentElement, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-            if (result.singleNodeValue) return result.singleNodeValue;
+            if (result.singleNodeValue) {
+              // Filter out disabled or hidden elements
+              const elem = result.singleNodeValue;
+              if (!elem.hasAttribute('aria-disabled') && !elem.hasAttribute('aria-hidden')) {
+                return elem;
+              }
+            }
           } catch (e) {}
           
-          // Method 2: Manual text search fallback
+          // Method 2: Manual text search with element filtering
           const elements = Array.from(parentElement.querySelectorAll('*'));
           const found = elements.find(el => {
             const textContent = el.textContent?.trim() || '';
             const innerText = el.innerText?.trim() || '';
-            return textContent.includes(text) || innerText.includes(text);
+            const isMatch = textContent.includes(text) || innerText.includes(text);
+            
+            // Filter out disabled, hidden, or back buttons
+            if (isMatch) {
+              const ariaLabel = el.getAttribute('aria-label') || '';
+              const isDisabled = el.hasAttribute('aria-disabled') && el.getAttribute('aria-disabled') === 'true';
+              const isHidden = el.hasAttribute('aria-hidden') && el.getAttribute('aria-hidden') === 'true';
+              const isBackButton = ariaLabel.toLowerCase().includes('back');
+              
+              return !isDisabled && !isHidden && !isBackButton;
+            }
+            return false;
           });
           if (found) return found;
         }
         
-        // Regular CSS selector
+        // Regular CSS selector (skip invalid ones)
         else {
+          // Skip invalid CSS selectors with :has-text pseudo-selector
+          if (selector.includes(':has-text(') || selector.includes(':contains(')) {
+            continue;
+          }
           const element = parentElement.querySelector(selector);
           if (element) return element;
         }
@@ -451,9 +472,8 @@ class SalesonatorAutomator {
         '[aria-label*="Year" i]', // Case insensitive
         '[data-testid*="year" i]',
         'select[name*="year" i]',
-        'div[role="button"]:has-text("Year")', // Role with text context
-        'div[role="combobox"]:has-text("Year")',
-        'div[role="button"]', // Generic fallback
+        'div[role="button"]', // Generic button fallback
+        'div[role="combobox"]', // Generic combobox fallback
         'select'
       ];
       
@@ -777,40 +797,106 @@ class SalesonatorAutomator {
     }
   }
 
-  // Enhanced image upload handling
+  // Enhanced image upload handling with CORS workaround
   async handleImageUploads(images) {
     try {
-      this.log('📸 Processing image uploads...');
+      this.log('📸 Starting image upload process...');
+      this.log('📸 Processing image uploads for Facebook Marketplace...');
       
-      const uploadSelectors = [
-        'input[type="file"]',
-        'input[accept*="image"]',
-        '[data-testid*="photo"]',
-        '[data-testid*="image"]',
-        '.file-input'
+      // First, find the upload trigger element (not the file input directly)
+      const uploadTriggerSelectors = [
+        'text:Add photos',
+        'text:Add photos/videos', 
+        'text:Upload photos',
+        '[aria-label*="Add photos"]',
+        '[aria-label*="Upload"]',
+        '[data-testid*="photo"]'
       ];
       
-      // Convert image URLs to File objects (simplified for demo)
-      const files = await Promise.all(images.map(async (imageUrl, index) => {
+      const uploadTrigger = await this.waitForElement(uploadTriggerSelectors, 5000);
+      this.log('📸 Found upload trigger:', uploadTrigger.textContent?.trim());
+      
+      // Click to reveal the file input
+      this.log('📸 Clicking upload area to reveal file input...');
+      await this.performFacebookDropdownClick(uploadTrigger);
+      await this.delay(this.randomDelay(1000, 2000));
+      
+      // Now find the actual file input
+      const fileInputSelectors = [
+        'input[type="file"][accept*="image"]',
+        'input[type="file"]'
+      ];
+      
+      const fileInput = await this.waitForElement(fileInputSelectors, 3000);
+      this.log('📸 Found file input:', fileInput);
+      
+      // Convert image URLs to File objects with CORS workaround via background script
+      this.log(`📸 Converting ${images.length} image URLs to files...`);
+      const filePromises = images.map(async (imageUrl, index) => {
         try {
-          const response = await fetch(imageUrl);
-          const blob = await response.blob();
-          return new File([blob], `vehicle_image_${index + 1}.jpg`, { type: 'image/jpeg' });
+          this.log(`📸 Processing image ${index + 1}: ${imageUrl}`);
+          
+          // Use background script to fetch images with proper headers
+          return new Promise((resolve) => {
+            chrome.runtime.sendMessage({
+              action: 'fetchImage',
+              url: imageUrl
+            }, (response) => {
+              if (response && response.success) {
+                // Convert base64 to blob
+                const byteCharacters = atob(response.data.split(',')[1]);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                  byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: 'image/jpeg' });
+                const file = new File([blob], `vehicle_image_${index + 1}.jpg`, { type: 'image/jpeg' });
+                resolve(file);
+              } else {
+                this.log(`⚠️ Could not process image ${index + 1}: ${imageUrl}`, response?.error);
+                resolve(null);
+              }
+            });
+          });
+          
         } catch (error) {
-          this.log('⚠️ Could not process image:', imageUrl, error);
+          this.log(`⚠️ Could not process image ${index + 1}: ${imageUrl}`, error);
           return null;
         }
-      }));
+      });
       
+      const files = await Promise.all(filePromises);
       const validFiles = files.filter(file => file !== null);
       
-      if (validFiles.length > 0) {
-        await this.uploadFiles(uploadSelectors, validFiles);
-        this.log(`✅ Uploaded ${validFiles.length} images`);
+      this.log(`📸 Successfully processed ${validFiles.length} out of ${images.length} images`);
+      
+      if (validFiles.length === 0) {
+        this.log('❌ No valid images to upload');
+        return false;
       }
+      
+      // Create a DataTransfer object to hold the files
+      const dataTransfer = new DataTransfer();
+      validFiles.forEach(file => {
+        dataTransfer.items.add(file);
+      });
+      
+      // Set the files to the file input
+      fileInput.files = dataTransfer.files;
+      
+      // Trigger the change event to notify Facebook's React components
+      const changeEvent = new Event('change', { bubbles: true });
+      fileInput.dispatchEvent(changeEvent);
+      
+      await this.delay(this.randomDelay(2000, 3000));
+      
+      this.log(`✅ Successfully uploaded ${validFiles.length} images`);
+      return true;
       
     } catch (error) {
       this.log('⚠️ Image upload failed:', error);
+      return false;
     }
   }
 
