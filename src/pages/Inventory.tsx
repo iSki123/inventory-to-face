@@ -14,8 +14,8 @@ import { VehicleForm } from "@/components/VehicleForm";
 import { VehicleSourceForm } from "@/components/VehicleSourceForm";
 
 export default function Inventory() {
-  const { vehicles, loading, addVehicle, updateVehicle, deleteVehicle, postToFacebook } = useVehicles();
-  const { sources, loading: sourcesLoading, addSource, startScraping } = useVehicleSources();
+  const { vehicles, loading, addVehicle, updateVehicle, deleteVehicle, postToFacebook, refetch } = useVehicles();
+  const { sources, loading: sourcesLoading, addSource, startScraping, importSpecificTask } = useVehicleSources();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [conditionFilter, setConditionFilter] = useState("all");
@@ -24,6 +24,8 @@ export default function Inventory() {
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState("vehicles");
+  const [taskIdInput, setTaskIdInput] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
 
   const filteredVehicles = vehicles.filter(vehicle => {
     const matchesSearch = searchTerm === "" || 
@@ -53,6 +55,24 @@ export default function Inventory() {
 
   const handleAddSource = async (sourceData: any) => {
     await addSource(sourceData);
+  };
+
+  const handleImportTask = async () => {
+    if (!taskIdInput.trim()) {
+      return;
+    }
+    
+    setIsImporting(true);
+    try {
+      const result = await importSpecificTask(taskIdInput.trim());
+      if (result) {
+        // Refresh vehicles after successful import
+        await refetch();
+        setTaskIdInput("");
+      }
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const formatPrice = (price: number) => {
@@ -409,6 +429,45 @@ export default function Inventory() {
               Add Source
             </Button>
           </div>
+
+          {/* Manual Task Import */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Import from Octoparse Task</CardTitle>
+              <CardDescription>
+                Directly import vehicle data from a specific Octoparse task ID
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-3">
+                <Input
+                  placeholder="Enter Octoparse Task ID (e.g., 7e9f5fcf-7257-470e-a20b-41f84293a152)"
+                  value={taskIdInput}
+                  onChange={(e) => setTaskIdInput(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={handleImportTask}
+                  disabled={isImporting || !taskIdInput.trim()}
+                >
+                  {isImporting ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Import Now
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                This will fetch and import all vehicle data from the specified Octoparse task.
+              </p>
+            </CardContent>
+          </Card>
 
           {sources.length === 0 ? (
             <Card className="p-12 text-center">

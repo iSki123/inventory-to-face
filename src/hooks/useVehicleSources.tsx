@@ -249,6 +249,43 @@ export const useVehicleSources = () => {
     }
   }, [user]);
 
+  const importSpecificTask = async (taskId: string) => {
+    try {
+      if (!user) throw new Error('User not authenticated');
+
+      const response = await supabase.functions.invoke('octoparse-scraper', {
+        body: {
+          action: 'import_task',
+          taskId,
+          userId: user.id
+        }
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      const result = response.data;
+      if (result.success) {
+        toast({
+          title: "Import Successful",
+          description: result.message,
+        });
+        return result;
+      } else {
+        throw new Error(result.error || 'Task import failed');
+      }
+    } catch (error) {
+      console.error('Error importing task:', error);
+      toast({
+        title: "Import Failed",
+        description: error.message || "Failed to import task data",
+        variant: "destructive",
+      });
+      return null;
+    }
+  };
+
   return {
     sources,
     loading,
@@ -257,6 +294,7 @@ export const useVehicleSources = () => {
     deleteSource,
     startScraping,
     processScrapedData,
+    importSpecificTask,
     refetch: fetchSources,
   };
 };

@@ -20,7 +20,7 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    const { action, sourceId, userId } = await req.json();
+    const { action, sourceId, userId, taskId } = await req.json();
 
     if (!action || !userId) {
       throw new Error('action and userId are required');
@@ -47,6 +47,8 @@ serve(async (req) => {
         return await getScrapingStatus(supabaseClient, sourceId);
       case 'process_scraped_data':
         return await processScrapedData(supabaseClient, sourceId, userId);
+      case 'import_task':
+        return await importSpecificTask(supabaseClient, taskId, userId);
       default:
         throw new Error('Invalid action');
     }
@@ -85,8 +87,8 @@ async function startScraping(supabaseClient: any, sourceId: string, userId: stri
   }
 
   try {
-    // Start scraping task via Octoparse API
-    const response = await fetch('https://api.octoparse.com/v1/tasks/run', {
+    // Start scraping task via Octoparse API (correct endpoint)
+    const response = await fetch('https://openapi.octoparse.com/api/task/startTask', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -94,8 +96,7 @@ async function startScraping(supabaseClient: any, sourceId: string, userId: stri
       },
       body: JSON.stringify({
         taskId: source.octoparse_task_id || 'default-task-id',
-        url: source.website_url,
-        // Add additional parameters as needed
+        dataLimit: 10000
       }),
     });
 
@@ -177,8 +178,8 @@ async function getScrapingStatus(supabaseClient: any, sourceId: string) {
   }
 
   try {
-    // Check task status via Octoparse API
-    const response = await fetch(`https://api.octoparse.com/v1/tasks/${source.octoparse_task_id}/status`, {
+    // Check task status via Octoparse API (correct endpoint)
+    const response = await fetch(`https://openapi.octoparse.com/api/task/getTaskStatus?taskId=${source.octoparse_task_id}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -234,8 +235,8 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
 
   if (accessToken && source.octoparse_task_id) {
     try {
-      // Fetch scraped data from Octoparse API
-      const response = await fetch(`https://api.octoparse.com/v1/tasks/${source.octoparse_task_id}/data`, {
+      // Fetch scraped data from Octoparse API (correct endpoint)
+      const response = await fetch(`https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${source.octoparse_task_id}&offset=0&size=10000`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -244,7 +245,11 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
 
       if (response.ok) {
         const result = await response.json();
-        vehicleData = parseOctoparseData(result.data || []);
+        console.log('Octoparse API response:', JSON.stringify(result, null, 2));
+        // Handle Octoparse response format
+        const rawData = result.data?.dataList || result.dataList || result.data || [];
+        vehicleData = parseOctoparseData(rawData);
+        console.log(`Parsed ${vehicleData.length} vehicles from Octoparse data`);
       } else {
         console.warn('Failed to fetch Octoparse data, using fallback');
         vehicleData = generateMockVehicleData();
@@ -296,23 +301,57 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
 }
 
 function parseOctoparseData(rawData: any[]): any[] {
+  console.log('Raw data from Octoparse:', JSON.stringify(rawData, null, 2));
+  
   // Parse and transform Octoparse data to our vehicle format
-  return rawData.map((item: any) => ({
-    year: parseInt(item.year) || new Date().getFullYear(),
-    make: item.make || item.brand || 'Unknown',
-    model: item.model || 'Unknown',
-    price: (parseFloat(item.price?.replace(/[^0-9.]/g, '')) || 0) * 100, // Convert to cents
-    mileage: parseInt(item.mileage?.replace(/[^0-9]/g, '')) || 0,
-    exterior_color: item.exterior_color || item.color || 'Unknown',
-    interior_color: item.interior_color || 'Unknown',
-    condition: item.condition || 'used',
-    fuel_type: item.fuel_type || 'gasoline',
-    transmission: item.transmission || 'automatic',
-    description: item.description || `${item.year} ${item.make} ${item.model}`,
-    vin: item.vin || generateVIN(),
-    features: Array.isArray(item.features) ? item.features : [],
-    images: Array.isArray(item.images) ? item.images : []
-  })).filter(vehicle => vehicle.make !== 'Unknown' && vehicle.model !== 'Unknown');
+  return rawData.map((item: any, index: number) => {
+    console.log(`Processing item ${index}:`, JSON.stringify(item, null, 2));
+    
+    // Extract price and convert to cents
+    let price = 0;
+    if (item.price || item.Price || item.PRICE) {
+      const priceStr = String(item.price || item.Price || item.PRICE);
+      const numericPrice = parseFloat(priceStr.replace(/[^0-9.]/g, ''));
+      price = (numericPrice || 0) * 100;
+    }
+    
+    // Extract mileage
+    let mileage = 0;
+    if (item.mileage || item.Mileage || item.MILEAGE) {
+      const mileageStr = String(item.mileage || item.Mileage || item.MILEAGE);
+      mileage = parseInt(mileageStr.replace(/[^0-9]/g, '')) || 0;
+    }
+    
+    // Extract year
+    let year = new Date().getFullYear();
+    if (item.year || item.Year || item.YEAR) {
+      year = parseInt(String(item.year || item.Year || item.YEAR)) || year;
+    }
+    
+    const vehicle = {
+      year,
+      make: item.make || item.Make || item.MAKE || item.brand || item.Brand || 'Unknown',
+      model: item.model || item.Model || item.MODEL || 'Unknown',
+      price,
+      mileage,
+      exterior_color: item.exterior_color || item.color || item.Color || 'Unknown',
+      interior_color: item.interior_color || item.interiorColor || 'Unknown',
+      condition: item.condition || item.Condition || 'used',
+      fuel_type: item.fuel_type || item.fuelType || 'gasoline',
+      transmission: item.transmission || item.Transmission || 'automatic',
+      description: item.description || item.Description || `${year} ${item.make || item.Make || 'Unknown'} ${item.model || item.Model || 'Unknown'}`,
+      vin: item.vin || item.VIN || generateVIN(),
+      features: Array.isArray(item.features) ? item.features : [],
+      images: Array.isArray(item.images) ? item.images : [],
+      trim: item.trim || item.Trim || '',
+      location: item.location || item.Location || '',
+      contact_phone: item.phone || item.Phone || '',
+      contact_email: item.email || item.Email || ''
+    };
+    
+    console.log(`Processed vehicle ${index}:`, vehicle);
+    return vehicle;
+  }).filter(vehicle => vehicle.make !== 'Unknown' && vehicle.model !== 'Unknown');
 }
 
 function generateMockVehicleData() {
@@ -365,6 +404,105 @@ function generateMockVehicleData() {
   }
   
   return vehicles;
+}
+
+async function importSpecificTask(supabaseClient: any, taskId: string, userId: string) {
+  const accessToken = Deno.env.get('OCTOPARSE_API_KEY');
+  if (!accessToken) {
+    throw new Error('Octoparse access token not configured');
+  }
+
+  try {
+    console.log(`Importing data from task ID: ${taskId}`);
+    
+    // Fetch scraped data from Octoparse API using specific task ID
+    const response = await fetch(`https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${taskId}&offset=0&size=10000`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+
+    let vehicleData = [];
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log('Octoparse API response for task import:', JSON.stringify(result, null, 2));
+      
+      // Handle Octoparse response format
+      const rawData = result.data?.dataList || result.dataList || result.data || [];
+      vehicleData = parseOctoparseData(rawData);
+      console.log(`Parsed ${vehicleData.length} vehicles from task ${taskId}`);
+    } else {
+      const errorText = await response.text();
+      console.error(`Failed to fetch data for task ${taskId}:`, response.status, errorText);
+      throw new Error(`Failed to fetch data for task ${taskId}: ${response.status} ${response.statusText}`);
+    }
+    
+    if (vehicleData.length === 0) {
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: 'No vehicle data found in the specified task',
+          taskId
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
+    
+    const insertedVehicles = [];
+    const errors = [];
+
+    for (const vehicle of vehicleData) {
+      try {
+        const { data: inserted, error } = await supabaseClient
+          .from('vehicles')
+          .insert([{
+            ...vehicle,
+            user_id: userId,
+            status: 'available',
+            facebook_post_status: 'draft',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }])
+          .select()
+          .single();
+
+        if (!error && inserted) {
+          insertedVehicles.push(inserted);
+        } else {
+          errors.push({ vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`, error: error?.message });
+        }
+      } catch (error) {
+        console.error('Error inserting vehicle:', error);
+        errors.push({ vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`, error: error.message });
+      }
+    }
+
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        insertedCount: insertedVehicles.length,
+        totalFound: vehicleData.length,
+        vehicles: insertedVehicles,
+        errors: errors,
+        message: `Successfully imported ${insertedVehicles.length} of ${vehicleData.length} vehicles from task ${taskId}`,
+        taskId
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+    
+  } catch (error) {
+    console.error('Error importing task data:', error);
+    return new Response(
+      JSON.stringify({ 
+        success: false,
+        error: error.message || 'Failed to import task data',
+        taskId
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+    );
+  }
 }
 
 function generateVIN() {
