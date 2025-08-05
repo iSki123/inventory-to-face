@@ -1,3 +1,4 @@
+
 class SalesonatorExtension {
   constructor() {
     this.isPosting = false;
@@ -22,9 +23,94 @@ class SalesonatorExtension {
     document.getElementById('startPosting').addEventListener('click', () => this.startPosting());
     document.getElementById('stopPosting').addEventListener('click', () => this.stopPosting());
     document.getElementById('delay').addEventListener('change', () => this.saveSettings());
+    document.getElementById('login').addEventListener('click', () => this.showLoginForm());
 
+    // Check authentication status
+    await this.checkAuthentication();
+    
     // Check connection status
     this.checkConnection();
+  }
+
+  async checkAuthentication() {
+    const { userToken } = await chrome.storage.sync.get(['userToken']);
+    const loginSection = document.getElementById('loginSection');
+    const mainSection = document.getElementById('mainSection');
+    
+    if (!userToken) {
+      loginSection.style.display = 'block';
+      mainSection.style.display = 'none';
+    } else {
+      // Verify token is still valid
+      try {
+        const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/auth/v1/user', {
+          headers: {
+            'Authorization': `Bearer ${userToken}`,
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+          }
+        });
+        
+        if (response.ok) {
+          loginSection.style.display = 'none';
+          mainSection.style.display = 'block';
+        } else {
+          // Token is invalid, show login
+          await chrome.storage.sync.remove(['userToken']);
+          loginSection.style.display = 'block';
+          mainSection.style.display = 'none';
+        }
+      } catch (error) {
+        console.error('Error verifying token:', error);
+        loginSection.style.display = 'block';
+        mainSection.style.display = 'none';
+      }
+    }
+  }
+
+  showLoginForm() {
+    const email = prompt('Enter your Salesonator email:');
+    const password = prompt('Enter your Salesonator password:');
+    
+    if (email && password) {
+      this.authenticate(email, password);
+    }
+  }
+
+  async authenticate(email, password) {
+    const statusEl = document.getElementById('status');
+    statusEl.textContent = 'Authenticating...';
+    
+    try {
+      const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/auth/v1/token?grant_type=password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+        },
+        body: JSON.stringify({
+          email: email,
+          password: password
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.access_token) {
+        // Store the token
+        await chrome.storage.sync.set({
+          userToken: data.access_token,
+          userEmail: email
+        });
+        
+        statusEl.textContent = 'Authentication successful!';
+        await this.checkAuthentication(); // Refresh the UI
+      } else {
+        throw new Error(data.error_description || 'Authentication failed');
+      }
+    } catch (error) {
+      console.error('Authentication error:', error);
+      statusEl.textContent = `Authentication failed: ${error.message}`;
+    }
   }
 
   async checkConnection() {
@@ -69,7 +155,7 @@ class SalesonatorExtension {
     try {
       statusEl.textContent = 'Fetching vehicles...';
       
-      // Get user token from storage (you'll need to implement auth)
+      // Get user token from storage
       const { userToken } = await chrome.storage.sync.get(['userToken']);
       
       if (!userToken) {
@@ -109,6 +195,12 @@ class SalesonatorExtension {
       statusEl.textContent = `Error: ${error.message}`;
       countEl.textContent = 'Failed to load vehicles';
       startBtn.disabled = true;
+      
+      // If authentication failed, show login
+      if (error.message.includes('not authenticated')) {
+        await chrome.storage.sync.remove(['userToken']);
+        await this.checkAuthentication();
+      }
     }
   }
 
@@ -202,6 +294,11 @@ class SalesonatorExtension {
     };
     
     await chrome.storage.sync.set(settings);
+  }
+
+  async logout() {
+    await chrome.storage.sync.remove(['userToken', 'userEmail']);
+    await this.checkAuthentication();
   }
 }
 
