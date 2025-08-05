@@ -1,48 +1,12 @@
-// Enhanced Facebook Marketplace Automation with Field Mapping
+// Enhanced Facebook Marketplace Automation
 // Implements React-native value setting, MutationObserver, keyboard simulation, and human-like behavior
 
 class SalesonatorAutomator {
   constructor() {
+    this.isPosting = false;
+    this.debugMode = true;
     this.retryAttempts = 3;
-    this.baseDelay = 1000;
-    this.isActive = false;
-    this.fieldMappings = null;
-    this.currentMappingField = null;
-    this.loadFieldMappings();
-  }
-
-  // Load saved field mappings
-  async loadFieldMappings() {
-    try {
-      const result = await chrome.storage.local.get(['fieldMappings']);
-      this.fieldMappings = result.fieldMappings || {};
-      this.log('🎯 Loaded field mappings:', this.fieldMappings);
-    } catch (error) {
-      this.log('⚠️ Could not load field mappings:', error);
-      this.fieldMappings = {};
-    }
-  }
-
-  // Get selector for a field using saved mappings or fallback
-  getFieldSelector(fieldName) {
-    const mapping = this.fieldMappings[fieldName];
-    if (mapping) {
-      this.log(`🎯 Using saved mapping for ${fieldName}:`, mapping);
-      return [mapping];
-    }
-    
-    // Return default selectors if no mapping
-    const defaultSelectors = {
-      'vehicle-type': ['text:Vehicle type', '[aria-label*="Vehicle type"]', 'form div[role="button"]:first-of-type'],
-      'year': ['text:Year', '[aria-label*="Year"]', 'div[role="button"]'],
-      'make': ['text:Make', '[aria-label*="Make"]', 'div[role="button"]'],
-      'model': ['[aria-label*="Model"]', 'input[placeholder*="Model"]'],
-      'mileage': ['[aria-label*="Mileage"]', 'input[placeholder*="Mileage"]'],
-      'price': ['[aria-label*="Price"]', 'input[placeholder*="Price"]'],
-      'description': ['[aria-label*="Description"]', 'textarea', '[role="textbox"]']
-    };
-    
-    return defaultSelectors[fieldName] || [];
+    this.setupMessageListener();
   }
 
   // Utility function for randomized delays (human-like behavior)
@@ -116,17 +80,11 @@ class SalesonatorAutomator {
 
   // Robust selector strategy with multiple fallbacks
   findElementWithFallbacks(selectors, parentElement = document) {
+    // Priority order: ARIA labels, placeholders, roles, text content, CSS selectors
     for (const selector of selectors) {
       try {
-        // XPath selector
-        if (selector.startsWith('xpath:')) {
-          const xpath = selector.replace('xpath:', '');
-          const result = document.evaluate(xpath, parentElement, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-          if (result.singleNodeValue) return result.singleNodeValue;
-        }
-        
         // ARIA label selector
-        else if (selector.startsWith('aria:')) {
+        if (selector.startsWith('aria:')) {
           const ariaLabel = selector.replace('aria:', '');
           const element = parentElement.querySelector(`[aria-label*="${ariaLabel}"]`);
           if (element) return element;
@@ -168,17 +126,10 @@ class SalesonatorAutomator {
     return null;
   }
 
-  // Enhanced scroll into view with human-like behavior
-  async scrollIntoView(element) {
-    if (!element) return;
-    
-    element.scrollIntoView({ 
-      behavior: 'smooth', 
-      block: 'center',
-      inline: 'center'
-    });
-    
-    await this.delay(this.randomDelay(300, 600));
+  // Helper function to find elements containing specific text
+  findElementByText(text, tagNames = ['div', 'li', 'button', 'span'], parentElement = document) {
+    const elements = Array.from(parentElement.querySelectorAll(tagNames.join(', ')));
+    return elements.find(el => el.textContent && el.textContent.trim().includes(text));
   }
 
   // Enhanced human-like typing simulation
@@ -190,7 +141,11 @@ class SalesonatorAutomator {
     await this.delay(this.randomDelay(100, 300));
     
     // Clear existing content safely
-    element.value = '';
+    if (element.select && typeof element.select === 'function') {
+      element.select();
+    } else {
+      element.value = '';
+    }
     await this.delay(this.randomDelay(50, 150));
     
     const speedMultipliers = {
@@ -208,6 +163,7 @@ class SalesonatorAutomator {
       
       // Add realistic typing variations
       if (Math.random() < 0.1) {
+        // Simulate brief pause (thinking)
         await this.delay(this.randomDelay(200, 600));
       } else {
         await this.delay(this.randomDelay(minDelay, maxDelay));
@@ -219,19 +175,149 @@ class SalesonatorAutomator {
     await this.delay(this.randomDelay(100, 300));
   }
 
-  // Main posting workflow
+  // Enhanced dropdown interaction with keyboard navigation
+  async selectDropdownOption(dropdownSelectors, optionValue, useKeyboard = true) {
+    try {
+      const dropdown = await this.waitForElement(dropdownSelectors, 5000);
+      await this.scrollIntoView(dropdown);
+      await this.delay(this.randomDelay(300, 600));
+      
+      // Focus and open dropdown
+      dropdown.focus();
+      await this.delay(this.randomDelay(200, 400));
+      
+      if (useKeyboard) {
+        // Use keyboard navigation (more reliable)
+        dropdown.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        dropdown.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+        await this.delay(this.randomDelay(300, 500));
+        
+        // Try typeahead selection
+        if (typeof optionValue === 'string') {
+          for (const char of optionValue.toLowerCase()) {
+            dropdown.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
+            await this.delay(this.randomDelay(50, 150));
+          }
+        }
+        
+        await this.delay(this.randomDelay(200, 400));
+        dropdown.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        
+      } else {
+        // Fallback to click-based selection
+        dropdown.click();
+        await this.delay(this.randomDelay(500, 1000));
+        
+        // Look for options
+        const optionSelectors = [
+          `[role="option"]`,
+          `[data-value="${optionValue}"]`,
+          `text:${optionValue}`,
+          `.option:contains("${optionValue}")`,
+          `option[value="${optionValue}"]`
+        ];
+        
+        const option = await this.waitForElement(optionSelectors, 3000);
+        if (option) {
+          await this.scrollIntoView(option);
+          await this.delay(this.randomDelay(200, 400));
+          option.click();
+        }
+      }
+      
+      await this.delay(this.randomDelay(300, 600));
+      return true;
+      
+    } catch (error) {
+      this.log('Dropdown selection failed:', error);
+      return false;
+    }
+  }
+
+  // Enhanced scroll into view with human-like behavior
+  async scrollIntoView(element) {
+    if (!element) return;
+    
+    // Add random scroll offset to make it look more natural
+    const randomOffset = this.randomDelay(-100, 100);
+    
+    element.scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'center',
+      inline: 'center'
+    });
+    
+    // Add slight delay and random adjustment
+    await this.delay(this.randomDelay(300, 600));
+    
+    if (randomOffset !== 0) {
+      window.scrollBy(0, randomOffset);
+      await this.delay(this.randomDelay(100, 300));
+    }
+  }
+
+  // Enhanced file upload with proper event simulation
+  async uploadFiles(fileInputSelectors, files) {
+    try {
+      const fileInput = await this.waitForElement(fileInputSelectors, 5000);
+      await this.scrollIntoView(fileInput);
+      
+      // Create FileList-like object
+      const fileList = {
+        length: files.length,
+        item: (index) => files[index],
+        [Symbol.iterator]: function* () {
+          for (let i = 0; i < files.length; i++) {
+            yield files[i];
+          }
+        }
+      };
+      
+      // Add files as indexed properties
+      files.forEach((file, index) => {
+        fileList[index] = file;
+      });
+      
+      // Set files using React-native approach
+      this.setNativeValue(fileInput, '');
+      Object.defineProperty(fileInput, 'files', {
+        value: fileList,
+        writable: false
+      });
+      
+      // Trigger change event
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+      await this.delay(this.randomDelay(500, 1000));
+      
+      return true;
+    } catch (error) {
+      this.log('File upload failed:', error);
+      return false;
+    }
+  }
+
+  // Main posting workflow with enhanced error recovery
   async postVehicle(vehicleData) {
     try {
       this.log('🚗 Starting enhanced vehicle posting process...', vehicleData);
       
       for (let attempt = 0; attempt < this.retryAttempts; attempt++) {
         try {
+          // Navigate to marketplace with retry logic
           await this.navigateToMarketplace();
           await this.delay(2000, attempt);
           
+          // Fill form with enhanced automation
           await this.fillVehicleForm(vehicleData);
           await this.delay(1000, attempt);
           
+          // Handle image uploads if images are provided
+          if (vehicleData.images && vehicleData.images.length > 0) {
+            await this.handleImageUploads(vehicleData.images);
+            await this.delay(1000, attempt);
+          }
+          
+          // Submit with verification
           const success = await this.submitListing();
           
           if (success) {
@@ -245,6 +331,12 @@ class SalesonatorAutomator {
           if (attempt < this.retryAttempts - 1) {
             this.log(`🔄 Retrying in ${2 ** attempt} seconds...`);
             await this.delay(2000 * (2 ** attempt));
+            
+            // Try to recover by refreshing the page
+            if (attempt > 0) {
+              window.location.reload();
+              await this.delay(5000);
+            }
           }
         }
       }
@@ -257,7 +349,7 @@ class SalesonatorAutomator {
     }
   }
 
-  // Navigation
+  // Enhanced navigation with better error handling
   async navigateToMarketplace() {
     const currentUrl = window.location.href;
     this.log('📍 Current URL:', currentUrl);
@@ -267,6 +359,32 @@ class SalesonatorAutomator {
       return;
     }
     
+    if (currentUrl.includes('facebook.com/marketplace/create')) {
+      this.log('📝 On marketplace create page, checking for vehicle category...');
+      
+      // Look for vehicle category button/option
+      const vehicleCategorySelectors = [
+        'aria:Vehicle',
+        'text:Vehicle',
+        'text:Car',
+        'text:Truck',
+        '[data-testid*="vehicle"]',
+        '[data-testid*="car"]'
+      ];
+      
+      try {
+        const vehicleCategory = await this.waitForElement(vehicleCategorySelectors, 3000);
+        await this.scrollIntoView(vehicleCategory);
+        await this.delay(this.randomDelay(300, 600));
+        vehicleCategory.click();
+        await this.delay(this.randomDelay(1000, 2000));
+        return;
+      } catch (error) {
+        this.log('⚠️ Could not find vehicle category, proceeding anyway');
+      }
+    }
+    
+    // Navigate to marketplace create page
     if (!currentUrl.includes('facebook.com/marketplace')) {
       this.log('🧭 Navigating to Facebook Marketplace...');
       window.location.href = 'https://www.facebook.com/marketplace/create/vehicle';
@@ -274,80 +392,49 @@ class SalesonatorAutomator {
     }
   }
 
-  // Enhanced form filling using saved mappings
+  // Enhanced form filling with React-native value setting
   async fillVehicleForm(vehicleData) {
     this.log('📝 Filling vehicle form with enhanced automation...');
     
+    // FIRST: Handle vehicle type dropdown selection
     await this.selectVehicleType();
+    
+    // SECOND: Fill Year dropdown
     await this.selectYear(vehicleData.year);
+    
+    // THIRD: Fill Make dropdown  
     await this.selectMake(vehicleData.make);
+    
+    // FOURTH: Fill Model input
     await this.fillModel(vehicleData.model);
     
+    // FIFTH: Fill Mileage if available
     if (vehicleData.mileage) {
       await this.fillMileage(vehicleData.mileage);
     }
     
+    // SIXTH: Fill Price
     await this.fillPrice(vehicleData.price);
     
+    // SEVENTH: Fill Description (this one works)
     const description = vehicleData.description || `${vehicleData.year} ${vehicleData.make} ${vehicleData.model} for sale. Contact for more details.`;
     await this.fillDescription(description);
     
     this.log('✅ Form filling sequence completed');
   }
 
-  // Vehicle type dropdown selection
-  async selectVehicleType() {
-    try {
-      this.log('🚗 Selecting vehicle type dropdown...');
-      
-      const vehicleDropdownSelectors = this.getFieldSelector('vehicle-type');
-      // Add fallback selectors if no mapping exists
-      if (vehicleDropdownSelectors.length === 0) {
-        vehicleDropdownSelectors.push('text:Vehicle type', '[aria-label*="Vehicle type"]', 'form div[role="button"]:first-of-type');
-      }
-      
-      await this.delay(2000);
-      
-      const dropdown = await this.waitForElement(vehicleDropdownSelectors, 10000);
-      await this.scrollIntoView(dropdown);
-      await this.delay(this.randomDelay(500, 1000));
-      
-      this.log('📝 Found vehicle type dropdown, clicking...');
-      dropdown.click();
-      await this.delay(this.randomDelay(2000, 3000));
-      
-      const carTruckSelectors = [
-        'text:Car/Truck',
-        'text:Car',
-        '[data-value*="car"]',
-        '[role="option"]'
-      ];
-      
-      const option = await this.waitForElement(carTruckSelectors, 5000);
-      await this.scrollIntoView(option);
-      await this.delay(this.randomDelay(300, 600));
-      option.click();
-      
-      await this.delay(this.randomDelay(2000, 3000));
-      this.log('✅ Successfully selected vehicle type');
-      return true;
-      
-    } catch (error) {
-      this.log('⚠️ Could not select vehicle type:', error);
-      return false;
-    }
-  }
-
-  // Select Year dropdown using saved mappings
+  // Select Year dropdown
   async selectYear(year) {
     try {
       this.log(`🗓️ Selecting year: ${year}`);
       
-      const yearDropdownSelectors = this.getFieldSelector('year');
-      // Add fallback selectors if no mapping exists
-      if (yearDropdownSelectors.length === 0) {
-        yearDropdownSelectors.push('text:Year', '[aria-label*="Year"]', 'div[role="button"]');
-      }
+      // Look for year dropdown more specifically using XPath and standard selectors
+      const yearDropdownSelectors = [
+        'text:Year', // This will use XPath
+        '[aria-label*="Year"]',
+        'div[role="button"]', // Generic fallback
+        'select'
+      ];
       
       const yearDropdown = await this.waitForElement(yearDropdownSelectors, 8000);
       await this.scrollIntoView(yearDropdown);
@@ -355,52 +442,23 @@ class SalesonatorAutomator {
       
       this.log('📅 Found year dropdown, clicking to open...');
       yearDropdown.click();
-      await this.delay(this.randomDelay(2000, 3000));
+      await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
       
+      // Look for year option more specifically using XPath - EXACT same as vehicle type
       const yearOptionSelectors = [
-        `text:${year}`,
-        `//div[text()="${year}"]`,
-        `//span[text()="${year}"]`,
-        `//*[text()="${year}"]`,
-        `[data-value="${year}"]`
+        `text:${year}`, // Use XPath for text content
+        `[data-value="${year}"]`,
+        `[role="option"]`
       ];
       
-      let yearOption = null;
-      for (const selector of yearOptionSelectors) {
-        try {
-          this.log(`📅 Trying selector: ${selector}`);
-          yearOption = await this.waitForElement([selector], 2000);
-          if (yearOption) {
-            this.log(`📅 Found year option with selector: ${selector}`);
-            break;
-          }
-        } catch (e) {
-          continue;
-        }
-      }
+      const yearOption = await this.waitForElement(yearOptionSelectors, 5000);
+      await this.scrollIntoView(yearOption);
+      await this.delay(this.randomDelay(300, 600));
+      yearOption.click();
       
-      if (!yearOption) {
-        const allOptions = document.querySelectorAll('[role="option"], div[data-value], .option, li');
-        for (const option of allOptions) {
-          if (option.textContent && option.textContent.trim() === year.toString()) {
-            yearOption = option;
-            this.log(`📅 Found year option via fallback: ${option.textContent}`);
-            break;
-          }
-        }
-      }
-      
-      if (yearOption) {
-        await this.scrollIntoView(yearOption);
-        await this.delay(this.randomDelay(300, 600));
-        yearOption.click();
-        await this.delay(this.randomDelay(2000, 3000));
-        this.log(`✅ Successfully selected year: ${year}`);
-        return true;
-      } else {
-        this.log(`❌ Could not find year option: ${year}`);
-        return false;
-      }
+      await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
+      this.log(`✅ Successfully selected year: ${year}`);
+      return true;
       
     } catch (error) {
       this.log(`⚠️ Could not select year: ${year}`, error);
@@ -408,17 +466,21 @@ class SalesonatorAutomator {
     }
   }
 
-  // Select Make dropdown using saved mappings
+  // Select Make dropdown  
   async selectMake(make) {
     try {
       this.log(`🏭 Selecting make: ${make}`);
       
+      // Clean make string (remove extra spaces)
       const cleanMake = make.trim();
-      const makeDropdownSelectors = this.getFieldSelector('make');
-      // Add fallback selectors if no mapping exists  
-      if (makeDropdownSelectors.length === 0) {
-        makeDropdownSelectors.push('text:Make', '[aria-label*="Make"]', 'div[role="button"]');
-      }
+      
+      // Look for make dropdown more specifically 
+      const makeDropdownSelectors = [
+        'text:Make', // Use XPath
+        '[aria-label*="Make"]',
+        'div[role="button"]', // Generic fallback after year
+        'select'
+      ];
       
       const makeDropdown = await this.waitForElement(makeDropdownSelectors, 8000);
       await this.scrollIntoView(makeDropdown);
@@ -426,10 +488,11 @@ class SalesonatorAutomator {
       
       this.log('🏭 Found make dropdown, clicking to open...');
       makeDropdown.click();
-      await this.delay(this.randomDelay(2000, 3000));
+      await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
       
+      // Look for make option more specifically using XPath - EXACT same as vehicle type
       const makeOptionSelectors = [
-        `text:${cleanMake}`,
+        `text:${cleanMake}`, // Use XPath for text content
         `text:${cleanMake.trim()}`,
         `[data-value*="${cleanMake.toLowerCase()}"]`,
         `[role="option"]`
@@ -440,7 +503,7 @@ class SalesonatorAutomator {
       await this.delay(this.randomDelay(300, 600));
       makeOption.click();
       
-      await this.delay(this.randomDelay(2000, 3000));
+      await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
       this.log(`✅ Successfully selected make: ${cleanMake}`);
       return true;
       
@@ -450,16 +513,18 @@ class SalesonatorAutomator {
     }
   }
 
-  // Fill Model input using saved mappings
+  // Fill Model input
   async fillModel(model) {
     try {
       this.log(`🚗 Filling model: ${model}`);
       
-      const modelInputSelectors = this.getFieldSelector('model');
-      // Add fallback selectors if no mapping exists
-      if (modelInputSelectors.length === 0) {
-        modelInputSelectors.push('[aria-label*="Model"]', 'input[placeholder*="Model"]');
-      }
+      const modelInputSelectors = [
+        '[aria-label*="Model"]', 
+        'input[placeholder*="Model"]',
+        'input[name*="model"]',
+        'text:Model', // May appear as label text
+        'input[type="text"]:not([aria-label*="Year"]):not([aria-label*="Make"])'
+      ];
       
       const modelInput = await this.waitForElement(modelInputSelectors, 8000);
       await this.scrollIntoView(modelInput);
@@ -473,16 +538,18 @@ class SalesonatorAutomator {
     }
   }
 
-  // Fill Mileage input using saved mappings
+  // Fill Mileage input
   async fillMileage(mileage) {
     try {
       this.log(`📏 Filling mileage: ${mileage}`);
       
-      const mileageInputSelectors = this.getFieldSelector('mileage');
-      // Add fallback selectors if no mapping exists
-      if (mileageInputSelectors.length === 0) {
-        mileageInputSelectors.push('[aria-label*="Mileage"]', 'input[placeholder*="Mileage"]');
-      }
+      const mileageInputSelectors = [
+        '[aria-label*="Mileage"]', 
+        'input[placeholder*="Mileage"]',
+        'input[name*="mileage"]',
+        'text:Mileage', // May appear as label text
+        'input[type="number"]:not([aria-label*="Price"]):not([aria-label*="Year"])'
+      ];
       
       const mileageInput = await this.waitForElement(mileageInputSelectors, 8000);
       await this.scrollIntoView(mileageInput);
@@ -496,16 +563,18 @@ class SalesonatorAutomator {
     }
   }
 
-  // Fill Price input using saved mappings
+  // Fill Price input
   async fillPrice(price) {
     try {
       this.log(`💰 Filling price: ${price}`);
       
-      const priceInputSelectors = this.getFieldSelector('price');
-      // Add fallback selectors if no mapping exists
-      if (priceInputSelectors.length === 0) {
-        priceInputSelectors.push('[aria-label*="Price"]', 'input[placeholder*="Price"]');
-      }
+      const priceInputSelectors = [
+        '[aria-label*="Price"]', 
+        'input[placeholder*="Price"]',
+        'input[name*="price"]',
+        'text:Price', // May appear as label text  
+        'input[type="number"]:not([aria-label*="Mileage"]):not([aria-label*="Year"])'
+      ];
       
       const priceInput = await this.waitForElement(priceInputSelectors, 8000);
       await this.scrollIntoView(priceInput);
@@ -519,18 +588,12 @@ class SalesonatorAutomator {
     }
   }
 
-  // Fill Description textarea using saved mappings
+  // Fill Description textarea
   async fillDescription(description) {
     try {
       this.log(`📝 Filling description: ${description}`);
       
-      const descriptionInputSelectors = this.getFieldSelector('description');
-      // Add fallback selectors if no mapping exists
-      if (descriptionInputSelectors.length === 0) {
-        descriptionInputSelectors.push('[aria-label*="Description"]', 'textarea', '[role="textbox"]');
-      }
-      
-      const descriptionInput = await this.waitForElement(descriptionInputSelectors, 5000);
+      const descriptionInput = await this.waitForElement(['[aria-label*="Description"]', 'textarea'], 5000);
       await this.scrollIntoView(descriptionInput);
       await this.typeHumanLike(descriptionInput, description);
       
@@ -542,7 +605,91 @@ class SalesonatorAutomator {
     }
   }
 
-  // Submit listing
+  // Vehicle type dropdown selection
+  async selectVehicleType() {
+    try {
+      this.log('🚗 Selecting vehicle type dropdown first...');
+      
+      // Look for the actual Vehicle type dropdown in the form, not search bar
+      const vehicleDropdownSelectors = [
+        'text:Vehicle type', // Use XPath to find by text
+        '[aria-label*="Vehicle type"]',
+        'form select:first-of-type',
+        'form div[role="button"]:first-of-type'
+      ];
+      
+      // Wait longer and be more specific
+      await this.delay(2000); // Wait for page to fully load
+      
+      const dropdown = await this.waitForElement(vehicleDropdownSelectors, 10000);
+      await this.scrollIntoView(dropdown);
+      await this.delay(this.randomDelay(500, 1000));
+      
+      this.log('📝 Found vehicle type dropdown, clicking...');
+      dropdown.click();
+      await this.delay(this.randomDelay(2000, 3000)); // Wait longer for dropdown to open
+      
+      // Look for Car/Truck option more specifically using XPath
+      const carTruckSelectors = [
+        'text:Car/Truck', // Use XPath for text content
+        'text:Car',
+        '[data-value*="car"]',
+        '[role="option"]'
+      ];
+      
+      const option = await this.waitForElement(carTruckSelectors, 5000);
+      await this.scrollIntoView(option);
+      await this.delay(this.randomDelay(300, 600));
+      option.click();
+      
+      await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
+      this.log('✅ Successfully selected vehicle type');
+      return true;
+      
+    } catch (error) {
+      this.log('⚠️ Could not select vehicle type:', error);
+      return false;
+    }
+  }
+
+  // Enhanced image upload handling
+  async handleImageUploads(images) {
+    try {
+      this.log('📸 Processing image uploads...');
+      
+      const uploadSelectors = [
+        'input[type="file"]',
+        'input[accept*="image"]',
+        '[data-testid*="photo"]',
+        '[data-testid*="image"]',
+        '.file-input'
+      ];
+      
+      // Convert image URLs to File objects (simplified for demo)
+      const files = await Promise.all(images.map(async (imageUrl, index) => {
+        try {
+          const response = await fetch(imageUrl);
+          const blob = await response.blob();
+          return new File([blob], `vehicle_image_${index + 1}.jpg`, { type: 'image/jpeg' });
+        } catch (error) {
+          this.log('⚠️ Could not process image:', imageUrl, error);
+          return null;
+        }
+      }));
+      
+      const validFiles = files.filter(file => file !== null);
+      
+      if (validFiles.length > 0) {
+        await this.uploadFiles(uploadSelectors, validFiles);
+        this.log(`✅ Uploaded ${validFiles.length} images`);
+      }
+      
+    } catch (error) {
+      this.log('⚠️ Image upload failed:', error);
+    }
+  }
+
+  // Enhanced form submission with verification
   async submitListing() {
     try {
       this.log('🚀 Submitting listing...');
@@ -550,21 +697,71 @@ class SalesonatorAutomator {
       const submitSelectors = [
         'aria:Next',
         'aria:Post',
+        'aria:Publish',
+        'aria:Submit',
         'text:Next',
         'text:Post',
+        'text:Publish',
         'button[type="submit"]',
-        '[data-testid*="submit"]'
+        '[data-testid*="submit"]',
+        '[data-testid*="next"]',
+        '.btn-primary'
       ];
       
       const submitButton = await this.waitForElement(submitSelectors, 10000);
       await this.scrollIntoView(submitButton);
+      
+      // Add final delay before submission
       await this.delay(this.randomDelay(1000, 2000));
       
       submitButton.click();
+      
+      // Wait for submission confirmation or next step
       await this.delay(3000);
       
-      this.log('✅ Listing submitted');
-      return true;
+      // Verify submission success
+      const successIndicators = [
+        'text:posted',
+        'text:published',
+        'text:success',
+        'text:Your listing is now live',
+        '[data-testid*="success"]'
+      ];
+      
+      try {
+        await this.waitForElement(successIndicators, 5000);
+        this.log('✅ Submission confirmed');
+        return true;
+      } catch (error) {
+        // Check if we're on a preview/confirmation page
+        if (window.location.href.includes('preview') || 
+            window.location.href.includes('confirm')) {
+          this.log('📋 On preview/confirmation page, looking for final submit...');
+          
+          const finalSubmitSelectors = [
+            'aria:Publish',
+            'aria:Post',
+            'text:Publish',
+            'text:Post',
+            'button:contains("Publish")',
+            'button:contains("Post")'
+          ];
+          
+          try {
+            const finalSubmit = await this.waitForElement(finalSubmitSelectors, 5000);
+            await this.scrollIntoView(finalSubmit);
+            await this.delay(this.randomDelay(500, 1000));
+            finalSubmit.click();
+            await this.delay(3000);
+            return true;
+          } catch (finalError) {
+            this.log('⚠️ Could not find final submit button');
+          }
+        }
+        
+        this.log('⚠️ Could not verify submission success');
+        return false;
+      }
       
     } catch (error) {
       this.log('❌ Submission failed:', error);
@@ -572,340 +769,56 @@ class SalesonatorAutomator {
     }
   }
 
-  // Handle messages from popup
-  async handleMessage(message, sender, sendResponse) {
-    this.log('📨 Received message:', message);
-    
-    try {
-      switch (message.action) {
-        case 'ping':
-          sendResponse({ success: true, message: 'Content script is active' });
-          break;
-          
-        case 'postVehicle':
-          const result = await this.postVehicle(message.vehicle);
-          sendResponse(result);
-          break;
-          
-        case 'checkLogin':
-          const isLoggedIn = this.checkFacebookLogin();
-          sendResponse({ success: true, loggedIn: isLoggedIn });
-          break;
-
-        case 'startFieldMapping':
-          this.startFieldMapping();
-          sendResponse({ success: true });
-          break;
-
-        case 'stopFieldMapping':
-          this.stopFieldMapping();
-          sendResponse({ success: true });
-          break;
-
-        case 'setCurrentField':
-          this.currentMappingField = message.fieldName;
-          this.updateMappingIndicator(message.fieldLabel);
-          sendResponse({ success: true });
-          break;
-          
-        default:
-          sendResponse({ success: false, error: 'Unknown action' });
-      }
-    } catch (error) {
-      this.log('❌ Error handling message:', error);
-      sendResponse({ success: false, error: error.message });
+  // Enhanced logging with debug mode
+  log(...args) {
+    if (this.debugMode) {
+      console.log('[Salesonator Enhanced]', ...args);
     }
   }
 
-  // Field mapping methods
-  startFieldMapping() {
-    this.log('🎯 Field mapping mode activated');
-    this.currentMappingField = null;
-    
-    // Clean up any existing markers
-    document.querySelectorAll('[data-salesonator-clicked]').forEach(el => {
-      el.removeAttribute('data-salesonator-clicked');
-      const origStyle = el.getAttribute('data-salesonator-original-style');
-      if (origStyle !== null) {
-        el.style.cssText = origStyle;
-        el.removeAttribute('data-salesonator-original-style');
+  // Message listener setup
+  setupMessageListener() {
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      this.log('📨 Received message:', request);
+      
+      if (request.action === 'postVehicle') {
+        this.postVehicle(request.vehicle)
+          .then(result => {
+            this.log('📤 Sending response:', result);
+            sendResponse(result);
+          })
+          .catch(error => {
+            this.log('❌ Error in postVehicle:', error);
+            sendResponse({ success: false, error: error.message });
+          });
+        
+        return true; // Keep message channel open for async response
+      }
+      
+      if (request.action === 'checkLogin') {
+        const isLoggedIn = this.checkFacebookLogin();
+        sendResponse({ loggedIn: isLoggedIn });
+      }
+      
+      if (request.action === 'ping') {
+        sendResponse({ status: 'ready', enhanced: true });
       }
     });
-    
-    // Remove existing indicator
-    const existingIndicator = document.getElementById('salesonator-mapping-indicator');
-    if (existingIndicator) existingIndicator.remove();
-    
-    // Add visual indicator with improved instructions
-    const indicator = document.createElement('div');
-    indicator.id = 'salesonator-mapping-indicator';
-    indicator.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: linear-gradient(135deg, #1877f2, #166fe5);
-      color: white;
-      padding: 15px 18px;
-      border-radius: 10px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 13px;
-      line-height: 1.4;
-      z-index: 10000;
-      box-shadow: 0 6px 25px rgba(24, 119, 242, 0.4);
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      max-width: 320px;
-    `;
-    indicator.innerHTML = `
-      🎯 <strong>Field Mapping Mode Active</strong><br>
-      <small>
-        <strong>Color Guide:</strong><br>
-        🔵 Blue = Selected for exploration<br>
-        🟢 Green = Successfully mapped<br>
-        🔴 Red = Skipped field<br><br>
-        Waiting for instructions...
-      </small>
-    `;
-    document.body.appendChild(indicator);
-    
-    // Add click listener for field mapping
-    document.addEventListener('click', this.handleFieldClick.bind(this), true);
-  }
-
-  stopFieldMapping() {
-    this.log('🎯 Field mapping mode deactivated');
-    
-    // Clean up all markers and styles
-    document.querySelectorAll('[data-salesonator-clicked]').forEach(el => {
-      el.removeAttribute('data-salesonator-clicked');
-      const origStyle = el.getAttribute('data-salesonator-original-style');
-      if (origStyle !== null) {
-        el.style.cssText = origStyle;
-        el.removeAttribute('data-salesonator-original-style');
-      }
-    });
-    
-    // Remove indicator
-    const indicator = document.getElementById('salesonator-mapping-indicator');
-    if (indicator) {
-      indicator.remove();
-    }
-    
-    // Remove click listener
-    document.removeEventListener('click', this.handleFieldClick.bind(this), true);
-    this.currentMappingField = null;
-  }
-
-  updateMappingIndicator(fieldLabel) {
-    const indicator = document.getElementById('salesonator-mapping-indicator');
-    if (indicator) {
-      indicator.innerHTML = `
-        🎯 <strong>Mapping: ${fieldLabel}</strong><br>
-        <small>
-          🔵 <strong>First click:</strong> Open/explore field<br>
-          🟢 <strong>Second click:</strong> Map this field<br>
-          🔴 <strong>Shift+Click:</strong> Skip this field
-        </small>
-      `;
-    }
-  }
-
-  handleFieldClick(event) {
-    if (!this.currentMappingField) return;
-    
-    const element = event.target;
-    
-    // Handle skip with Shift+Click
-    if (event.shiftKey) {
-      event.preventDefault();
-      event.stopPropagation();
-      
-      this.log('⏭️ Skipping field:', this.currentMappingField);
-      
-      // Update indicator
-      const indicator = document.getElementById('salesonator-mapping-indicator');
-      if (indicator) {
-        indicator.innerHTML = `⏭️ <strong>Skipped: ${this.currentMappingField}</strong><br><small>Moving to next field...</small>`;
-      }
-      
-      // Send skip message to popup
-      chrome.runtime.sendMessage({
-        type: 'FIELD_MAPPED',
-        fieldName: this.currentMappingField,
-        selector: null // null indicates skip
-      });
-      
-      return;
-    }
-    
-    // Check if this element was already clicked once (has our marker)
-    const wasAlreadyClicked = element.hasAttribute('data-salesonator-clicked');
-    
-    if (!wasAlreadyClicked) {
-      // First click - just mark it and allow normal behavior
-      element.setAttribute('data-salesonator-clicked', 'true');
-      
-      // Add visual indicator for first click
-      const originalStyle = element.style.cssText;
-      element.style.cssText += 'border: 3px solid #007bff !important; background-color: rgba(0, 123, 255, 0.1) !important;';
-      
-      // Store original style for cleanup
-      element.setAttribute('data-salesonator-original-style', originalStyle);
-      
-      // Update indicator
-      const indicator = document.getElementById('salesonator-mapping-indicator');
-      if (indicator) {
-        indicator.innerHTML = `
-          🔵 <strong>Field Selected</strong><br>
-          <small>Click again to map this field, or click elsewhere to explore</small>
-        `;
-      }
-      
-      this.log('🔵 First click on element - exploring:', element);
-      return; // Allow normal click behavior
-    }
-    
-    // Second click - map the field
-    event.preventDefault();
-    event.stopPropagation();
-    
-    const selector = this.getElementSelector(element);
-    
-    this.log('🎯 Second click - mapping field:', element, 'Selector:', selector);
-    
-    // Change to green to show mapping
-    const originalStyle = element.getAttribute('data-salesonator-original-style') || '';
-    element.style.cssText = originalStyle + 'border: 3px solid #28a745 !important; background-color: rgba(40, 167, 69, 0.1) !important;';
-    
-    // Clean up all clicked markers
-    document.querySelectorAll('[data-salesonator-clicked]').forEach(el => {
-      el.removeAttribute('data-salesonator-clicked');
-      const origStyle = el.getAttribute('data-salesonator-original-style');
-      if (origStyle !== null) {
-        el.style.cssText = origStyle;
-        el.removeAttribute('data-salesonator-original-style');
-      }
-    });
-    
-    // Reset the mapped element after a delay
-    setTimeout(() => {
-      element.style.cssText = originalStyle;
-    }, 2000);
-    
-    // Save to storage immediately
-    this.saveFieldMapping(this.currentMappingField, selector);
-    
-    // Send mapping info back to popup
-    chrome.runtime.sendMessage({
-      type: 'FIELD_MAPPED',
-      fieldName: this.currentMappingField,
-      selector: selector
-    });
-    
-    // Update indicator
-    const indicator = document.getElementById('salesonator-mapping-indicator');
-    if (indicator) {
-      indicator.innerHTML = `✅ <strong>Mapped: ${this.currentMappingField}</strong><br><small>Saved successfully! Moving to next field...</small>`;
-    }
-  }
-
-  getElementSelector(element) {
-    const selectors = [];
-    
-    // XPath
-    const xpath = this.getXPath(element);
-    if (xpath) selectors.push(`xpath:${xpath}`);
-    
-    // ID
-    if (element.id) {
-      selectors.push(`#${element.id}`);
-    }
-    
-    // Class-based
-    if (element.className && typeof element.className === 'string') {
-      const classes = element.className.split(' ').filter(c => c.trim());
-      if (classes.length > 0) {
-        selectors.push(`.${classes.join('.')}`);
-      }
-    }
-    
-    // Attribute-based
-    const attrs = ['aria-label', 'data-testid', 'name', 'placeholder', 'role'];
-    for (const attr of attrs) {
-      const value = element.getAttribute(attr);
-      if (value) {
-        selectors.push(`[${attr}="${value}"]`);
-      }
-    }
-    
-    // Text-based
-    if (element.textContent && element.textContent.trim()) {
-      const text = element.textContent.trim();
-      if (text.length < 50) {
-        selectors.push(`text:${text}`);
-      }
-    }
-    
-    return selectors[0] || element.tagName.toLowerCase();
-  }
-
-  getXPath(element) {
-    if (element === document.body) return '/html/body';
-    
-    let ix = 0;
-    const siblings = element.parentNode ? element.parentNode.childNodes : [];
-    
-    for (let i = 0; i < siblings.length; i++) {
-      const sibling = siblings[i];
-      if (sibling === element) {
-        const parentPath = element.parentNode ? this.getXPath(element.parentNode) : '';
-        return `${parentPath}/${element.tagName.toLowerCase()}[${ix + 1}]`;
-      }
-      if (sibling.nodeType === 1 && sibling.tagName === element.tagName) {
-        ix++;
-      }
-    }
-  }
-
-  async saveFieldMapping(fieldName, selector) {
-    try {
-      const result = await chrome.storage.local.get(['fieldMappings']);
-      const mappings = result.fieldMappings || {};
-      mappings[fieldName] = selector;
-      await chrome.storage.local.set({ fieldMappings: mappings });
-      
-      // Reload mappings in this instance
-      this.fieldMappings = mappings;
-      
-      this.log(`💾 Saved mapping for ${fieldName}:`, selector);
-    } catch (error) {
-      this.log('❌ Error saving field mapping:', error);
-    }
   }
 
   // Check if user is logged into Facebook
   checkFacebookLogin() {
     const loginIndicators = [
       '[data-testid="blue_bar_profile_link"]',
+      '[data-testid="left_nav_menu_item_Marketplace"]',
       '[aria-label*="Profile"]',
-      'div[role="banner"]'
+      '.fb_logo'
     ];
     
     return loginIndicators.some(selector => document.querySelector(selector) !== null);
   }
-
-  // Enhanced logging
-  log(...args) {
-    console.log('[Salesonator Enhanced]', ...args);
-  }
 }
 
-// Initialize automator and set up message handling
-const automator = new SalesonatorAutomator();
-
-// Handle messages from popup and background
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  automator.handleMessage(message, sender, sendResponse);
-  return true; // Will respond asynchronously
-});
-
+// Initialize the enhanced automator
+const salesonatorAutomator = new SalesonatorAutomator();
 console.log('✅ Salesonator Enhanced Automator loaded successfully');

@@ -1,10 +1,11 @@
+
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <style>
     body {
-      width: 380px;
+      width: 350px;
       padding: 20px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
@@ -17,48 +18,12 @@
       font-weight: bold;
       color: #1877f2;
     }
-    .tabs {
-      display: flex;
-      margin-bottom: 15px;
-      border-radius: 6px;
-      overflow: hidden;
-      border: 1px solid #ddd;
-    }
-    .tab {
-      flex: 1;
-      padding: 10px;
-      background: #f8f9fa;
-      cursor: pointer;
-      text-align: center;
-      font-size: 13px;
-      border: none;
-      transition: background-color 0.2s;
-    }
-    .tab.active {
-      background: #1877f2;
-      color: white;
-    }
-    .tab-content {
-      display: none;
-    }
-    .section {
-      margin-bottom: 15px;
-      padding: 15px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      background: #fff;
-    }
-    .section h3 {
-      margin: 0 0 10px 0;
-      font-size: 14px;
-      color: #333;
-    }
     .status {
       padding: 10px;
       border-radius: 6px;
       margin: 10px 0;
       text-align: center;
-      font-size: 13px;
+      font-size: 14px;
     }
     .status.connected {
       background: #e8f5e8;
@@ -70,20 +35,14 @@
       color: #d63384;
       border: 1px solid #d63384;
     }
-    .status.warning {
-      background: #fff3cd;
-      color: #856404;
-      border: 1px solid #ffeaa7;
-    }
     .btn {
       width: 100%;
-      padding: 8px 12px;
+      padding: 10px;
       border: none;
       border-radius: 6px;
       cursor: pointer;
-      font-size: 13px;
-      margin: 3px 0;
-      transition: background-color 0.2s;
+      font-size: 14px;
+      margin: 5px 0;
     }
     .btn-primary {
       background: #1877f2;
@@ -99,13 +58,6 @@
     .btn-secondary:hover {
       background: #5a6268;
     }
-    .btn-success {
-      background: #28a745;
-      color: white;
-    }
-    .btn-success:hover {
-      background: #218838;
-    }
     .btn-danger {
       background: #dc3545;
       color: white;
@@ -116,58 +68,12 @@
     .vehicle-count {
       text-align: center;
       margin: 10px 0;
-      font-size: 13px;
-      font-weight: bold;
+      font-size: 14px;
     }
-    .field-item {
-      margin: 8px 0;
-      padding: 10px;
-      background: #f8f9fa;
-      border-radius: 6px;
-      border-left: 4px solid #ddd;
-      font-size: 12px;
-    }
-    .field-item.mapped {
-      background: #d4edda;
-      border-left-color: #28a745;
-    }
-    .field-item.pending {
-      background: #fff3cd;
-      border-left-color: #ffc107;
-      animation: pulse 1s infinite;
-    }
-    @keyframes pulse {
-      0% { opacity: 1; }
-      50% { opacity: 0.7; }
-      100% { opacity: 1; }
-    }
-    .field-label {
-      font-weight: bold;
-      color: #333;
-      margin-bottom: 4px;
-    }
-    .field-selector {
-      color: #666;
-      font-family: monospace;
-      font-size: 11px;
-      word-break: break-all;
-    }
-    .mapping-instructions {
-      background: #e7f3ff;
-      border: 1px solid #b6d7ff;
-      border-radius: 6px;
-      padding: 10px;
-      margin: 10px 0;
-      font-size: 12px;
-      color: #0066cc;
-    }
-    .mapping-progress {
-      background: #f8f9fa;
-      border-radius: 6px;
-      padding: 8px;
-      margin: 10px 0;
-      font-size: 12px;
-      text-align: center;
+    .settings {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
     }
     .input-group {
       margin: 10px 0;
@@ -183,140 +89,102 @@
       padding: 8px;
       border: 1px solid #ddd;
       border-radius: 4px;
-      font-size: 13px;
+      font-size: 14px;
       box-sizing: border-box;
+    }
+    .login-section {
+      text-align: center;
+      padding: 20px 0;
+    }
+    .error-message {
+      background: #fee;
+      color: #d63384;
+      border: 1px solid #d63384;
+      padding: 10px;
+      border-radius: 6px;
+      margin: 10px 0;
+      font-size: 12px;
+    }
+    .web-app-auth-notice {
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      color: white;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-size: 13px;
+    }
+    .notice-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+    .notice-icon {
+      font-size: 16px;
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="logo">🚗 Salesonator Enhanced</div>
-    <p style="font-size: 12px; color: #666; margin: 5px 0;">Facebook Marketplace Automator</p>
+    <div class="logo">🚗 Salesonator</div>
   </div>
 
-  <!-- Tab Navigation -->
-  <div class="tabs">
-    <button class="tab active" data-tab="posting">📤 Posting</button>
-    <button class="tab" data-tab="mapping">🎯 Field Mapping</button>
+  <!-- Login Section (shown when not authenticated) -->
+  <div id="loginSection" class="login-section" style="display: none;">
+    <div class="web-app-auth-notice">
+      <div class="notice-header">
+        <span class="notice-icon">🔐</span>
+        <strong>Auto-Login Available</strong>
+      </div>
+      <p>If you're logged into Salesonator as an admin, the extension will automatically detect and use your session!</p>
+      <p>Otherwise, please log in below:</p>
+    </div>
+    
+    <div class="error-message">
+      You need to log in to Salesonator to use this extension.
+    </div>
+    <button id="login" class="btn btn-primary">
+      Login to Salesonator
+    </button>
   </div>
 
-  <!-- Posting Tab -->
-  <div id="posting-tab" class="tab-content" style="display: block;">
-    <div class="section">
-      <div id="status" class="status disconnected">
-        Connecting to Salesonator...
-      </div>
+  <!-- Main Section (shown when authenticated) -->
+  <div id="mainSection">
+    <div id="status" class="status disconnected">
+      Connecting to Salesonator...
     </div>
 
-    <div class="section">
-      <h3>📋 Vehicle Queue</h3>
-      <div class="vehicle-count" id="vehicleCount">
-        No vehicles ready to post
-      </div>
-      <button id="fetchVehicles" class="btn btn-primary">
-        🔄 Fetch Pending Vehicles
-      </button>
+    <div class="vehicle-count" id="vehicleCount">
+      No vehicles ready to post
     </div>
 
-    <div class="section">
-      <h3>🚀 Auto Posting</h3>
-      <button id="startPosting" class="btn btn-success" disabled>
-        ▶️ Start Auto-Posting
-      </button>
-      <button id="stopPosting" class="btn btn-danger" style="display: none;">
-        ⏹️ Stop Posting
-      </button>
+    <button id="fetchVehicles" class="btn btn-primary">
+      Fetch Pending Vehicles
+    </button>
+
+    <button id="startPosting" class="btn btn-primary" disabled>
+      Start Auto-Posting
+    </button>
+
+    <button id="stopPosting" class="btn btn-secondary" style="display: none;">
+      Stop Posting
+    </button>
+
+    <div class="settings">
+      <div class="input-group">
+        <label for="apiUrl">Salesonator API URL:</label>
+        <input type="text" id="apiUrl" value="https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster" readonly>
+      </div>
       
       <div class="input-group">
         <label for="delay">Delay between posts (seconds):</label>
         <input type="number" id="delay" value="30" min="10" max="300">
       </div>
-    </div>
-  </div>
 
-  <!-- Field Mapping Tab -->
-  <div id="mapping-tab" class="tab-content">
-    <div class="section">
-      <h3>🎯 Field Mapper</h3>
-      <div class="mapping-instructions">
-        <strong>How to use:</strong><br>
-        1. Navigate to Facebook Marketplace vehicle creation page<br>
-        2. Click "Start Mapping" below<br>
-        3. <span style="color: #007bff;">🔵 First click:</span> Explore/open field<br>
-        4. <span style="color: #28a745;">🟢 Second click:</span> Map the field<br>
-        5. <span style="color: #dc3545;">🔴 Shift+Click:</span> Skip field<br>
-        6. Save your mappings for perfect automation!
-      </div>
-      
-      
-      <button id="startMapping" class="btn btn-success">
-        🎯 Start Auto Mapping
+      <button id="logout" class="btn btn-danger" onclick="new SalesonatorExtension().logout()">
+        Logout
       </button>
-      <button id="stopMapping" class="btn btn-danger" style="display: none;">
-        ⏹️ Stop Mapping
-      </button>
-      <button id="clearMappings" class="btn btn-secondary">
-        🗑️ Clear All Mappings
-      </button>
-      
-      <div class="mapping-instructions" style="margin-top: 10px;">
-        <strong>Manual Field Selection:</strong><br>
-        <select id="manualFieldSelect" style="width: 100%; padding: 5px; margin: 5px 0;">
-          <option value="">Select a field to map...</option>
-          <option value="vehicle-type">🚗 Vehicle Type</option>
-          <option value="year">📅 Year</option>
-          <option value="make">🏭 Make</option>
-          <option value="model">🚙 Model</option>
-          <option value="mileage">📏 Mileage</option>
-          <option value="price">💰 Price</option>
-          <option value="description">📝 Description</option>
-        </select>
-        <button id="startManualMapping" class="btn btn-success" style="margin-top: 5px;">
-          🎯 Map Selected Field
-        </button>
-      </div>
-      
-      <div id="mappingProgress" class="mapping-progress" style="display: none;">
-        Click on the highlighted field...
-      </div>
-    </div>
-
-    <div class="section">
-      <h3>📋 Current Mappings</h3>
-      <div id="mappingStatus" style="text-align: center; margin-bottom: 10px; font-size: 12px; color: #666;">
-        No mappings saved
-      </div>
-      
-      <div id="fieldMappings">
-        <div class="field-item" id="vehicle-type-field">
-          <div class="field-label">🚗 Vehicle Type</div>
-          <div class="field-selector">Not mapped</div>
-        </div>
-        <div class="field-item" id="year-field">
-          <div class="field-label">📅 Year</div>
-          <div class="field-selector">Not mapped</div>
-        </div>
-        <div class="field-item" id="make-field">
-          <div class="field-label">🏭 Make</div>
-          <div class="field-selector">Not mapped</div>
-        </div>
-        <div class="field-item" id="model-field">
-          <div class="field-label">🚙 Model</div>
-          <div class="field-selector">Not mapped</div>
-        </div>
-        <div class="field-item" id="mileage-field">
-          <div class="field-label">📏 Mileage</div>
-          <div class="field-selector">Not mapped</div>
-        </div>
-        <div class="field-item" id="price-field">
-          <div class="field-label">💰 Price</div>
-          <div class="field-selector">Not mapped</div>
-        </div>
-        <div class="field-item" id="description-field">
-          <div class="field-label">📝 Description</div>
-          <div class="field-selector">Not mapped</div>
-        </div>
-      </div>
     </div>
   </div>
 
