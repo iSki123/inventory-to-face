@@ -547,11 +547,14 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
     if (vehicleData.length === 0) {
       return new Response(
         JSON.stringify({ 
-          success: false,
-          error: 'No vehicle data found in the specified task',
+          success: true,
+          insertedCount: 0,
+          totalFound: 0,
+          vehicles: [],
+          message: 'No vehicle data found in the specified task. The task may be empty or still processing.',
           taskId
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
