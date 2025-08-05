@@ -347,24 +347,20 @@ export default function Inventory() {
                         onCheckedChange={() => toggleVehicleSelection(vehicle.id)}
                         className="absolute top-2 left-2 z-10"
                       />
-                       {vehicle.images && vehicle.images.length > 0 ? (
+                      {vehicle.images && vehicle.images.length > 0 ? (
                         <img 
                           src={vehicle.images[0]} 
                           alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            const img = e.currentTarget as HTMLImageElement;
-                            img.style.display = 'none';
-                            const fallback = img.nextElementSibling as HTMLElement;
-                            if (fallback) fallback.style.display = 'flex';
+                            e.currentTarget.style.display = 'none';
                           }}
                         />
-                      ) : null}
-                      <div 
-                        className={`text-muted-foreground text-sm absolute inset-0 flex items-center justify-center ${vehicle.images && vehicle.images.length > 0 ? 'hidden' : ''}`}
-                      >
-                        No Image
-                      </div>
+                      ) : (
+                        <div className="text-muted-foreground text-sm">
+                          No Image
+                        </div>
+                      )}
                     </div>
                     <CardHeader className="pb-3">
                       <div className="flex justify-between items-start">
