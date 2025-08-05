@@ -444,31 +444,49 @@ class SalesonatorAutomator {
       yearDropdown.click();
       await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
       
-      // Look for the specific year option - but first scroll dropdown to bottom for recent years
-      this.log(`📅 Scrolling dropdown to find year ${year}...`);
+      // Use keyboard navigation instead of clicking - more reliable for React dropdowns
+      this.log(`📅 Using keyboard navigation to select year ${year}...`);
       
-      // Find the dropdown container first
+      // Find and focus the dropdown first
       const dropdownContainer = document.querySelector('[role="listbox"], [role="menu"], .dropdown-menu, [data-testid*="dropdown"]');
       if (dropdownContainer) {
-        // Scroll to bottom of dropdown where recent years like 2024 would be
-        dropdownContainer.scrollTop = dropdownContainer.scrollHeight;
-        await this.delay(this.randomDelay(500, 1000));
+        dropdownContainer.focus();
+        await this.delay(500);
+        
+        // Use keyboard to navigate to the year
+        // Recent years are usually at the bottom, so press End key first
+        dropdownContainer.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+        await this.delay(300);
+        
+        // Then search for the year by typing it
+        for (const char of year.toString()) {
+          dropdownContainer.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
+          await this.delay(100);
+        }
+        
+        await this.delay(500);
+        
+        // Press Enter to select
+        dropdownContainer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        await this.delay(1000);
+        
+        this.log(`✅ Used keyboard to select year: ${year}`);
+        return true;
       }
       
+      // Fallback to click method if keyboard doesn't work
       const yearOptionSelectors = [
-        `text:${year}`, // Use XPath for text content
+        `text:${year}`,
         `[data-value="${year}"]`,
         `option[value="${year}"]`
       ];
       
-      const yearOption = await this.waitForElement(yearOptionSelectors, 5000);
-      
-      // CRITICAL: Scroll the year option into view within the dropdown
+      const yearOption = await this.waitForElement(yearOptionSelectors, 3000);
       await this.scrollIntoView(yearOption);
       await this.delay(this.randomDelay(300, 600));
       
       this.log(`📅 Found year option ${year}, clicking...`);
-      yearOption.click(); // Simple click like vehicle type
+      yearOption.click();
       
       await this.delay(this.randomDelay(1000, 2000));
       
@@ -511,11 +529,35 @@ class SalesonatorAutomator {
       makeDropdown.click();
       await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
       
-      // Look for the specific make option using our custom text finder
+      // Use keyboard navigation for make selection too
+      this.log(`🏭 Using keyboard navigation to select make ${cleanMake}...`);
+      
+      const dropdownContainer = document.querySelector('[role="listbox"], [role="menu"], .dropdown-menu, [data-testid*="dropdown"]');
+      if (dropdownContainer) {
+        dropdownContainer.focus();
+        await this.delay(500);
+        
+        // Type the first few characters of the make to navigate to it
+        const searchTerm = cleanMake.substring(0, 3).toLowerCase();
+        for (const char of searchTerm) {
+          dropdownContainer.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
+          await this.delay(200);
+        }
+        
+        await this.delay(500);
+        
+        // Press Enter to select
+        dropdownContainer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        await this.delay(1000);
+        
+        this.log(`✅ Used keyboard to select make: ${cleanMake}`);
+        return true;
+      }
+      
+      // Fallback to click method
       let makeOption = this.findElementByText(cleanMake);
       
       if (!makeOption) {
-        // Fallback to regular selectors
         const makeOptionSelectors = [
           `[data-value*="${cleanMake.toLowerCase()}"]`,
           `option[value*="${cleanMake}"]`
