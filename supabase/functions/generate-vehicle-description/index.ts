@@ -104,12 +104,13 @@ Keep it conversational but professional, focusing on value and reliability.`;
       `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''} - Well-maintained vehicle in excellent condition. Features ${vehicle.transmission || 'automatic'} transmission and ${vehicle.fuel_type || 'gasoline'} engine. ${vehicle.mileage ? `With ${vehicle.mileage.toLocaleString()} miles,` : ''} this reliable vehicle is perfect for daily driving. Contact us today for more details and to schedule a test drive. Don't miss this great opportunity!` :
       'Quality vehicle available for sale. Contact us for more details and to schedule a test drive.';
 
+    // Return success with fallback description instead of error
     return new Response(JSON.stringify({ 
-      success: false,
-      error: error.message,
-      description: fallbackDescription
+      success: true,
+      description: fallbackDescription,
+      fallback: true,
+      originalError: error.message
     }), {
-      status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

@@ -573,7 +573,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
 
     for (const vehicle of vehicleData) {
       try {
-        // Generate AI description with custom prompt if provided
+        // Generate AI description with custom prompt if provided, but don't fail if it doesn't work
         let aiDescription = null;
         if (!vehicle.description || vehicle.description.length < 30) {
           try {
@@ -585,17 +585,19 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
               }
             });
 
-            if (!error && data?.success) {
+            // Accept both success=true responses and fallback descriptions from errors
+            if (data?.description) {
               aiDescription = data.description;
               console.log(`Generated AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
             } else {
-              console.log('AI description generation failed:', error?.message || 'Unknown error');
+              console.log('AI description generation failed, continuing without it:', error?.message || 'Unknown error');
             }
           } catch (error) {
-            console.warn('Failed to generate AI description:', error);
+            console.warn('Failed to generate AI description, continuing without it:', error);
           }
         }
 
+        console.log(`Inserting vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
         const { data: inserted, error } = await supabaseClient
           .from('vehicles')
           .insert([{
@@ -629,11 +631,13 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
 
         if (!error && inserted) {
           insertedVehicles.push(inserted);
+          console.log(`Successfully inserted vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
         } else {
+          console.error(`Failed to insert vehicle ${vehicle.year} ${vehicle.make} ${vehicle.model}:`, error);
           errors.push({ vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`, error: error?.message });
         }
       } catch (error) {
-        console.error('Error inserting vehicle:', error);
+        console.error('Error processing vehicle:', error);
         errors.push({ vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`, error: error.message });
       }
     }
