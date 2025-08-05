@@ -311,6 +311,41 @@ export const useVehicleSources = () => {
     }
   };
 
+  const listAvailableTasks = async () => {
+    try {
+      if (!user) throw new Error('User not authenticated');
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No valid session found');
+      }
+
+      const response = await supabase.functions.invoke('octoparse-scraper', {
+        body: {
+          action: 'list_tasks',
+          userId: user.id
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to fetch tasks');
+      }
+
+      return response.data?.tasks || [];
+    } catch (error) {
+      console.error('Error fetching available tasks:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fetch available tasks",
+        variant: "destructive",
+      });
+      return [];
+    }
+  };
+
   return {
     sources,
     loading,
@@ -320,6 +355,7 @@ export const useVehicleSources = () => {
     startScraping,
     processScrapedData,
     importSpecificTask,
+    listAvailableTasks,
     refetch: fetchSources,
   };
 };

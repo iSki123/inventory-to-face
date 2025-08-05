@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Edit, Trash2, Facebook, Eye, Settings, RefreshCw } from "lucide-react";
@@ -16,7 +17,7 @@ import { VehicleSourceForm } from "@/components/VehicleSourceForm";
 
 export default function Inventory() {
   const { vehicles, loading, addVehicle, updateVehicle, deleteVehicle, bulkDeleteVehicles, postToFacebook, refetch } = useVehicles();
-  const { sources, loading: sourcesLoading, addSource, startScraping, importSpecificTask } = useVehicleSources();
+  const { sources, loading: sourcesLoading, addSource, startScraping, importSpecificTask, listAvailableTasks } = useVehicleSources();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [conditionFilter, setConditionFilter] = useState("all");
@@ -28,6 +29,9 @@ export default function Inventory() {
   const [taskIdInput, setTaskIdInput] = useState("");
   const [aiDescriptionPrompt, setAiDescriptionPrompt] = useState("Create a compelling and professional vehicle listing description for Facebook Marketplace that highlights the vehicle's key selling points and ends with a call to action for interested buyers.");
   const [isImporting, setIsImporting] = useState(false);
+  const [showTaskBrowser, setShowTaskBrowser] = useState(false);
+  const [availableTasks, setAvailableTasks] = useState<any[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
 
   const filteredVehicles = vehicles.filter(vehicle => {
     const matchesSearch = searchTerm === "" || 
@@ -75,6 +79,22 @@ export default function Inventory() {
     } finally {
       setIsImporting(false);
     }
+  };
+
+  const handleBrowseTasks = async () => {
+    setLoadingTasks(true);
+    setShowTaskBrowser(true);
+    try {
+      const tasks = await listAvailableTasks();
+      setAvailableTasks(tasks);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+
+  const handleSelectTask = (taskId: string) => {
+    setTaskIdInput(taskId);
+    setShowTaskBrowser(false);
   };
 
   const formatPrice = (price: number) => {
@@ -507,6 +527,18 @@ export default function Inventory() {
                   className="flex-1"
                 />
                 <Button
+                  variant="outline"
+                  onClick={handleBrowseTasks}
+                  disabled={loadingTasks}
+                >
+                  {loadingTasks ? (
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="mr-2 h-4 w-4" />
+                  )}
+                  Browse Tasks
+                </Button>
+                <Button
                   onClick={handleImportTask}
                   disabled={isImporting || !taskIdInput.trim()}
                 >
@@ -629,6 +661,69 @@ export default function Inventory() {
         onOpenChange={setShowSourceForm}
         onSubmit={handleAddSource}
       />
+
+      {/* Task Browser Dialog */}
+      <Dialog open={showTaskBrowser} onOpenChange={setShowTaskBrowser}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Browse Octoparse Tasks</DialogTitle>
+            <DialogDescription>
+              Select a task to import vehicle data from your Octoparse account
+            </DialogDescription>
+          </DialogHeader>
+          
+          {loadingTasks ? (
+            <div className="flex items-center justify-center py-8">
+              <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+              <span>Loading available tasks...</span>
+            </div>
+          ) : availableTasks.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No tasks found in your Octoparse account</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {availableTasks.map((task) => (
+                <Card key={task.id} className="cursor-pointer hover:bg-muted/50 transition-colors">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          <div>
+                            <h4 className="font-medium">{task.name}</h4>
+                            <p className="text-sm text-muted-foreground">ID: {task.id}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Badge variant={task.status === 'completed' ? 'default' : 'secondary'}>
+                              {task.status}
+                            </Badge>
+                            {task.itemCount > 0 && (
+                              <Badge variant="outline">
+                                {task.itemCount} items
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        {task.lastRun && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Last run: {new Date(task.lastRun).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        onClick={() => handleSelectTask(task.id)}
+                        size="sm"
+                      >
+                        Select Task
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -60,6 +60,8 @@ serve(async (req) => {
         return await processScrapedData(supabaseClient, sourceId, userId);
       case 'import_task':
         return await importSpecificTask(supabaseClient, taskId, userId, aiDescriptionPrompt);
+      case 'list_tasks':
+        return await listAvailableTasks();
       default:
         throw new Error('Invalid action');
     }
@@ -667,6 +669,61 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
     );
   }
 }
+
+async function listAvailableTasks() {
+  const accessToken = Deno.env.get('OCTOPARSE_API_KEY');
+  if (!accessToken) {
+    throw new Error('Octoparse access token not configured');
+  }
+
+  try {
+    console.log('Fetching available Octoparse tasks...');
+    
+    // Fetch available tasks from Octoparse API
+    const response = await fetch('https://openapi.octoparse.com/api/task/getUserTasks', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Octoparse API error: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    console.log('Available tasks response:', JSON.stringify(result, null, 2));
+    
+    // Extract tasks from the response
+    const tasks = result.data || result.tasks || [];
+    
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        tasks: tasks.map((task: any) => ({
+          id: task.id || task.taskId,
+          name: task.name || task.taskName,
+          status: task.status,
+          itemCount: task.itemCount || 0,
+          lastRun: task.lastRun || task.lastRunAt,
+          created: task.created || task.createdAt
+        })),
+        message: `Found ${tasks.length} available tasks`
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+    
+  } catch (error) {
+    console.error('Error fetching available tasks:', error);
+    return new Response(
+      JSON.stringify({ 
+        success: false,
+        error: error.message || 'Failed to fetch available tasks',
+        tasks: []
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+    );
+  }
 
 function generateVIN() {
   const chars = 'ABCDEFGHJKLMNPRSTUVWXYZ1234567890';
