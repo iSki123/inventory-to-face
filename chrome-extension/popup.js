@@ -259,24 +259,38 @@ class SalesonatorExtension {
       }, (response) => {
         if (chrome.runtime.lastError) {
           console.error('Error posting vehicle:', chrome.runtime.lastError);
-          statusEl.textContent = 'Error communicating with page';
+          statusEl.textContent = `Error: ${chrome.runtime.lastError.message}`;
           this.stopPosting();
           return;
         }
 
+        console.log('Vehicle posting response:', response);
+
         if (response && response.success) {
+          console.log(`Successfully posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}`);
+          statusEl.textContent = `Posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}`;
+          
           this.currentVehicleIndex++;
           const delay = parseInt(document.getElementById('delay').value) * 1000;
           
-          // Wait before posting next vehicle
-          setTimeout(() => {
-            if (this.isPosting) {
-              this.postNextVehicle();
-            }
-          }, delay);
+          // Check if there are more vehicles to post
+          if (this.currentVehicleIndex < this.vehicles.length) {
+            statusEl.textContent = `Waiting ${delay/1000}s before next vehicle...`;
+            
+            // Wait before posting next vehicle
+            setTimeout(() => {
+              if (this.isPosting) {
+                this.postNextVehicle();
+              }
+            }, delay);
+          } else {
+            // All vehicles posted
+            statusEl.textContent = 'All vehicles posted successfully!';
+            this.stopPosting();
+          }
         } else {
-          console.error('Failed to post vehicle:', response?.error);
-          statusEl.textContent = `Failed to post: ${response?.error || 'Unknown error'}`;
+          console.error('Failed to post vehicle:', response?.error || 'Unknown error');
+          statusEl.textContent = `Failed: ${response?.error || 'Unknown error'}`;
           this.stopPosting();
         }
       });

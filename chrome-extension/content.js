@@ -37,24 +37,31 @@ class FacebookMarketplaceAutomation {
     this.isProcessing = true;
 
     try {
-      console.log('Posting vehicle:', vehicle);
+      console.log('Starting to post vehicle:', vehicle);
 
-      // Navigate to marketplace create listing if not already there
-      if (!window.location.href.includes('/marketplace/create')) {
+      // Check if we're already on a create listing page
+      const currentUrl = window.location.href;
+      console.log('Current URL:', currentUrl);
+
+      if (!currentUrl.includes('/marketplace/create')) {
+        console.log('Not on create listing page, navigating...');
         await this.navigateToCreateListing();
+      } else {
+        console.log('Already on create listing page');
       }
 
-      // Wait for the page to be ready - use more flexible selectors
+      // Wait for the page to be ready with better error handling
+      console.log('Waiting for page to be ready...');
       await this.waitForPageReady();
+      console.log('Page is ready');
 
       // Fill out the form
+      console.log('Starting to fill vehicle form...');
       await this.fillVehicleForm(vehicle);
-
-      // Don't auto-submit, let user review first
-      console.log('Form filled successfully. Please review and submit manually.');
+      console.log('Form filled successfully');
 
       this.isProcessing = false;
-      return { success: true };
+      return { success: true, message: 'Vehicle form filled successfully' };
 
     } catch (error) {
       console.error('Error posting vehicle:', error);
@@ -64,33 +71,76 @@ class FacebookMarketplaceAutomation {
   }
 
   async navigateToCreateListing() {
-    window.location.href = 'https://www.facebook.com/marketplace/create/vehicle';
+    console.log('Navigating to Facebook Marketplace create listing page...');
     
-    // Wait for navigation to complete
-    await new Promise(resolve => {
-      const checkNavigation = () => {
-        if (window.location.href.includes('/marketplace/create')) {
-          resolve();
-        } else {
-          setTimeout(checkNavigation, 500);
-        }
-      };
-      checkNavigation();
-    });
+    try {
+      // Try to navigate to the vehicle listing page
+      window.location.href = 'https://www.facebook.com/marketplace/create/vehicle';
+      
+      // Wait for navigation to complete with timeout
+      const maxWaitTime = 10000; // 10 seconds
+      const startTime = Date.now();
+      
+      await new Promise((resolve, reject) => {
+        const checkNavigation = () => {
+          const currentTime = Date.now();
+          const currentUrl = window.location.href;
+          
+          console.log('Checking navigation, current URL:', currentUrl);
+          
+          if (currentUrl.includes('/marketplace/create')) {
+            console.log('Navigation successful');
+            resolve();
+          } else if (currentTime - startTime > maxWaitTime) {
+            reject(new Error('Navigation timeout - could not reach marketplace create page'));
+          } else {
+            setTimeout(checkNavigation, 500);
+          }
+        };
+        
+        // Start checking after a short delay
+        setTimeout(checkNavigation, 1000);
+      });
+      
+    } catch (error) {
+      console.error('Navigation failed:', error);
+      throw new Error(`Failed to navigate to marketplace: ${error.message}`);
+    }
   }
 
   async waitForPageReady() {
+    console.log('Waiting for page elements to be ready...');
+    
     // Wait for any of these common Facebook Marketplace elements to appear
     const selectors = [
-      'input', 'textarea', 'select', // Basic form elements
+      'input[type="text"]', 'input[type="number"]', 'textarea', 'select', // Basic form elements
       '[data-testid*="composer"]', // Facebook testids
       '[role="combobox"]', // Dropdown elements
-      'div[contenteditable="true"]' // Rich text editors
+      'div[contenteditable="true"]', // Rich text editors
+      'form', // Any form element
+      '[aria-label*="rice"]', '[aria-label*="itle"]' // Marketplace specific fields
     ];
 
-    return Promise.race(
-      selectors.map(selector => this.waitForElement(selector, 8000))
-    );
+    try {
+      // Try to find any element that indicates the page is ready
+      const foundElement = await Promise.race(
+        selectors.map(selector => this.waitForElement(selector, 8000))
+      );
+      
+      console.log('Page ready - found element:', foundElement);
+      
+      // Additional wait to ensure page is fully loaded
+      await this.delay(2000);
+      
+      return foundElement;
+    } catch (error) {
+      console.warn('Page ready check failed, proceeding anyway:', error.message);
+      
+      // Even if we can't find specific elements, wait a bit and continue
+      await this.delay(3000);
+      
+      return null;
+    }
   }
 
   async fillVehicleForm(vehicle) {
