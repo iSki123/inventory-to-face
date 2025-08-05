@@ -1,696 +1,657 @@
-// Content script for Salesonator Chrome Extension
+// Enhanced Facebook Marketplace Automation
+// Implements React-native value setting, MutationObserver, keyboard simulation, and human-like behavior
 
 class SalesonatorAutomator {
   constructor() {
-    this.isRunning = false;
-    this.currentStep = '';
-    this.retryCount = 0;
-    this.maxRetries = 3;
-    this.baseDelay = 2000;
-    this.maxDelay = 8000;
+    this.isPosting = false;
+    this.debugMode = true;
+    this.retryAttempts = 3;
+    this.setupMessageListener();
   }
 
-  async delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  async waitForElement(selector, timeout = 10000) {
-    const startTime = Date.now();
-    while (Date.now() - startTime < timeout) {
-      const element = document.querySelector(selector);
-      if (element && element.offsetParent !== null) return element; // Element must be visible
-      await this.delay(500);
-    }
-    throw new Error(`Element not found or not visible: ${selector}`);
-  }
-
-  getRandomDelay(min, max) {
+  // Utility function for randomized delays (human-like behavior)
+  randomDelay(min = 300, max = 900) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
-  async navigateToMarketplace() {
-    console.log('Navigating to marketplace...');
-    
-    if (window.location.pathname.includes('/marketplace/create')) {
-      console.log('Already on marketplace create page');
-      return true;
-    }
-
-    if (!window.location.hostname.includes('facebook.com')) {
-      throw new Error('Not on Facebook');
-    }
-
-    // Navigate to marketplace
-    window.location.href = 'https://www.facebook.com/marketplace/create/item';
-    await this.delay(3000);
-    return true;
+  // Enhanced delay function with exponential backoff
+  async delay(ms, attempt = 0) {
+    const backoffMultiplier = Math.pow(1.5, attempt);
+    const actualDelay = ms * backoffMultiplier + this.randomDelay(50, 200);
+    return new Promise(resolve => setTimeout(resolve, actualDelay));
   }
 
-  async selectCategory() {
-    console.log('Selecting vehicle category...');
+  // React-native value setter that forces React to recognize changes
+  setNativeValue(element, value) {
+    const descriptor = Object.getOwnPropertyDescriptor(element.__proto__, 'value') ||
+                     Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), 'value');
     
-    try {
-      // Wait for page to load fully
-      await this.delay(3000);
-      
-      console.log('Analyzing page structure for vehicle type dropdown...');
-      
-      // Skip category selection since we're already on the vehicle page
-      console.log('Already on vehicle creation page, checking if category selection is needed...');
-      
-      // Look for actual vehicle type dropdown that might need to be opened
-      let vehicleTypeDropdown = null;
-      
-      // Method 1: Look for specific vehicle type dropdown selectors
-      const vehicleDropdownSelectors = [
-        'select[name*="vehicle_type"]',
-        'select[aria-label*="Vehicle type"]',
-        'div[role="combobox"][aria-label*="Vehicle type"]',
-        'div[role="combobox"][aria-label*="vehicle"]',
-        'input[role="combobox"][placeholder*="Vehicle type"]',
-        'div[data-testid*="vehicle-type"]'
-      ];
-      
-      for (let selector of vehicleDropdownSelectors) {
-        vehicleTypeDropdown = document.querySelector(selector);
-        if (vehicleTypeDropdown) {
-          console.log('Found vehicle type dropdown with selector:', selector);
-          break;
-        }
-      }
-      
-      // Method 2: Look for any remaining category selection dropdown
-      if (!vehicleTypeDropdown) {
-        console.log('Looking for category selection dropdown...');
-        
-        // Look for category dropdowns that might appear before vehicle details
-        const categorySelectors = [
-          'select[aria-label*="Category"]',
-          'div[role="combobox"][aria-label*="Category"]',
-          'div[role="button"][aria-haspopup="listbox"]',
-          'select:first-of-type',
-          'div[role="combobox"]:first-of-type'
-        ];
-        
-        for (let selector of categorySelectors) {
-          const elements = document.querySelectorAll(selector);
-          for (let element of elements) {
-            // Skip disabled elements and navigation elements
-            if (element.getAttribute('aria-disabled') === 'true' || 
-                element.getAttribute('aria-hidden') === 'true' ||
-                element.getAttribute('aria-label')?.includes('Back to') ||
-                element.getAttribute('aria-label')?.includes('navigation')) {
-              continue;
-            }
-            
-            vehicleTypeDropdown = element;
-            console.log('Found category dropdown:', element.getAttribute('aria-label') || element.className);
-            break;
-          }
-          if (vehicleTypeDropdown) break;
-        }
-      }
-      
-      // Method 3: Since we're on /marketplace/create/vehicle, check if category is already selected
-      if (!vehicleTypeDropdown) {
-        console.log('No dropdown found - checking if vehicle category is already pre-selected...');
-        
-        // Check if we can find vehicle-specific form fields (year, make, model)
-        const vehicleFields = document.querySelectorAll([
-          'input[placeholder*="Year" i]',
-          'input[placeholder*="Make" i]', 
-          'input[placeholder*="Model" i]',
-          'select[aria-label*="Year"]',
-          'select[aria-label*="Make"]',
-          'select[aria-label*="Model"]'
-        ].join(', '));
-        
-        if (vehicleFields.length > 0) {
-          console.log('Found vehicle form fields - category appears to be pre-selected');
-          return true; // Skip category selection, proceed to vehicle details
-        }
-      }
-      
-      if (!vehicleTypeDropdown) {
-        console.log('No vehicle type dropdown found and no vehicle fields detected');
-        console.log('Page might not be ready or category selection might not be needed');
-        
-        // Try to find any visible dropdown/combobox that's not disabled
-        const anyDropdown = document.querySelector('div[role="combobox"]:not([aria-disabled="true"]):not([aria-hidden="true"]), select:not([disabled])');
-        if (anyDropdown) {
-          console.log('Found generic dropdown as fallback');
-          vehicleTypeDropdown = anyDropdown;
-        } else {
-          // If still no dropdown, assume category is pre-selected
-          console.log('No dropdown needed - assuming vehicle category is pre-selected');
-          return true;
-        }
-      }
-      
-      if (!vehicleTypeDropdown) {
-        console.error('Could not find Vehicle type dropdown after all methods');
-        throw new Error('Could not find Vehicle type dropdown');
-      }
-      
-      console.log('Found dropdown element:', vehicleTypeDropdown);
-      console.log('Dropdown attributes:', {
-        role: vehicleTypeDropdown.getAttribute('role'),
-        ariaLabel: vehicleTypeDropdown.getAttribute('aria-label'),
-        className: vehicleTypeDropdown.className,
-        tagName: vehicleTypeDropdown.tagName
-      });
-      
-      // Enhanced clicking with retry mechanism
-      console.log('Attempting to open dropdown...');
-      for (let clickAttempt = 0; clickAttempt < 3; clickAttempt++) {
-        try {
-          // Scroll into view first
-          vehicleTypeDropdown.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          await this.delay(500);
-          
-          // Focus and click
-          vehicleTypeDropdown.focus();
-          await this.delay(300);
-          
-          // Try different click methods
-          vehicleTypeDropdown.click();
-          
-          // Also try dispatching mouse events for stubborn dropdowns
-          const clickEvent = new MouseEvent('click', {
-            bubbles: true,
-            cancelable: true,
-            view: window
-          });
-          vehicleTypeDropdown.dispatchEvent(clickEvent);
-          
-          await this.delay(this.getRandomDelay(1500, 2500));
-          
-          // Check if dropdown opened by looking for options
-          const hasOptions = document.querySelectorAll('div[role="option"], li[role="option"], div[aria-selected]').length > 0;
-          if (hasOptions) {
-            console.log('Dropdown opened successfully');
-            break;
-          } else if (clickAttempt < 2) {
-            console.log(`Click attempt ${clickAttempt + 1} failed, retrying...`);
-          }
-        } catch (error) {
-          console.warn(`Click attempt ${clickAttempt + 1} error:`, error);
-        }
-      }
-      
-      // Enhanced option finding with multiple strategies
-      console.log('Looking for Car/Truck option...');
-      let carTruckOption = null;
-      
-      // Wait for dropdown menu to appear and try multiple times
-      for (let attempt = 0; attempt < 5; attempt++) {
-        await this.delay(800);
-        
-        // Comprehensive option selectors
-        const optionSelectors = [
-          'div[role="option"]',
-          'li[role="option"]',
-          'div[data-testid*="option"]',
-          'ul[role="listbox"] > li',
-          'div[aria-selected]',
-          'div[data-value]',
-          '[role="menuitem"]',
-          'div[tabindex="0"]',
-          'li[tabindex]',
-          'div[data-focusable="true"]'
-        ];
-        
-        const dropdownOptions = document.querySelectorAll(optionSelectors.join(', '));
-        console.log(`Attempt ${attempt + 1}: Found ${dropdownOptions.length} potential options`);
-        
-        // Enhanced text matching patterns
-        const vehiclePatterns = [
-          /^car\/truck$/i,
-          /^car\s*&\s*truck$/i,
-          /^cars?\s*&\s*trucks?$/i,
-          /^cars?\/trucks?$/i,
-          /^vehicle$/i,
-          /^vehicles$/i,
-          /^automobile$/i,
-          /^automotive$/i,
-          /^motor vehicle$/i,
-          /car.*truck|truck.*car/i
-        ];
-        
-        for (let option of dropdownOptions) {
-          const text = (option.textContent || '').trim();
-          const cleanText = text.toLowerCase().replace(/\s+/g, ' ');
-          console.log(`Checking option: "${text}"`);
-          
-          // Check against all patterns
-          for (let pattern of vehiclePatterns) {
-            if (pattern.test(cleanText)) {
-              carTruckOption = option;
-              console.log('Found matching option:', text, 'with pattern:', pattern);
-              break;
-            }
-          }
-          
-          if (carTruckOption) break;
-        }
-        
-        if (carTruckOption) break;
-        
-        // If no options found, try different strategies
-        if (attempt < 4) {
-          console.log('No matching option found, trying alternative approach...');
-          
-          // Try pressing Enter or Space key
-          if (attempt === 1) {
-            vehicleTypeDropdown.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-          } else if (attempt === 2) {
-            vehicleTypeDropdown.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-          } else {
-            // Try clicking again
-            vehicleTypeDropdown.click();
-          }
-          
-          await this.delay(1000);
-        }
-      }
-      
-      if (!carTruckOption) {
-        // Enhanced debugging output
-        const allOptions = document.querySelectorAll('div[role="option"], li[role="option"], div[data-testid*="option"], [role="menuitem"]');
-        const optionTexts = Array.from(allOptions).map(opt => ({
-          text: opt.textContent?.trim(),
-          className: opt.className,
-          attributes: Array.from(opt.attributes).map(attr => `${attr.name}="${attr.value}"`).join(' ')
-        }));
-        
-        console.error('Available options with details:', optionTexts);
-        console.error('Current page URL:', window.location.href);
-        console.error('Page title:', document.title);
-        
-        throw new Error(`Could not find Car/Truck option. Found ${optionTexts.length} options: ${optionTexts.map(o => o.text).join(', ')}`);
-      }
-      
-      // Enhanced option clicking
-      console.log('Clicking Car/Truck option...');
-      try {
-        carTruckOption.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        await this.delay(300);
-        
-        carTruckOption.focus();
-        await this.delay(200);
-        
-        carTruckOption.click();
-        
-        // Also dispatch click event for extra reliability
-        const optionClickEvent = new MouseEvent('click', {
-          bubbles: true,
-          cancelable: true,
-          view: window
-        });
-        carTruckOption.dispatchEvent(optionClickEvent);
-        
-      } catch (error) {
-        console.warn('Error clicking option, trying alternative method:', error);
-        carTruckOption.dispatchEvent(new Event('click', { bubbles: true }));
-      }
-      
-      await this.delay(this.getRandomDelay(2000, 3000));
-      
-      console.log('Successfully selected vehicle category');
-      return true;
-      
-    } catch (error) {
-      console.error('Error selecting category:', error);
-      throw new Error(`Could not select vehicle category: ${error.message}`);
+    if (descriptor && descriptor.set) {
+      descriptor.set.call(element, value);
+    } else {
+      element.value = value;
     }
+    
+    // Trigger React's synthetic events
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+    element.dispatchEvent(new Event('blur', { bubbles: true }));
   }
 
-  async fillVehicleDetails(vehicle) {
-    console.log('Filling vehicle details...');
-    
-    // Fill Year
-    console.log('Filling year...');
-    try {
-      const yearDropdown = await this.waitForElement('input[placeholder*="Year" i], div[role="combobox"] input, select', 5000);
-      await this.delay(500);
-      yearDropdown.focus();
-      yearDropdown.click();
-      await this.delay(1000);
+  // Enhanced element detection with MutationObserver
+  waitForElement(selectors, timeout = 10000, parentElement = document) {
+    return new Promise((resolve, reject) => {
+      const startTime = Date.now();
       
-      // If it's a dropdown, look for the year option
-      const yearOption = await this.waitForElement(`div[role="option"]:has-text("${vehicle.year}"), li:has-text("${vehicle.year}")`, 3000);
-      yearOption.click();
-      await this.delay(1000);
-    } catch (error) {
-      console.warn('Could not fill year field:', error);
-    }
-    
-    // Fill Make
-    console.log('Filling make...');
-    try {
-      const makeDropdown = await this.waitForElement('input[placeholder*="Make" i], div[role="combobox"]:nth-of-type(2) input', 5000);
-      await this.delay(500);
-      makeDropdown.focus();
-      makeDropdown.click();
-      await this.delay(1000);
-      
-      // Look for make in dropdown or type it
-      try {
-        const makeOption = await this.waitForElement(`div[role="option"]:has-text("${vehicle.make.trim()}")`, 2000);
-        makeOption.click();
-      } catch {
-        // If no dropdown option found, type the make
-        makeDropdown.value = vehicle.make.trim();
-        makeDropdown.dispatchEvent(new Event('input', { bubbles: true }));
+      // Try immediate selection first
+      const immediateElement = this.findElementWithFallbacks(selectors, parentElement);
+      if (immediateElement) {
+        this.log('Element found immediately:', selectors[0]);
+        return resolve(immediateElement);
       }
-      await this.delay(1000);
-    } catch (error) {
-      console.warn('Could not fill make field:', error);
-    }
-    
-    // Fill Model
-    console.log('Filling model...');
-    try {
-      const modelDropdown = await this.waitForElement('input[placeholder*="Model" i], div[role="combobox"]:nth-of-type(3) input', 5000);
-      await this.delay(500);
-      modelDropdown.focus();
-      modelDropdown.click();
-      await this.delay(1000);
-      
-      const modelText = `${vehicle.model} ${vehicle.trim || ''}`.trim();
-      try {
-        const modelOption = await this.waitForElement(`div[role="option"]:has-text("${modelText}")`, 2000);
-        modelOption.click();
-      } catch {
-        // If no dropdown option found, type the model
-        modelDropdown.value = modelText;
-        modelDropdown.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-      await this.delay(1000);
-    } catch (error) {
-      console.warn('Could not fill model field:', error);
-    }
-    
-    // Fill Mileage
-    console.log('Filling mileage...');
-    try {
-      if (vehicle.mileage) {
-        const mileageInput = await this.waitForElement('input[placeholder*="Mileage" i], input[aria-label*="Mileage" i]', 3000);
-        mileageInput.focus();
-        await this.delay(500);
-        mileageInput.value = vehicle.mileage.toString();
-        mileageInput.dispatchEvent(new Event('input', { bubbles: true }));
-        await this.delay(1000);
-      }
-    } catch (error) {
-      console.warn('Could not fill mileage field:', error);
-    }
-    
-    return true;
-  }
 
-  async fillPrice(vehicle) {
-    console.log('Filling price...');
-    
-    const price = (vehicle.price / 100).toString();
-    console.log(`Using price: $${price}`);
-    
-    const priceInput = await this.waitForElement('input[placeholder*="price" i], input[aria-label*="price" i]');
-    
-    priceInput.focus();
-    await this.delay(500);
-    priceInput.value = '';
-    priceInput.dispatchEvent(new Event('input', { bubbles: true }));
-    
-    for (let char of price) {
-      priceInput.value += char;
-      priceInput.dispatchEvent(new Event('input', { bubbles: true }));
-      await this.delay(this.getRandomDelay(80, 200));
-    }
-    
-    await this.delay(500);
-    return true;
-  }
-
-  async fillDescription(vehicle) {
-    let description = vehicle.ai_description || vehicle.description;
-    
-    // Generate AI description if none exists or is too short
-    if (!description || description.length < 30) {
-      console.log('Generating AI description for vehicle...');
-      try {
-        description = await this.generateAIDescription(vehicle);
-        console.log('Successfully generated AI description');
-      } catch (error) {
-        console.warn('Failed to generate AI description, using fallback:', error);
-        description = this.generateFallbackDescription(vehicle);
-      }
-    }
-    
-    console.log(`Using description (${description.length} chars):`, description.substring(0, 100) + '...');
-    
-    const descriptionTextarea = await this.waitForElement('textarea[placeholder*="description" i], textarea[aria-label*="description" i]');
-    
-    descriptionTextarea.focus();
-    await this.delay(500);
-    descriptionTextarea.value = '';
-    descriptionTextarea.dispatchEvent(new Event('input', { bubbles: true }));
-    
-    // Type description in chunks for more human-like behavior
-    const chunks = description.match(/.{1,50}/g) || [description];
-    for (let chunk of chunks) {
-      descriptionTextarea.value += chunk;
-      descriptionTextarea.dispatchEvent(new Event('input', { bubbles: true }));
-      await this.delay(this.getRandomDelay(200, 500));
-    }
-    
-    await this.delay(1000);
-    return true;
-  }
-
-  async generateAIDescription(vehicle) {
-    try {
-      console.log('Calling Supabase function to generate AI description...');
-      
-      const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/generate-vehicle-description', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await this.getStoredToken()}`,
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
-        },
-        body: JSON.stringify({ vehicle })
+      // Set up MutationObserver for dynamic detection
+      const observer = new MutationObserver(() => {
+        const element = this.findElementWithFallbacks(selectors, parentElement);
+        if (element) {
+          observer.disconnect();
+          this.log('Element found via MutationObserver:', selectors[0]);
+          resolve(element);
+        } else if (Date.now() - startTime > timeout) {
+          observer.disconnect();
+          reject(new Error(`Timeout waiting for element: ${selectors.join(', ')}`));
+        }
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success && data.description) {
-        return data.description;
-      } else {
-        throw new Error(data.error || 'No description generated');
-      }
-    } catch (error) {
-      console.error('AI description generation failed:', error);
-      throw error;
-    }
-  }
-
-  async getStoredToken() {
-    return new Promise((resolve) => {
-      chrome.storage.sync.get(['userToken'], (result) => {
-        resolve(result.userToken || '');
+      observer.observe(parentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeOldValue: true
       });
+
+      // Fallback timeout
+      setTimeout(() => {
+        observer.disconnect();
+        reject(new Error(`Timeout waiting for element: ${selectors.join(', ')}`));
+      }, timeout);
     });
   }
 
-  generateFallbackDescription(vehicle) {
-    const features = vehicle.features && vehicle.features.length > 0 
-      ? ` Key features include: ${vehicle.features.slice(0, 3).join(', ')}.`
-      : '';
-    
-    const mileageText = vehicle.mileage 
-      ? ` With ${vehicle.mileage.toLocaleString()} miles, `
-      : ' ';
-    
-    const conditionText = vehicle.condition 
-      ? ` in ${vehicle.condition} condition`
-      : '';
-
-    return `${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ` ${vehicle.trim}` : ''} available for sale.${mileageText}this ${vehicle.transmission || 'automatic'} ${vehicle.fuel_type || 'gasoline'} vehicle${conditionText} is perfect for your driving needs.${features} Contact us today for more information and to schedule a test drive. Serious inquiries only.`;
+  // Robust selector strategy with multiple fallbacks
+  findElementWithFallbacks(selectors, parentElement = document) {
+    // Priority order: ARIA labels, placeholders, roles, text content, CSS selectors
+    for (const selector of selectors) {
+      try {
+        // ARIA label selector
+        if (selector.startsWith('aria:')) {
+          const ariaLabel = selector.replace('aria:', '');
+          const element = parentElement.querySelector(`[aria-label="${ariaLabel}"]`);
+          if (element) return element;
+        }
+        
+        // Placeholder selector
+        if (selector.startsWith('placeholder:')) {
+          const placeholder = selector.replace('placeholder:', '');
+          const element = parentElement.querySelector(`[placeholder="${placeholder}"]`);
+          if (element) return element;
+        }
+        
+        // Role selector
+        if (selector.startsWith('role:')) {
+          const role = selector.replace('role:', '');
+          const element = parentElement.querySelector(`[role="${role}"]`);
+          if (element) return element;
+        }
+        
+        // Text content selector (XPath)
+        if (selector.startsWith('text:')) {
+          const text = selector.replace('text:', '');
+          const xpath = `.//*[contains(text(), "${text}")]`;
+          const result = document.evaluate(xpath, parentElement, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+          if (result.singleNodeValue) return result.singleNodeValue;
+        }
+        
+        // Regular CSS selector
+        const element = parentElement.querySelector(selector);
+        if (element) return element;
+        
+      } catch (error) {
+        this.log('Selector failed:', selector, error);
+        continue;
+      }
+    }
+    return null;
   }
 
-  async uploadImages(vehicle) {
-    console.log('Handling image upload...');
+  // Enhanced human-like typing simulation
+  async typeHumanLike(element, text, speed = 'normal') {
+    await this.scrollIntoView(element);
+    await this.delay(this.randomDelay(200, 500));
     
-    if (!vehicle.images || vehicle.images.length === 0) {
-      console.log('No images to upload');
-      return true;
+    element.focus();
+    await this.delay(this.randomDelay(100, 300));
+    
+    // Clear existing content
+    element.select();
+    await this.delay(this.randomDelay(50, 150));
+    
+    const speedMultipliers = {
+      slow: [100, 250],
+      normal: [50, 150],
+      fast: [30, 80]
+    };
+    
+    const [minDelay, maxDelay] = speedMultipliers[speed] || speedMultipliers.normal;
+    
+    // Type character by character with random delays
+    for (let i = 0; i < text.length; i++) {
+      const currentValue = element.value + text[i];
+      this.setNativeValue(element, currentValue);
+      
+      // Add realistic typing variations
+      if (Math.random() < 0.1) {
+        // Simulate brief pause (thinking)
+        await this.delay(this.randomDelay(200, 600));
+      } else {
+        await this.delay(this.randomDelay(minDelay, maxDelay));
+      }
     }
     
-    try {
-      const uploadButton = await this.waitForElement('input[type="file"], [data-testid="media-sprout-picker"]', 5000);
-      console.log('Found upload button, skipping actual upload for now');
-      // Note: Actual image upload would require more complex handling
-      await this.delay(1000);
-      return true;
-    } catch (error) {
-      console.warn('Could not find upload button:', error);
-      return true; // Continue without images
-    }
+    // Final events
+    element.dispatchEvent(new Event('blur', { bubbles: true }));
+    await this.delay(this.randomDelay(100, 300));
   }
 
-  async fillLocation(vehicle) {
-    console.log('Filling location...');
-    
-    const location = vehicle.location || 'Local Area';
-    
+  // Enhanced dropdown interaction with keyboard navigation
+  async selectDropdownOption(dropdownSelectors, optionValue, useKeyboard = true) {
     try {
-      const locationInput = await this.waitForElement('input[placeholder*="location" i], input[aria-label*="location" i]', 3000);
+      const dropdown = await this.waitForElement(dropdownSelectors, 5000);
+      await this.scrollIntoView(dropdown);
+      await this.delay(this.randomDelay(300, 600));
       
-      locationInput.focus();
-      await this.delay(500);
-      locationInput.value = location;
-      locationInput.dispatchEvent(new Event('input', { bubbles: true }));
-      await this.delay(1000);
+      // Focus and open dropdown
+      dropdown.focus();
+      await this.delay(this.randomDelay(200, 400));
       
-      return true;
-    } catch (error) {
-      console.warn('Could not find location field:', error);
-      return true; // Continue without setting location
-    }
-  }
-
-  async fillContactInfo(vehicle) {
-    console.log('Handling contact info...');
-    
-    // Facebook typically uses the user's profile info
-    // Skip manual contact info entry
-    await this.delay(500);
-    return true;
-  }
-
-  async publishListing() {
-    console.log('Publishing listing...');
-    
-    try {
-      // Look for publish/post button
-      const publishButton = await this.waitForElement(
-        'button[type="submit"], [data-testid="post-button"], button:contains("Post"), button:contains("Publish")',
-        5000
-      );
-      
-      // Add human delay before clicking
-      await this.delay(this.getRandomDelay(1000, 2000));
-      publishButton.click();
-      
-      console.log('Clicked publish button');
-      await this.delay(3000);
-      
-      return true;
-    } catch (error) {
-      console.error('Could not find publish button:', error);
-      throw error;
-    }
-  }
-
-  async postVehicle(vehicle) {
-    console.log('Starting vehicle posting process...', vehicle);
-    
-    try {
-      this.isRunning = true;
-      this.retryCount = 0;
-
-      // Step 1: Navigate to marketplace
-      await this.navigateToMarketplace();
-      await this.delay(this.getRandomDelay(2000, 4000));
-
-      // Step 2: Select category
-      await this.selectCategory();
-      await this.delay(this.getRandomDelay(1500, 3000));
-
-      // Step 3: Fill in vehicle details
-      await this.fillVehicleDetails(vehicle);
-      await this.delay(this.getRandomDelay(800, 1500));
-
-      await this.fillPrice(vehicle);
-      await this.delay(this.getRandomDelay(800, 1500));
-
-      await this.fillDescription(vehicle);
-      await this.delay(this.getRandomDelay(1000, 2000));
-
-      await this.uploadImages(vehicle);
-      await this.delay(this.getRandomDelay(1000, 2000));
-
-      await this.fillLocation(vehicle);
-      await this.delay(this.getRandomDelay(800, 1500));
-
-      await this.fillContactInfo(vehicle);
-      await this.delay(this.getRandomDelay(1000, 2000));
-
-      // Step 4: Publish
-      await this.publishListing();
-
-      console.log('Vehicle posted successfully!');
-      return { success: true, message: 'Vehicle posted successfully' };
-
-    } catch (error) {
-      console.error('Error posting vehicle:', error);
-      
-      if (this.retryCount < this.maxRetries) {
-        this.retryCount++;
-        console.log(`Retrying... (${this.retryCount}/${this.maxRetries})`);
-        await this.delay(this.getRandomDelay(5000, 10000));
-        return this.postVehicle(vehicle);
+      if (useKeyboard) {
+        // Use keyboard navigation (more reliable)
+        dropdown.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        dropdown.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+        await this.delay(this.randomDelay(300, 500));
+        
+        // Try typeahead selection
+        if (typeof optionValue === 'string') {
+          for (const char of optionValue.toLowerCase()) {
+            dropdown.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
+            await this.delay(this.randomDelay(50, 150));
+          }
+        }
+        
+        await this.delay(this.randomDelay(200, 400));
+        dropdown.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        
+      } else {
+        // Fallback to click-based selection
+        dropdown.click();
+        await this.delay(this.randomDelay(500, 1000));
+        
+        // Look for options
+        const optionSelectors = [
+          `[role="option"]`,
+          `[data-value="${optionValue}"]`,
+          `text:${optionValue}`,
+          `.option:contains("${optionValue}")`,
+          `option[value="${optionValue}"]`
+        ];
+        
+        const option = await this.waitForElement(optionSelectors, 3000);
+        if (option) {
+          await this.scrollIntoView(option);
+          await this.delay(this.randomDelay(200, 400));
+          option.click();
+        }
       }
       
-      return { 
-        success: false, 
-        error: `Failed to post vehicle after ${this.maxRetries} attempts: ${error.message}` 
-      };
-    } finally {
-      this.isRunning = false;
+      await this.delay(this.randomDelay(300, 600));
+      return true;
+      
+    } catch (error) {
+      this.log('Dropdown selection failed:', error);
+      return false;
     }
+  }
+
+  // Enhanced scroll into view with human-like behavior
+  async scrollIntoView(element) {
+    if (!element) return;
+    
+    // Add random scroll offset to make it look more natural
+    const randomOffset = this.randomDelay(-100, 100);
+    
+    element.scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'center',
+      inline: 'center'
+    });
+    
+    // Add slight delay and random adjustment
+    await this.delay(this.randomDelay(300, 600));
+    
+    if (randomOffset !== 0) {
+      window.scrollBy(0, randomOffset);
+      await this.delay(this.randomDelay(100, 300));
+    }
+  }
+
+  // Enhanced file upload with proper event simulation
+  async uploadFiles(fileInputSelectors, files) {
+    try {
+      const fileInput = await this.waitForElement(fileInputSelectors, 5000);
+      await this.scrollIntoView(fileInput);
+      
+      // Create FileList-like object
+      const fileList = {
+        length: files.length,
+        item: (index) => files[index],
+        [Symbol.iterator]: function* () {
+          for (let i = 0; i < files.length; i++) {
+            yield files[i];
+          }
+        }
+      };
+      
+      // Add files as indexed properties
+      files.forEach((file, index) => {
+        fileList[index] = file;
+      });
+      
+      // Set files using React-native approach
+      this.setNativeValue(fileInput, '');
+      Object.defineProperty(fileInput, 'files', {
+        value: fileList,
+        writable: false
+      });
+      
+      // Trigger change event
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+      await this.delay(this.randomDelay(500, 1000));
+      
+      return true;
+    } catch (error) {
+      this.log('File upload failed:', error);
+      return false;
+    }
+  }
+
+  // Main posting workflow with enhanced error recovery
+  async postVehicle(vehicleData) {
+    try {
+      this.log('🚗 Starting enhanced vehicle posting process...', vehicleData);
+      
+      for (let attempt = 0; attempt < this.retryAttempts; attempt++) {
+        try {
+          // Navigate to marketplace with retry logic
+          await this.navigateToMarketplace();
+          await this.delay(2000, attempt);
+          
+          // Fill form with enhanced automation
+          await this.fillVehicleForm(vehicleData);
+          await this.delay(1000, attempt);
+          
+          // Submit with verification
+          const success = await this.submitListing();
+          
+          if (success) {
+            this.log('✅ Vehicle posted successfully');
+            return { success: true };
+          }
+          
+        } catch (error) {
+          this.log(`❌ Attempt ${attempt + 1} failed:`, error);
+          
+          if (attempt < this.retryAttempts - 1) {
+            this.log(`🔄 Retrying in ${2 ** attempt} seconds...`);
+            await this.delay(2000 * (2 ** attempt));
+            
+            // Try to recover by refreshing the page
+            if (attempt > 0) {
+              window.location.reload();
+              await this.delay(5000);
+            }
+          }
+        }
+      }
+      
+      throw new Error('All retry attempts failed');
+      
+    } catch (error) {
+      this.log('❌ Vehicle posting failed completely:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Enhanced navigation with better error handling
+  async navigateToMarketplace() {
+    const currentUrl = window.location.href;
+    this.log('📍 Current URL:', currentUrl);
+    
+    if (currentUrl.includes('facebook.com/marketplace/create/vehicle')) {
+      this.log('✅ Already on vehicle creation page');
+      return;
+    }
+    
+    if (currentUrl.includes('facebook.com/marketplace/create')) {
+      this.log('📝 On marketplace create page, checking for vehicle category...');
+      
+      // Look for vehicle category button/option
+      const vehicleCategorySelectors = [
+        'aria:Vehicle',
+        'text:Vehicle',
+        'text:Car',
+        'text:Truck',
+        '[data-testid*="vehicle"]',
+        '[data-testid*="car"]'
+      ];
+      
+      try {
+        const vehicleCategory = await this.waitForElement(vehicleCategorySelectors, 3000);
+        await this.scrollIntoView(vehicleCategory);
+        await this.delay(this.randomDelay(300, 600));
+        vehicleCategory.click();
+        await this.delay(this.randomDelay(1000, 2000));
+        return;
+      } catch (error) {
+        this.log('⚠️ Could not find vehicle category, proceeding anyway');
+      }
+    }
+    
+    // Navigate to marketplace create page
+    if (!currentUrl.includes('facebook.com/marketplace')) {
+      this.log('🧭 Navigating to Facebook Marketplace...');
+      window.location.href = 'https://www.facebook.com/marketplace/create/vehicle';
+      await this.delay(5000);
+    }
+  }
+
+  // Enhanced form filling with React-native value setting
+  async fillVehicleForm(vehicleData) {
+    this.log('📝 Filling vehicle form with enhanced automation...');
+    
+    const formFields = [
+      {
+        field: 'title',
+        value: `${vehicleData.year} ${vehicleData.make} ${vehicleData.model}`,
+        selectors: [
+          'aria:Title',
+          'placeholder:What are you selling?',
+          'placeholder:Title',
+          'input[name="title"]',
+          '[data-testid*="title"]'
+        ]
+      },
+      {
+        field: 'price',
+        value: vehicleData.price?.toString() || '0',
+        selectors: [
+          'aria:Price',
+          'placeholder:Price',
+          'input[name="price"]',
+          '[data-testid*="price"]',
+          'input[type="number"]'
+        ]
+      },
+      {
+        field: 'description',
+        value: vehicleData.description || `${vehicleData.year} ${vehicleData.make} ${vehicleData.model} for sale. Contact for more details.`,
+        selectors: [
+          'aria:Description',
+          'placeholder:Description',
+          'textarea[name="description"]',
+          '[data-testid*="description"]',
+          'textarea'
+        ]
+      },
+      {
+        field: 'location',
+        value: vehicleData.location || 'Aurora, Illinois',
+        selectors: [
+          'aria:Location',
+          'placeholder:Location',
+          'input[name="location"]',
+          '[data-testid*="location"]'
+        ]
+      },
+      {
+        field: 'year',
+        value: vehicleData.year?.toString(),
+        selectors: [
+          'aria:Year',
+          'placeholder:Year',
+          'input[name="year"]',
+          '[data-testid*="year"]'
+        ]
+      },
+      {
+        field: 'make',
+        value: vehicleData.make,
+        selectors: [
+          'aria:Make',
+          'placeholder:Make',
+          'input[name="make"]',
+          '[data-testid*="make"]'
+        ]
+      },
+      {
+        field: 'model',
+        value: vehicleData.model,
+        selectors: [
+          'aria:Model',
+          'placeholder:Model',
+          'input[name="model"]',
+          '[data-testid*="model"]'
+        ]
+      }
+    ];
+    
+    // Fill each field with enhanced error recovery
+    for (const fieldConfig of formFields) {
+      if (!fieldConfig.value) continue;
+      
+      try {
+        this.log(`📝 Filling ${fieldConfig.field}:`, fieldConfig.value);
+        
+        const element = await this.waitForElement(fieldConfig.selectors, 5000);
+        
+        if (element.tagName.toLowerCase() === 'select' || element.getAttribute('role') === 'combobox') {
+          // Handle dropdown/select elements
+          await this.selectDropdownOption(fieldConfig.selectors, fieldConfig.value);
+        } else {
+          // Handle input/textarea elements
+          await this.typeHumanLike(element, fieldConfig.value);
+        }
+        
+        await this.delay(this.randomDelay(300, 800));
+        
+      } catch (error) {
+        this.log(`⚠️ Could not fill ${fieldConfig.field}:`, error);
+        // Continue with other fields
+      }
+    }
+    
+    // Handle file uploads if images are provided
+    if (vehicleData.images && vehicleData.images.length > 0) {
+      await this.handleImageUploads(vehicleData.images);
+    }
+  }
+
+  // Enhanced image upload handling
+  async handleImageUploads(images) {
+    try {
+      this.log('📸 Processing image uploads...');
+      
+      const uploadSelectors = [
+        'input[type="file"]',
+        'input[accept*="image"]',
+        '[data-testid*="photo"]',
+        '[data-testid*="image"]',
+        '.file-input'
+      ];
+      
+      // Convert image URLs to File objects (simplified for demo)
+      const files = await Promise.all(images.map(async (imageUrl, index) => {
+        try {
+          const response = await fetch(imageUrl);
+          const blob = await response.blob();
+          return new File([blob], `vehicle_image_${index + 1}.jpg`, { type: 'image/jpeg' });
+        } catch (error) {
+          this.log('⚠️ Could not process image:', imageUrl, error);
+          return null;
+        }
+      }));
+      
+      const validFiles = files.filter(file => file !== null);
+      
+      if (validFiles.length > 0) {
+        await this.uploadFiles(uploadSelectors, validFiles);
+        this.log(`✅ Uploaded ${validFiles.length} images`);
+      }
+      
+    } catch (error) {
+      this.log('⚠️ Image upload failed:', error);
+    }
+  }
+
+  // Enhanced form submission with verification
+  async submitListing() {
+    try {
+      this.log('🚀 Submitting listing...');
+      
+      const submitSelectors = [
+        'aria:Next',
+        'aria:Post',
+        'aria:Publish',
+        'aria:Submit',
+        'text:Next',
+        'text:Post',
+        'text:Publish',
+        'button[type="submit"]',
+        '[data-testid*="submit"]',
+        '[data-testid*="next"]',
+        '.btn-primary'
+      ];
+      
+      const submitButton = await this.waitForElement(submitSelectors, 10000);
+      await this.scrollIntoView(submitButton);
+      
+      // Add final delay before submission
+      await this.delay(this.randomDelay(1000, 2000));
+      
+      submitButton.click();
+      
+      // Wait for submission confirmation or next step
+      await this.delay(3000);
+      
+      // Verify submission success
+      const successIndicators = [
+        'text:posted',
+        'text:published',
+        'text:success',
+        'text:Your listing is now live',
+        '[data-testid*="success"]'
+      ];
+      
+      try {
+        await this.waitForElement(successIndicators, 5000);
+        this.log('✅ Submission confirmed');
+        return true;
+      } catch (error) {
+        // Check if we're on a preview/confirmation page
+        if (window.location.href.includes('preview') || 
+            window.location.href.includes('confirm')) {
+          this.log('📋 On preview/confirmation page, looking for final submit...');
+          
+          const finalSubmitSelectors = [
+            'aria:Publish',
+            'aria:Post',
+            'text:Publish',
+            'text:Post',
+            'button:contains("Publish")',
+            'button:contains("Post")'
+          ];
+          
+          try {
+            const finalSubmit = await this.waitForElement(finalSubmitSelectors, 5000);
+            await this.scrollIntoView(finalSubmit);
+            await this.delay(this.randomDelay(500, 1000));
+            finalSubmit.click();
+            await this.delay(3000);
+            return true;
+          } catch (finalError) {
+            this.log('⚠️ Could not find final submit button');
+          }
+        }
+        
+        this.log('⚠️ Could not verify submission success');
+        return false;
+      }
+      
+    } catch (error) {
+      this.log('❌ Submission failed:', error);
+      return false;
+    }
+  }
+
+  // Enhanced logging with debug mode
+  log(...args) {
+    if (this.debugMode) {
+      console.log('[Salesonator Enhanced]', ...args);
+    }
+  }
+
+  // Message listener setup
+  setupMessageListener() {
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      this.log('📨 Received message:', request);
+      
+      if (request.action === 'postVehicle') {
+        this.postVehicle(request.vehicle)
+          .then(result => {
+            this.log('📤 Sending response:', result);
+            sendResponse(result);
+          })
+          .catch(error => {
+            this.log('❌ Error in postVehicle:', error);
+            sendResponse({ success: false, error: error.message });
+          });
+        
+        return true; // Keep message channel open for async response
+      }
+      
+      if (request.action === 'checkLogin') {
+        const isLoggedIn = this.checkFacebookLogin();
+        sendResponse({ loggedIn: isLoggedIn });
+      }
+      
+      if (request.action === 'ping') {
+        sendResponse({ status: 'ready', enhanced: true });
+      }
+    });
+  }
+
+  // Check if user is logged into Facebook
+  checkFacebookLogin() {
+    const loginIndicators = [
+      '[data-testid="blue_bar_profile_link"]',
+      '[data-testid="left_nav_menu_item_Marketplace"]',
+      '[aria-label*="Profile"]',
+      '.fb_logo'
+    ];
+    
+    return loginIndicators.some(selector => document.querySelector(selector) !== null);
   }
 }
 
-// Initialize automator
-const automator = new SalesonatorAutomator();
-
-// Handle messages from popup
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('Content script received message:', request);
-
-  if (request.action === 'ping') {
-    sendResponse({ success: true, message: 'Content script loaded' });
-    return;
-  }
-
-  if (request.action === 'checkLogin') {
-    const isLoggedIn = document.querySelector('[data-testid="facebook_logged_in"]') || 
-                      document.querySelector('[aria-label="Account"]') ||
-                      !document.querySelector('[data-testid="royal_login_form"]');
-    sendResponse({ loggedIn: isLoggedIn });
-    return;
-  }
-
-  if (request.action === 'postVehicle') {
-    automator.postVehicle(request.vehicle)
-      .then(result => {
-        console.log('Vehicle posting result:', result);
-        sendResponse(result);
-      })
-      .catch(error => {
-        console.error('Vehicle posting error:', error);
-        sendResponse({ success: false, error: error.message });
-      });
-    return true; // Will respond asynchronously
-  }
-
-  sendResponse({ success: false, error: 'Unknown action' });
-});
-
-console.log('Salesonator content script loaded and ready');
+// Initialize the enhanced automator
+const salesonatorAutomator = new SalesonatorAutomator();
+console.log('✅ Salesonator Enhanced Automator loaded successfully');
