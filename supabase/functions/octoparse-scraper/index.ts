@@ -654,6 +654,8 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
       try {
         // Generate AI description with custom prompt if provided, but don't fail if it doesn't work
         let aiDescription = null;
+        let finalDescription = vehicle.description || `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+        
         if (!vehicle.description || vehicle.description.length < 30) {
           try {
             console.log(`Generating AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
@@ -667,6 +669,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
             // Accept both success=true responses and fallback descriptions from errors
             if (data?.description) {
               aiDescription = data.description;
+              finalDescription = aiDescription; // Use AI description as the main description
               console.log(`Generated AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
             } else {
               console.log('AI description generation failed, continuing without it:', error?.message || 'Unknown error');
@@ -699,7 +702,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
             condition: vehicle.condition,
             fuel_type: vehicle.fuel_type,
             transmission: vehicle.transmission,
-            description: vehicle.description || `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+            description: finalDescription,
             ai_description: aiDescription,
             vin: vehicle.vin,
             features: vehicle.features,

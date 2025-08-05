@@ -328,11 +328,15 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
             )}
             <Textarea
               id="description"
+              aria-describedby="description-help"
               value={formData.description || formData.ai_description || ''}
               onChange={(e) => updateField('description', e.target.value)}
               placeholder="Detailed description of the vehicle..."
               rows={4}
             />
+            <p id="description-help" className="text-xs text-muted-foreground">
+              This description will be used for Facebook Marketplace listings.
+            </p>
           </div>
 
           {/* Featured checkbox */}
