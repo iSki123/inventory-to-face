@@ -78,8 +78,9 @@ class SalesonatorAutomator {
     });
   }
 
-  // Enhanced robust selector strategy - Fixed for Facebook
+  // Robust selector strategy with multiple fallbacks
   findElementWithFallbacks(selectors, parentElement = document) {
+    // Priority order: ARIA labels, placeholders, roles, text content, CSS selectors
     for (const selector of selectors) {
       try {
         // ARIA label selector
@@ -103,53 +104,25 @@ class SalesonatorAutomator {
           if (element) return element;
         }
         
-        // Enhanced text content selector - FIXED for Facebook dropdowns
+        // Text content selector using multiple approaches
         else if (selector.startsWith('text:')) {
           const text = selector.replace('text:', '');
           
-          // Method 1: Find interactive elements first (buttons, options, links)
-          const interactiveSelectors = [
-            `[role="option"]:contains("${text}")`,
-            `button:contains("${text}")`,
-            `[role="button"]:contains("${text}")`,
-            `div[role="option"]`,
-            `li[role="option"]`,
-            `div[tabindex]`,
-            `span[role="button"]`
-          ];
-          
-          for (const sel of interactiveSelectors) {
-            try {
-              if (sel.includes(':contains')) {
-                // Manual text search for interactive elements
-                const baseSelector = sel.split(':contains')[0];
-                const elements = Array.from(parentElement.querySelectorAll(baseSelector));
-                const found = elements.find(el => {
-                  const textContent = el.textContent?.trim() || '';
-                  const innerText = el.innerText?.trim() || '';
-                  return textContent === text || innerText === text || 
-                         textContent.includes(text) || innerText.includes(text);
-                });
-                if (found && this.isInteractiveElement(found)) return found;
-              } else {
-                const elements = Array.from(parentElement.querySelectorAll(sel));
-                const found = elements.find(el => {
-                  const textContent = el.textContent?.trim() || '';
-                  return textContent === text || textContent.includes(text);
-                });
-                if (found && this.isInteractiveElement(found)) return found;
-              }
-            } catch (e) {}
-          }
-          
-          // Method 2: XPath approach with filtering for non-script elements
+          // Method 1: XPath approach (most reliable)
           try {
-            const xpath = `.//*[not(self::script) and not(self::style) and contains(normalize-space(text()), "${text}")]`;
+            const xpath = `.//*[contains(normalize-space(text()), "${text}")]`;
             const result = document.evaluate(xpath, parentElement, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-            if (result.singleNodeValue && this.isInteractiveElement(result.singleNodeValue)) {
-              return result.singleNodeValue;
-            }
+            if (result.singleNodeValue) return result.singleNodeValue;
           } catch (e) {}
+          
+          // Method 2: Manual text search fallback
+          const elements = Array.from(parentElement.querySelectorAll('*'));
+          const found = elements.find(el => {
+            const textContent = el.textContent?.trim() || '';
+            const innerText = el.innerText?.trim() || '';
+            return textContent.includes(text) || innerText.includes(text);
+          });
+          if (found) return found;
         }
         
         // Regular CSS selector
@@ -166,99 +139,53 @@ class SalesonatorAutomator {
     return null;
   }
 
-  // Helper to check if element is interactive
-  isInteractiveElement(element) {
-    if (!element) return false;
-    
-    // Exclude script tags, style tags, and other non-interactive elements
-    const tagName = element.tagName?.toLowerCase();
-    if (['script', 'style', 'meta', 'link', 'title'].includes(tagName)) {
-      return false;
-    }
-    
-    // Check for interactive attributes/roles
-    const role = element.getAttribute('role');
-    const tabindex = element.getAttribute('tabindex');
-    const clickable = element.onclick || role === 'button' || role === 'option' || 
-                     tagName === 'button' || tagName === 'a' || tabindex !== null;
-    
-    return clickable;
-  }
-
   // Helper function to find elements containing specific text
   findElementByText(text, tagNames = ['div', 'li', 'button', 'span'], parentElement = document) {
     const elements = Array.from(parentElement.querySelectorAll(tagNames.join(', ')));
     return elements.find(el => el.textContent && el.textContent.trim().includes(text));
   }
 
-  // Enhanced human-like typing with better Facebook compatibility
+  // Enhanced human-like typing simulation
   async typeHumanLike(element, text, speed = 'normal') {
     await this.scrollIntoView(element);
-    await this.delay(this.randomDelay(300, 600));
+    await this.delay(this.randomDelay(200, 500));
     
-    // Focus with multiple attempts
-    for (let attempt = 0; attempt < 3; attempt++) {
-      element.focus();
-      await this.delay(this.randomDelay(100, 200));
-      if (document.activeElement === element) break;
-    }
+    element.focus();
+    await this.delay(this.randomDelay(100, 300));
     
-    // Clear existing content more aggressively
-    try {
+    // Clear existing content safely
+    if (element.select && typeof element.select === 'function') {
       element.select();
-      await this.delay(50);
-    } catch (e) {}
-    
-    // Multiple clear methods
-    this.setNativeValue(element, '');
-    element.value = '';
-    element.dispatchEvent(new Event('input', { bubbles: true }));
-    await this.delay(this.randomDelay(100, 200));
+    } else {
+      element.value = '';
+    }
+    await this.delay(this.randomDelay(50, 150));
     
     const speedMultipliers = {
-      slow: [150, 300],
-      normal: [80, 200],
-      fast: [50, 120]
+      slow: [100, 250],
+      normal: [50, 150],
+      fast: [30, 80]
     };
     
     const [minDelay, maxDelay] = speedMultipliers[speed] || speedMultipliers.normal;
     
-    // Type character by character with enhanced React support
+    // Type character by character with random delays
     for (let i = 0; i < text.length; i++) {
-      const char = text[i];
-      const currentValue = element.value + char;
-      
-      // Multiple methods to set value (React compatibility)
+      const currentValue = element.value + text[i];
       this.setNativeValue(element, currentValue);
-      element.value = currentValue;
       
-      // Trigger multiple events for React
-      element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-      element.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
-      element.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
-      
-      // Realistic typing variations
-      if (Math.random() < 0.15) {
-        await this.delay(this.randomDelay(300, 800)); // Thinking pause
+      // Add realistic typing variations
+      if (Math.random() < 0.1) {
+        // Simulate brief pause (thinking)
+        await this.delay(this.randomDelay(200, 600));
       } else {
         await this.delay(this.randomDelay(minDelay, maxDelay));
       }
     }
     
-    // Final validation events
+    // Final events
     element.dispatchEvent(new Event('blur', { bubbles: true }));
-    element.dispatchEvent(new Event('focusout', { bubbles: true }));
-    await this.delay(this.randomDelay(200, 400));
-    
-    // Verify the value was set
-    if (element.value !== text) {
-      console.warn(`[TYPE] Value verification failed. Expected: "${text}", Got: "${element.value}"`);
-      // Try one more time
-      this.setNativeValue(element, text);
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true }));
-    }
+    await this.delay(this.randomDelay(100, 300));
   }
 
   // Enhanced dropdown interaction with keyboard navigation
@@ -399,11 +326,8 @@ class SalesonatorAutomator {
           
           // Handle image uploads if images are provided
           if (vehicleData.images && vehicleData.images.length > 0) {
-            this.log('📸 Starting image upload process...');
             await this.handleImageUploads(vehicleData.images);
-            await this.delay(2000, attempt);
-          } else {
-            this.log('⚠️ No images provided for upload');
+            await this.delay(1000, attempt);
           }
           
           // Submit with verification
@@ -853,131 +777,40 @@ class SalesonatorAutomator {
     }
   }
 
-  // Enhanced image upload handling with Facebook-specific targeting
+  // Enhanced image upload handling
   async handleImageUploads(images) {
     try {
-      this.log('📸 Processing image uploads for Facebook Marketplace...');
+      this.log('📸 Processing image uploads...');
       
-      // Facebook-specific upload selectors
       const uploadSelectors = [
-        'input[type="file"][accept*="image"]',
         'input[type="file"]',
-        '[data-testid*="photo-upload"]',
-        '[data-testid*="image-upload"]',
-        '[aria-label*="photo" i]',
-        '[aria-label*="image" i]',
         'input[accept*="image"]',
-        'input[multiple][accept*="image"]'
+        '[data-testid*="photo"]',
+        '[data-testid*="image"]',
+        '.file-input'
       ];
       
-      // Look for upload area or button first
-      const uploadAreaSelectors = [
-        'text:Add photos',
-        'text:Upload photos',
-        'text:Add images',
-        '[data-testid*="upload"]',
-        '.upload-area',
-        '[role="button"]:contains("photo")'
-      ];
-      
-      // Try to find upload area first
-      let uploadTrigger = null;
-      for (const selector of uploadAreaSelectors) {
-        uploadTrigger = this.findElementWithFallbacks([selector]);
-        if (uploadTrigger) {
-          this.log('📸 Found upload trigger:', selector);
-          break;
-        }
-      }
-      
-      // Click upload area to reveal file input if needed
-      if (uploadTrigger && uploadTrigger.tagName !== 'INPUT') {
-        this.log('📸 Clicking upload area to reveal file input...');
-        await this.performFacebookDropdownClick(uploadTrigger);
-        await this.delay(this.randomDelay(1000, 2000));
-      }
-      
-      // Find file input after potential click
-      let fileInput = null;
-      for (const selector of uploadSelectors) {
-        fileInput = document.querySelector(selector);
-        if (fileInput && !fileInput.disabled && !fileInput.hidden) {
-          this.log('📸 Found file input:', selector);
-          break;
-        }
-      }
-      
-      if (!fileInput) {
-        this.log('❌ No file input found for image upload');
-        return;
-      }
-      
-      // Convert image URLs to File objects
-      this.log(`📸 Converting ${images.length} image URLs to files...`);
+      // Convert image URLs to File objects (simplified for demo)
       const files = await Promise.all(images.map(async (imageUrl, index) => {
         try {
-          this.log(`📸 Processing image ${index + 1}: ${imageUrl}`);
           const response = await fetch(imageUrl);
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
           const blob = await response.blob();
           return new File([blob], `vehicle_image_${index + 1}.jpg`, { type: 'image/jpeg' });
         } catch (error) {
-          this.log(`⚠️ Could not process image ${index + 1}:`, imageUrl, error);
+          this.log('⚠️ Could not process image:', imageUrl, error);
           return null;
         }
       }));
       
       const validFiles = files.filter(file => file !== null);
-      this.log(`📸 Successfully processed ${validFiles.length} out of ${images.length} images`);
       
       if (validFiles.length > 0) {
-        await this.uploadFilesToInput(fileInput, validFiles);
-        this.log(`✅ Uploaded ${validFiles.length} images to Facebook`);
-      } else {
-        this.log('❌ No valid images to upload');
+        await this.uploadFiles(uploadSelectors, validFiles);
+        this.log(`✅ Uploaded ${validFiles.length} images`);
       }
       
     } catch (error) {
-      this.log('❌ Image upload failed:', error);
-    }
-  }
-
-  // Enhanced file upload specifically for Facebook
-  async uploadFilesToInput(fileInput, files) {
-    try {
-      this.log(`📸 Uploading ${files.length} files to input element...`);
-      
-      // Create DataTransfer object
-      const dataTransfer = new DataTransfer();
-      
-      // Add all files to the DataTransfer
-      files.forEach((file, index) => {
-        this.log(`📸 Adding file ${index + 1}: ${file.name} (${file.size} bytes)`);
-        dataTransfer.items.add(file);
-      });
-      
-      // Set the files on the input
-      fileInput.files = dataTransfer.files;
-      
-      // Trigger all necessary events for Facebook's React system
-      const events = [
-        new Event('input', { bubbles: true }),
-        new Event('change', { bubbles: true }),
-        new Event('blur', { bubbles: true })
-      ];
-      
-      for (const event of events) {
-        fileInput.dispatchEvent(event);
-        await this.delay(this.randomDelay(100, 300));
-      }
-      
-      this.log(`✅ File upload events dispatched successfully`);
-      
-    } catch (error) {
-      this.log('❌ File upload to input failed:', error);
-      throw error;
+      this.log('⚠️ Image upload failed:', error);
     }
   }
 
@@ -1110,76 +943,58 @@ class SalesonatorAutomator {
     return loginIndicators.some(selector => document.querySelector(selector) !== null);
   }
 
-  // Enhanced Facebook React dropdown click with aggressive retry
+  // Specialized click method for Facebook React dropdowns - Enhanced with reverse engineering insights
   async performFacebookDropdownClick(element) {
     try {
       console.log(`[FACEBOOK CLICK] Starting enhanced React-compatible click sequence...`);
       
       // Ensure element is in view and focused
       await this.scrollIntoView(element);
-      await this.delay(this.randomDelay(300, 500));
-
-      // Clear any existing selections first
-      document.getSelection()?.removeAllRanges();
-
-      // Method 1: Standard click with focus preparation
-      element.focus();
       await this.delay(this.randomDelay(200, 400));
-      
-      // Aggressive event sequence for Facebook's React system
-      const clickEvents = [
-        () => element.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, cancelable: true })),
-        () => element.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true })),
-        () => element.focus(),
-        () => element.dispatchEvent(new FocusEvent('focusin', { bubbles: true })),
-        () => element.dispatchEvent(new MouseEvent('mousedown', { 
-          bubbles: true, cancelable: true, button: 0, detail: 1,
-          clientX: element.getBoundingClientRect().left + 10,
-          clientY: element.getBoundingClientRect().top + 10
-        })),
-        () => element.dispatchEvent(new MouseEvent('mouseup', { 
-          bubbles: true, cancelable: true, button: 0, detail: 1,
-          clientX: element.getBoundingClientRect().left + 10,
-          clientY: element.getBoundingClientRect().top + 10
-        })),
-        () => element.click(), // Standard click
-        () => element.dispatchEvent(new MouseEvent('click', { 
-          bubbles: true, cancelable: true, button: 0, detail: 1,
-          clientX: element.getBoundingClientRect().left + 10,
-          clientY: element.getBoundingClientRect().top + 10
-        })),
-        () => element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 })),
-        () => element.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }))
+
+      // Pre-click preparation - mimic human behavior
+      element.focus();
+      await this.delay(this.randomDelay(100, 300));
+
+      // Enhanced event sequence based on reverse engineering findings
+      const eventSequence = [
+        new MouseEvent('mouseenter', { bubbles: true, cancelable: true }),
+        new MouseEvent('mouseover', { bubbles: true, cancelable: true }),
+        new FocusEvent('focusin', { bubbles: true }),
+        new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }),
+        new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0 }),
+        new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }),
+        new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId: 1 }),
+        new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerId: 1 }),
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+        new KeyboardEvent('keyup', { key: 'Enter', bubbles: true, cancelable: true })
       ];
 
-      // Execute events with delays
-      for (const eventFn of clickEvents) {
+      // Dispatch events with realistic delays
+      for (const event of eventSequence) {
         try {
-          eventFn();
-          await this.delay(this.randomDelay(50, 150));
+          element.dispatchEvent(event);
+          await this.delay(this.randomDelay(20, 80));
         } catch (e) {
-          console.warn(`[FACEBOOK CLICK] Event execution failed:`, e);
+          console.warn(`[FACEBOOK CLICK] Event ${event.type} failed:`, e);
         }
       }
 
-      // Try keyboard trigger as backup
+      // Additional React synthetic event triggers
       try {
-        element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-        await this.delay(100);
-        element.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
-        await this.delay(100);
-        element.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true })); // Space key
-        await this.delay(100);
-        element.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
+        // Trigger React's onChange and other synthetic events
+        if (element.tagName === 'INPUT' || element.tagName === 'SELECT') {
+          this.setNativeValue(element, element.value);
+        }
       } catch (e) {
-        console.warn(`[FACEBOOK CLICK] Keyboard events failed:`, e);
+        console.warn(`[FACEBOOK CLICK] Synthetic event trigger failed:`, e);
       }
 
       console.log(`[FACEBOOK CLICK] Enhanced React-compatible click sequence completed`);
       
     } catch (error) {
       console.error(`[FACEBOOK CLICK] Error in enhanced React click sequence:`, error);
-      // Last resort fallback
+      // Multi-level fallback
       try {
         element.click();
       } catch (fallbackError) {
