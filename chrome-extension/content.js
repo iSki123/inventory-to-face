@@ -44,14 +44,14 @@ class FacebookMarketplaceAutomation {
         await this.navigateToCreateListing();
       }
 
-      // Wait for page to load
-      await this.waitForElement('[data-testid="marketplace_composer_title_input"]', 10000);
+      // Wait for the page to be ready - use more flexible selectors
+      await this.waitForPageReady();
 
       // Fill out the form
       await this.fillVehicleForm(vehicle);
 
-      // Submit the form
-      await this.submitForm();
+      // Don't auto-submit, let user review first
+      console.log('Form filled successfully. Please review and submit manually.');
 
       this.isProcessing = false;
       return { success: true };
@@ -79,66 +79,336 @@ class FacebookMarketplaceAutomation {
     });
   }
 
-  async fillVehicleForm(vehicle) {
-    // Title
-    await this.fillInput('[data-testid="marketplace_composer_title_input"]', 
-      `${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+  async waitForPageReady() {
+    // Wait for any of these common Facebook Marketplace elements to appear
+    const selectors = [
+      'input', 'textarea', 'select', // Basic form elements
+      '[data-testid*="composer"]', // Facebook testids
+      '[role="combobox"]', // Dropdown elements
+      'div[contenteditable="true"]' // Rich text editors
+    ];
 
-    // Price
-    await this.fillInput('[data-testid="marketplace_composer_price_input"]', 
-      (vehicle.price / 100).toString());
-
-    // Category - select Vehicle
-    await this.selectCategory('Vehicle');
-
-    // Description
-    await this.fillTextarea('[data-testid="marketplace_composer_description_input"]', 
-      vehicle.description || `Beautiful ${vehicle.year} ${vehicle.make} ${vehicle.model} in excellent condition.`);
-
-    // Vehicle specific fields
-    await this.fillVehicleSpecificFields(vehicle);
+    return Promise.race(
+      selectors.map(selector => this.waitForElement(selector, 8000))
+    );
   }
 
-  async fillVehicleSpecificFields(vehicle) {
-    // Year
-    if (vehicle.year) {
-      await this.selectDropdown('[data-testid="year_selector"]', vehicle.year.toString());
+  async fillVehicleForm(vehicle) {
+    console.log('Starting to fill vehicle form with:', vehicle);
+
+    // Wait for the form to be fully loaded
+    await this.delay(2000);
+
+    // Fill vehicle type first (if dropdown exists)
+    await this.selectVehicleType();
+
+    // Fill basic fields with multiple selector strategies
+    await this.fillPrice(vehicle.price);
+    await this.fillYear(vehicle.year);
+    await this.fillMake(vehicle.make);
+    await this.fillModel(vehicle.model);
+    await this.fillLocation(vehicle.location);
+    await this.fillDescription(vehicle);
+    
+    // Upload images if available
+    if (vehicle.images && vehicle.images.length > 0) {
+      await this.uploadImages(vehicle.images);
     }
 
-    // Make
-    if (vehicle.make) {
-      await this.selectDropdown('[data-testid="make_selector"]', vehicle.make);
+    console.log('Form filling completed');
+  }
+
+  async selectVehicleType() {
+    const selectors = [
+      'select', // Generic select element
+      '[data-testid*="vehicle"]',
+      '[aria-label*="Vehicle"]',
+      'div[role="combobox"]'
+    ];
+
+    for (let selector of selectors) {
+      try {
+        const element = document.querySelector(selector);
+        if (element) {
+          console.log(`Found vehicle type selector: ${selector}`);
+          if (element.tagName === 'SELECT') {
+            // For regular select dropdown
+            element.value = 'vehicle';
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+          } else {
+            // For custom dropdowns
+            element.click();
+            await this.delay(500);
+            // Look for vehicle option
+            const vehicleOption = document.querySelector('[role="option"]');
+            if (vehicleOption) vehicleOption.click();
+          }
+          break;
+        }
+      } catch (error) {
+        console.warn(`Error with vehicle type selector ${selector}:`, error);
+      }
+    }
+  }
+
+  async fillPrice(price) {
+    if (!price) return;
+    
+    const priceValue = (price / 100).toString();
+    const selectors = [
+      'input[placeholder*="rice"]',
+      'input[data-testid*="price"]',
+      'input[name*="price"]',
+      'input[type="number"]'
+    ];
+
+    await this.tryFillInput(selectors, priceValue, 'price');
+  }
+
+  async fillYear(year) {
+    if (!year) return;
+
+    const selectors = [
+      'select', // Year is often the first select
+      'input[placeholder*="ear"]',
+      '[data-testid*="year"]',
+      '[aria-label*="Year"]'
+    ];
+
+    await this.tryFillInput(selectors, year.toString(), 'year');
+  }
+
+  async fillMake(make) {
+    if (!make) return;
+
+    const selectors = [
+      'input[placeholder*="ake"]',
+      '[data-testid*="make"]',
+      '[aria-label*="Make"]',
+      'input[name*="make"]'
+    ];
+
+    await this.tryFillInput(selectors, make, 'make');
+  }
+
+  async fillModel(model) {
+    if (!model) return;
+
+    const selectors = [
+      'input[placeholder*="odel"]',
+      '[data-testid*="model"]',
+      '[aria-label*="Model"]',
+      'input[name*="model"]'
+    ];
+
+    await this.tryFillInput(selectors, model, 'model');
+  }
+
+  async fillLocation(location) {
+    if (!location) return;
+
+    const selectors = [
+      'input[placeholder*="ocation"]',
+      '[data-testid*="location"]',
+      '[aria-label*="Location"]',
+      'input[name*="location"]'
+    ];
+
+    await this.tryFillInput(selectors, location, 'location');
+  }
+
+  async fillDescription(vehicle) {
+    let description = vehicle.description;
+    
+    // Generate a better description if none exists
+    if (!description) {
+      description = this.generateDescription(vehicle);
     }
 
-    // Model
-    if (vehicle.model) {
-      await this.selectDropdown('[data-testid="model_selector"]', vehicle.model);
+    const selectors = [
+      'textarea',
+      'div[contenteditable="true"]',
+      '[data-testid*="description"]',
+      '[aria-label*="description"]'
+    ];
+
+    await this.tryFillTextarea(selectors, description, 'description');
+  }
+
+  generateDescription(vehicle) {
+    let desc = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+    
+    if (vehicle.trim) desc += ` ${vehicle.trim}`;
+    if (vehicle.mileage) desc += `\n\nMileage: ${vehicle.mileage.toLocaleString()} miles`;
+    if (vehicle.exterior_color) desc += `\nExterior Color: ${vehicle.exterior_color}`;
+    if (vehicle.interior_color) desc += `\nInterior Color: ${vehicle.interior_color}`;
+    if (vehicle.transmission) desc += `\nTransmission: ${vehicle.transmission}`;
+    if (vehicle.fuel_type) desc += `\nFuel Type: ${vehicle.fuel_type}`;
+    if (vehicle.condition) desc += `\nCondition: ${vehicle.condition}`;
+    if (vehicle.vin) desc += `\nVIN: ${vehicle.vin}`;
+    
+    if (vehicle.features && vehicle.features.length > 0) {
+      desc += `\n\nFeatures:\n${vehicle.features.join('\n')}`;
     }
 
-    // Mileage
-    if (vehicle.mileage) {
-      await this.fillInput('[data-testid="mileage_input"]', vehicle.mileage.toString());
+    if (vehicle.contact_phone) {
+      desc += `\n\nContact: ${vehicle.contact_phone}`;
     }
 
-    // Condition
-    if (vehicle.condition) {
-      await this.selectDropdown('[data-testid="condition_selector"]', vehicle.condition);
-    }
+    return desc;
+  }
 
-    // Color
-    if (vehicle.exterior_color) {
-      await this.selectDropdown('[data-testid="exterior_color_selector"]', vehicle.exterior_color);
-    }
+  async uploadImages(imageUrls) {
+    console.log('Attempting to upload images:', imageUrls);
+    
+    // Look for file input or upload area
+    const uploadSelectors = [
+      'input[type="file"]',
+      '[data-testid*="photo"]',
+      '[aria-label*="photo"]',
+      '[role="button"]:has-text("Add photos")'
+    ];
 
-    // Transmission
-    if (vehicle.transmission) {
-      await this.selectDropdown('[data-testid="transmission_selector"]', vehicle.transmission);
+    for (let selector of uploadSelectors) {
+      try {
+        const uploadElement = document.querySelector(selector);
+        if (uploadElement) {
+          console.log(`Found upload element: ${selector}`);
+          
+          if (uploadElement.tagName === 'INPUT') {
+            // For file input, we need to create File objects from URLs
+            await this.uploadImageFiles(uploadElement, imageUrls);
+          } else {
+            // For other upload areas, try clicking
+            uploadElement.click();
+            await this.delay(1000);
+          }
+          break;
+        }
+      } catch (error) {
+        console.warn(`Error with upload selector ${selector}:`, error);
+      }
     }
+  }
 
-    // Fuel type
-    if (vehicle.fuel_type) {
-      await this.selectDropdown('[data-testid="fuel_type_selector"]', vehicle.fuel_type);
+  async uploadImageFiles(input, imageUrls) {
+    try {
+      // Download images and convert to File objects
+      const files = [];
+      
+      for (let i = 0; i < Math.min(imageUrls.length, 10); i++) { // Limit to 10 images
+        try {
+          const response = await fetch(imageUrls[i], { mode: 'cors' });
+          if (response.ok) {
+            const blob = await response.blob();
+            const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
+            files.push(file);
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch image ${imageUrls[i]}:`, error);
+        }
+      }
+
+      if (files.length > 0) {
+        // Create a new FileList
+        const dt = new DataTransfer();
+        files.forEach(file => dt.items.add(file));
+        
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        console.log(`Uploaded ${files.length} images`);
+      }
+    } catch (error) {
+      console.error('Error uploading images:', error);
     }
+  }
+
+  async tryFillInput(selectors, value, fieldName) {
+    for (let selector of selectors) {
+      try {
+        const element = document.querySelector(selector);
+        if (element && element.offsetParent !== null) { // Check if visible
+          console.log(`Filling ${fieldName} with selector: ${selector}`);
+          
+          if (element.tagName === 'SELECT') {
+            // Handle select dropdowns
+            const option = Array.from(element.options).find(opt => 
+              opt.value === value || opt.text.toLowerCase().includes(value.toLowerCase())
+            );
+            if (option) {
+              element.value = option.value;
+              element.dispatchEvent(new Event('change', { bubbles: true }));
+              return true;
+            }
+          } else if (element.tagName === 'INPUT') {
+            // Handle input fields
+            await this.simulateTyping(element, value);
+            return true;
+          } else {
+            // Handle custom components
+            element.click();
+            await this.delay(500);
+            
+            // Try to type the value
+            document.execCommand('insertText', false, value);
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+          }
+        }
+      } catch (error) {
+        console.warn(`Error with ${fieldName} selector ${selector}:`, error);
+      }
+    }
+    
+    console.warn(`Could not fill ${fieldName} with value: ${value}`);
+    return false;
+  }
+
+  async tryFillTextarea(selectors, value, fieldName) {
+    for (let selector of selectors) {
+      try {
+        const element = document.querySelector(selector);
+        if (element && element.offsetParent !== null) {
+          console.log(`Filling ${fieldName} with selector: ${selector}`);
+          
+          if (element.tagName === 'TEXTAREA') {
+            await this.simulateTyping(element, value);
+            return true;
+          } else if (element.contentEditable === 'true') {
+            element.focus();
+            element.textContent = value;
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+          }
+        }
+      } catch (error) {
+        console.warn(`Error with ${fieldName} selector ${selector}:`, error);
+      }
+    }
+    
+    console.warn(`Could not fill ${fieldName} with value: ${value}`);
+    return false;
+  }
+
+  async simulateTyping(element, value) {
+    element.focus();
+    
+    // Clear existing content
+    element.select();
+    await this.delay(100);
+    
+    // Set value directly for reliability
+    element.value = value;
+    
+    // Trigger events to ensure React/Vue components detect the change
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+    element.dispatchEvent(new Event('blur', { bubbles: true }));
+    
+    await this.delay(200);
   }
 
   async fillInput(selector, value) {
