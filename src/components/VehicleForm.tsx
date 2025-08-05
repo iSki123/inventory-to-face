@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,20 +22,37 @@ const conditions = ['new', 'used', 'certified'];
 const statuses = ['available', 'pending', 'sold', 'draft'];
 
 export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }: VehicleFormProps) {
-  const [formData, setFormData] = useState<Partial<Vehicle>>(
-    vehicle || {
-      year: new Date().getFullYear(),
-      make: '',
-      model: '',
-      price: 0,
-      condition: 'used',
-      fuel_type: 'gasoline',
-      transmission: 'automatic',
-      status: 'available',
-      features: [],
-    }
-  );
+  const [formData, setFormData] = useState<Partial<Vehicle>>({
+    year: new Date().getFullYear(),
+    make: '',
+    model: '',
+    price: 0,
+    condition: 'used',
+    fuel_type: 'gasoline',
+    transmission: 'automatic',
+    status: 'available',
+    features: [],
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Update form data when vehicle prop changes
+  useEffect(() => {
+    if (vehicle) {
+      setFormData(vehicle);
+    } else {
+      setFormData({
+        year: new Date().getFullYear(),
+        make: '',
+        model: '',
+        price: 0,
+        condition: 'used',
+        fuel_type: 'gasoline',
+        transmission: 'automatic',
+        status: 'available',
+        features: [],
+      });
+    }
+  }, [vehicle]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
