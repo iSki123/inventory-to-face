@@ -140,7 +140,7 @@ class SalesonatorExtension {
                   const userRole = profileData[0]?.role;
                   console.log('Extracted user role:', userRole);
                   
-                  if (userRole === 'Owner' || userRole === 'Manager' || userRole === 'Admin') {
+                  if (userRole === 'Owner' || userRole === 'Manager' || userRole === 'Admin' || userRole === 'admin') {
                     console.log('✅ User has admin role:', userRole);
                     console.log('Setting up auto-authentication...');
                     this.showWebAppAuthSuccess();
