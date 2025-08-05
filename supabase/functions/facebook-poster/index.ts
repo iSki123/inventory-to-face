@@ -75,8 +75,8 @@ async function getPendingVehicles(supabaseClient: any, userId: string) {
       .eq('user_id', userId)
       .eq('status', 'available')
       .in('facebook_post_status', ['draft', 'error'])
-      .order('created_at', { ascending: true })
-      .limit(10); // Limit to 10 vehicles at a time
+      .order('created_at', { ascending: true });
+      // Removed the .limit(10) to fetch ALL vehicles
 
     if (error) {
       console.error('Error fetching vehicles:', error);
@@ -101,8 +101,12 @@ async function getPendingVehicles(supabaseClient: any, userId: string) {
       vin: vehicle.vin,
       location: vehicle.location,
       contact_phone: vehicle.contact_phone,
-      contact_email: vehicle.contact_email
+      contact_email: vehicle.contact_email,
+      fuel_type: vehicle.fuel_type,
+      transmission: vehicle.transmission
     }));
+
+    console.log(`Found ${transformedVehicles.length} vehicles ready to post for user ${userId}`);
 
     return new Response(
       JSON.stringify({ 
