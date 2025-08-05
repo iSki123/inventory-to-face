@@ -492,12 +492,24 @@ class SalesonatorAutomator {
       
       console.log(`[YEAR DEBUG] ✅ Found year option using waitForElement:`, yearOption);
       console.log(`[YEAR DEBUG] Option text:`, yearOption.textContent?.trim());
+      console.log(`[YEAR DEBUG] Option tagName:`, yearOption.tagName);
+      console.log(`[YEAR DEBUG] Option role:`, yearOption.getAttribute('role'));
+      console.log(`[YEAR DEBUG] Option ID:`, yearOption.id);
+      console.log(`[YEAR DEBUG] Option classes:`, yearOption.className);
       
-      await this.scrollIntoView(yearOption);
-      await this.delay(this.randomDelay(300, 600));
+      // Let's check what the manual search would find for comparison
+      const manualOptions = document.querySelectorAll('[role="option"]');
+      const manualMatch = Array.from(manualOptions).find(opt => opt.textContent?.trim() === year.toString());
+      console.log(`[YEAR DEBUG] 🔍 Manual search would find:`, manualMatch);
+      console.log(`[YEAR DEBUG] 🔍 Are they the same element?`, yearOption === manualMatch);
       
-      console.log(`[YEAR DEBUG] 🖱️ Clicking year option...`);
-      yearOption.click(); // Simple click - same as make selection
+      if (manualMatch && yearOption !== manualMatch) {
+        console.log(`[YEAR DEBUG] ⚠️ DIFFERENT ELEMENTS! Switching to manual match...`);
+        await this.performFacebookDropdownClick(manualMatch);
+      } else {
+        console.log(`[YEAR DEBUG] 🖱️ Using React-compatible click sequence...`);
+        await this.performFacebookDropdownClick(yearOption);
+      }
       
       await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
       
@@ -906,7 +918,63 @@ class SalesonatorAutomator {
     
     return loginIndicators.some(selector => document.querySelector(selector) !== null);
   }
-}
+  }
+
+  // Specialized click method for Facebook React dropdowns
+  async performFacebookDropdownClick(element) {
+    try {
+      console.log(`[FACEBOOK CLICK] Starting React-compatible click sequence...`);
+      
+      // Ensure element is in view and focused
+      await this.scrollIntoView(element);
+      await this.delay(200);
+      
+      // Focus the element first
+      element.focus();
+      await this.delay(100);
+      
+      // Method 1: Standard click with focus
+      console.log(`[FACEBOOK CLICK] Method 1: Standard click...`);
+      element.click();
+      await this.delay(300);
+      
+      // Method 2: Mouse events sequence (what React often expects)
+      console.log(`[FACEBOOK CLICK] Method 2: Mouse event sequence...`);
+      const mouseDown = new MouseEvent('mousedown', {
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        button: 0
+      });
+      
+      const mouseUp = new MouseEvent('mouseup', {
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        button: 0
+      });
+      
+      const click = new MouseEvent('click', {
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        button: 0
+      });
+      
+      element.dispatchEvent(mouseDown);
+      await this.delay(50);
+      element.dispatchEvent(mouseUp);
+      await this.delay(50);
+      element.dispatchEvent(click);
+      
+      console.log(`[FACEBOOK CLICK] ✅ React-compatible click sequence completed`);
+      return true;
+      
+    } catch (error) {
+      console.error(`[FACEBOOK CLICK] ❌ Click sequence failed:`, error);
+      return false;
+    }
+  }
 
 // Initialize the enhanced automator
 const salesonatorAutomator = new SalesonatorAutomator();
