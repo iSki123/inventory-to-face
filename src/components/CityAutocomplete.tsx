@@ -7,8 +7,9 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
 interface City {
-  name: string;
-  state: string;
+  city_name: string;
+  state_name: string;
+  full_name: string;
 }
 
 interface CityAutocompleteProps {
@@ -61,9 +62,8 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
-  const handleSelect = (cityName: string, stateName: string) => {
-    const cityStateString = `${cityName}, ${stateName}`;
-    onChange(cityStateString);
+  const handleSelect = (fullName: string) => {
+    onChange(fullName);
     setOpen(false);
     setSearchQuery("");
   };
@@ -98,20 +98,19 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
             )}
             <CommandGroup>
               {cities.map((city) => {
-                const cityStateString = `${city.name}, ${city.state}`;
                 return (
                   <CommandItem
-                    key={`${city.name}-${city.state}`}
-                    value={cityStateString}
-                    onSelect={() => handleSelect(city.name, city.state)}
+                    key={`${city.city_name}-${city.state_name}`}
+                    value={city.full_name}
+                    onSelect={() => handleSelect(city.full_name)}
                   >
                     <Check
                       className={cn(
                         "mr-2 h-4 w-4",
-                        value === cityStateString ? "opacity-100" : "opacity-0"
+                        value === city.full_name ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    {cityStateString}
+                    {city.full_name}
                   </CommandItem>
                 );
               })}

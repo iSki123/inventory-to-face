@@ -266,6 +266,65 @@ export type Database = {
         }
         Relationships: []
       }
+      us_cities: {
+        Row: {
+          city_name: string
+          county_name: string | null
+          created_at: string | null
+          id: number
+          latitude: number | null
+          longitude: number | null
+          state_id: string
+        }
+        Insert: {
+          city_name: string
+          county_name?: string | null
+          created_at?: string | null
+          id?: number
+          latitude?: number | null
+          longitude?: number | null
+          state_id: string
+        }
+        Update: {
+          city_name?: string
+          county_name?: string | null
+          created_at?: string | null
+          id?: number
+          latitude?: number | null
+          longitude?: number | null
+          state_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_cities_state"
+            columns: ["state_id"]
+            isOneToOne: false
+            referencedRelation: "us_states"
+            referencedColumns: ["state_id"]
+          },
+        ]
+      }
+      us_states: {
+        Row: {
+          created_at: string | null
+          id: number
+          state_id: string
+          state_name: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: number
+          state_id: string
+          state_name: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: number
+          state_id?: string
+          state_name?: string
+        }
+        Relationships: []
+      }
       vehicle_sources: {
         Row: {
           created_at: string
@@ -418,7 +477,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      search_us_cities: {
+        Args: { search_term: string; limit_count?: number }
+        Returns: {
+          city_name: string
+          state_name: string
+          full_name: string
+        }[]
+      }
     }
     Enums: {
       app_role: "owner" | "manager" | "sales_rep" | "admin"
