@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -60,7 +61,7 @@ Keep it conversational but professional, focusing on value and reliability.`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-2025-04-14',
         messages: [
           { 
             role: 'system', 
@@ -74,11 +75,14 @@ Keep it conversational but professional, focusing on value and reliability.`;
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+      const errorData = await response.json().catch(() => null);
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}${errorData?.error?.message ? ` - ${errorData.error.message}` : ''}`);
     }
 
     const data = await response.json();
     const generatedDescription = data.choices[0].message.content;
+
+    console.log(`Generated AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
 
     return new Response(JSON.stringify({ 
       success: true,
@@ -89,11 +93,16 @@ Keep it conversational but professional, focusing on value and reliability.`;
 
   } catch (error) {
     console.error('Error in generate-vehicle-description function:', error);
+    
+    // Provide a more detailed fallback description
+    const fallbackDescription = vehicle ? 
+      `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''} - Well-maintained vehicle in excellent condition. Features ${vehicle.transmission || 'automatic'} transmission and ${vehicle.fuel_type || 'gasoline'} engine. ${vehicle.mileage ? `With ${vehicle.mileage.toLocaleString()} miles,` : ''} this reliable vehicle is perfect for daily driving. Contact us today for more details and to schedule a test drive. Don't miss this great opportunity!` :
+      'Quality vehicle available for sale. Contact us for more details and to schedule a test drive.';
+
     return new Response(JSON.stringify({ 
       success: false,
       error: error.message,
-      // Fallback description
-      description: `${vehicle?.year || ''} ${vehicle?.make || ''} ${vehicle?.model || ''} - Well-maintained vehicle in excellent condition. Perfect for daily driving with reliable performance. Contact us for more details and to schedule a test drive.`
+      description: fallbackDescription
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
