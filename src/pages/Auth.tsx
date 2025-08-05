@@ -23,6 +23,7 @@ const Auth = () => {
     lastName: '',
     dealershipName: '',
     phone: '',
+    location: '',
     role: 'sales_rep' as 'owner' | 'manager' | 'sales_rep'
   });
 
@@ -54,6 +55,7 @@ const Auth = () => {
       last_name: signUpData.lastName,
       dealership_name: signUpData.dealershipName,
       phone: signUpData.phone,
+      location: signUpData.location,
       role: signUpData.role
     });
     
@@ -176,6 +178,16 @@ const Auth = () => {
                     placeholder="Your phone number"
                     value={signUpData.phone}
                     onChange={(e) => setSignUpData(prev => ({ ...prev, phone: e.target.value }))}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="signup-location">Location</Label>
+                  <Input
+                    id="signup-location"
+                    placeholder="City, State (e.g., Miami, FL)"
+                    value={signUpData.location}
+                    onChange={(e) => setSignUpData(prev => ({ ...prev, location: e.target.value }))}
                   />
                 </div>
                 
