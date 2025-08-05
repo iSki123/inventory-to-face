@@ -434,14 +434,28 @@ class SalesonatorAutomator {
       yearDropdown.click();
       await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
       
-      // Look for the specific year option using our custom text finder
-      let yearOption = this.findElementByText(year.toString());
+      // Look for the specific year option within dropdown containers
+      let yearOption = null;
+      
+      // First, try to find the dropdown container that just opened
+      const dropdownContainers = document.querySelectorAll('[role="listbox"], [role="menu"], .dropdown-menu, [data-testid*="dropdown"]');
+      
+      for (const container of dropdownContainers) {
+        yearOption = this.findElementByText(year.toString(), ['div', 'li', 'button', 'span', 'option'], container);
+        if (yearOption) {
+          this.log(`📅 Found year ${year} in dropdown container`);
+          break;
+        }
+      }
       
       if (!yearOption) {
-        // Fallback to regular selectors
+        // Broader search with more specific selectors
         const yearOptionSelectors = [
+          `//div[contains(text(), "${year}") and (@role="option" or parent::*[@role="listbox"])]`,
           `[data-value="${year}"]`,
-          `option[value="${year}"]`
+          `option[value="${year}"]`,
+          `li:contains("${year}")`,
+          `div[role="option"]:contains("${year}")`
         ];
         yearOption = await this.waitForElement(yearOptionSelectors, 3000);
       }
