@@ -466,32 +466,55 @@ class SalesonatorAutomator {
         console.log(`[YEAR DEBUG] Option ${i}:`, opt.textContent?.trim(), opt);
       });
       
-      // Look for year option more specifically using XPath - EXACT same as vehicle type
-      const yearOptionSelectors = [
-        `text:${year}`, // Use XPath for text content
-        `[data-value="${year}"]`,
-        `[role="option"]`
-      ];
+      // Find the specific year option from the list we already discovered
+      console.log(`[YEAR DEBUG] Looking for year option: ${year}`);
+      let yearFound = false;
+      let targetOption = null;
       
-      console.log('[YEAR DEBUG] Searching for year option with selectors:', yearOptionSelectors);
-      const yearOption = await this.waitForElement(yearOptionSelectors, 5000);
-      
-      if (!yearOption) {
-        console.error(`[YEAR DEBUG] No year option found for: ${year}`);
-        // Try to find any year options to debug
-        const anyYearOptions = document.querySelectorAll('[role="option"]');
-        console.log('[YEAR DEBUG] Available options:', Array.from(anyYearOptions).map(opt => opt.textContent?.trim()));
-        throw new Error(`Year option ${year} not found`);
+      for (let i = 0; i < allOptions.length; i++) {
+        const option = allOptions[i];
+        const optionText = option.textContent?.trim();
+        
+        if (optionText === year.toString()) {
+          console.log(`[YEAR DEBUG] ✅ Found matching year option at index ${i}: "${optionText}"`);
+          targetOption = option;
+          yearFound = true;
+          break;
+        }
       }
       
-      console.log('[YEAR DEBUG] Found year option:', yearOption);
-      console.log('[YEAR DEBUG] Option text content:', yearOption.textContent?.trim());
+      if (!yearFound || !targetOption) {
+        console.error(`[YEAR DEBUG] ❌ Year ${year} not found in dropdown options!`);
+        console.log('[YEAR DEBUG] Available years found:', Array.from(allOptions).slice(0, 10).map(opt => opt.textContent?.trim()));
+        return false;
+      }
       
-      await this.scrollIntoView(yearOption);
+      console.log('[YEAR DEBUG] Target option element:', targetOption);
+      console.log('[YEAR DEBUG] Option visible:', targetOption.offsetParent !== null);
+      console.log('[YEAR DEBUG] Option classes:', targetOption.className);
+      
+      // Scroll into view and focus
+      await this.scrollIntoView(targetOption);
       await this.delay(this.randomDelay(300, 600));
       
-      console.log('[YEAR DEBUG] Clicking year option...');
-      yearOption.click();
+      console.log('[YEAR DEBUG] About to click year option...');
+      
+      // Try multiple click methods for reliability
+      try {
+        targetOption.focus();
+        await this.delay(200);
+        targetOption.click();
+        console.log(`[YEAR DEBUG] ✅ Standard click completed`);
+      } catch (e) {
+        console.log(`[YEAR DEBUG] Standard click failed, trying mouse event:`, e);
+        const clickEvent = new MouseEvent('click', {
+          view: window,
+          bubbles: true,
+          cancelable: true
+        });
+        targetOption.dispatchEvent(clickEvent);
+        console.log(`[YEAR DEBUG] ✅ Mouse event dispatched`);
+      }
       
       await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
       
