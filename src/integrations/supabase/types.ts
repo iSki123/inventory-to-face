@@ -498,13 +498,10 @@ export type Database = {
         Returns: unknown
       }
       search_us_cities: {
-        Args:
-          | { search_term: string }
-          | { search_term: string; limit_count?: number }
+        Args: { search_term: string }
         Returns: {
-          city_name: string
-          state_name: string
-          full_name: string
+          name: string
+          state: string
         }[]
       }
       set_limit: {
