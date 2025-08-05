@@ -12,7 +12,18 @@ class FacebookMarketplaceAutomation {
       } else if (request.action === 'checkLogin') {
         sendResponse({ loggedIn: this.isLoggedIn() });
       } else if (request.action === 'postVehicle') {
-        this.postVehicle(request.vehicle).then(sendResponse);
+        // Handle async response with proper error handling
+        this.postVehicle(request.vehicle)
+          .then(result => {
+            sendResponse(result);
+          })
+          .catch(error => {
+            console.error('Error in postVehicle:', error);
+            sendResponse({ 
+              success: false, 
+              error: error.message || 'Unknown error occurred' 
+            });
+          });
         return true; // Will respond asynchronously
       }
     });
