@@ -221,7 +221,11 @@ class SalesonatorExtension {
     this.updateFieldDisplay(fieldName, selector);
     
     this.currentFieldIndex++;
-    setTimeout(() => this.nextField(), 1000); // Move to next field after 1 second
+    setTimeout(() => {
+      if (this.isMapping) {
+        this.nextField();
+      }
+    }, 1000);
   }
 
   async clearMappings() {

@@ -301,6 +301,10 @@ class SalesonatorAutomator {
       this.log('🚗 Selecting vehicle type dropdown...');
       
       const vehicleDropdownSelectors = this.getFieldSelector('vehicle-type');
+      // Add fallback selectors if no mapping exists
+      if (vehicleDropdownSelectors.length === 0) {
+        vehicleDropdownSelectors.push('text:Vehicle type', '[aria-label*="Vehicle type"]', 'form div[role="button"]:first-of-type');
+      }
       
       await this.delay(2000);
       
@@ -340,6 +344,10 @@ class SalesonatorAutomator {
       this.log(`🗓️ Selecting year: ${year}`);
       
       const yearDropdownSelectors = this.getFieldSelector('year');
+      // Add fallback selectors if no mapping exists
+      if (yearDropdownSelectors.length === 0) {
+        yearDropdownSelectors.push('text:Year', '[aria-label*="Year"]', 'div[role="button"]');
+      }
       
       const yearDropdown = await this.waitForElement(yearDropdownSelectors, 8000);
       await this.scrollIntoView(yearDropdown);
@@ -407,6 +415,10 @@ class SalesonatorAutomator {
       
       const cleanMake = make.trim();
       const makeDropdownSelectors = this.getFieldSelector('make');
+      // Add fallback selectors if no mapping exists  
+      if (makeDropdownSelectors.length === 0) {
+        makeDropdownSelectors.push('text:Make', '[aria-label*="Make"]', 'div[role="button"]');
+      }
       
       const makeDropdown = await this.waitForElement(makeDropdownSelectors, 8000);
       await this.scrollIntoView(makeDropdown);
@@ -444,6 +456,10 @@ class SalesonatorAutomator {
       this.log(`🚗 Filling model: ${model}`);
       
       const modelInputSelectors = this.getFieldSelector('model');
+      // Add fallback selectors if no mapping exists
+      if (modelInputSelectors.length === 0) {
+        modelInputSelectors.push('[aria-label*="Model"]', 'input[placeholder*="Model"]');
+      }
       
       const modelInput = await this.waitForElement(modelInputSelectors, 8000);
       await this.scrollIntoView(modelInput);
@@ -463,6 +479,10 @@ class SalesonatorAutomator {
       this.log(`📏 Filling mileage: ${mileage}`);
       
       const mileageInputSelectors = this.getFieldSelector('mileage');
+      // Add fallback selectors if no mapping exists
+      if (mileageInputSelectors.length === 0) {
+        mileageInputSelectors.push('[aria-label*="Mileage"]', 'input[placeholder*="Mileage"]');
+      }
       
       const mileageInput = await this.waitForElement(mileageInputSelectors, 8000);
       await this.scrollIntoView(mileageInput);
@@ -482,6 +502,10 @@ class SalesonatorAutomator {
       this.log(`💰 Filling price: ${price}`);
       
       const priceInputSelectors = this.getFieldSelector('price');
+      // Add fallback selectors if no mapping exists
+      if (priceInputSelectors.length === 0) {
+        priceInputSelectors.push('[aria-label*="Price"]', 'input[placeholder*="Price"]');
+      }
       
       const priceInput = await this.waitForElement(priceInputSelectors, 8000);
       await this.scrollIntoView(priceInput);
@@ -501,6 +525,10 @@ class SalesonatorAutomator {
       this.log(`📝 Filling description: ${description}`);
       
       const descriptionInputSelectors = this.getFieldSelector('description');
+      // Add fallback selectors if no mapping exists
+      if (descriptionInputSelectors.length === 0) {
+        descriptionInputSelectors.push('[aria-label*="Description"]', 'textarea', '[role="textbox"]');
+      }
       
       const descriptionInput = await this.waitForElement(descriptionInputSelectors, 5000);
       await this.scrollIntoView(descriptionInput);
