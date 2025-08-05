@@ -49,81 +49,102 @@ class SalesonatorAutomator {
   async selectCategory() {
     console.log('Selecting vehicle category...');
     
-    // Multiple selector strategies for finding vehicle category
-    const selectors = [
-      '[data-testid="category-vehicles"]',
-      '[data-testid="category-item-vehicles"]', 
-      '[aria-label*="Vehicle" i]',
-      '[aria-label*="Car" i]',
-      'div[role="button"]:has-text("Vehicle")',
-      'div[role="button"]:has-text("Car")',
-      'div[role="button"]:has-text("Auto")'
-    ];
-    
-    // Try each selector
-    for (let selector of selectors) {
-      try {
-        console.log(`Trying selector: ${selector}`);
-        const element = await this.waitForElement(selector, 3000);
-        if (element) {
-          console.log(`Found category element with selector: ${selector}`);
-          element.click();
-          await this.delay(this.getRandomDelay(1500, 2500));
-          return true;
-        }
-      } catch (error) {
-        console.log(`Selector failed: ${selector}`);
-        continue;
-      }
-    }
-    
-    // Enhanced fallback approach
-    console.warn('Trying enhanced fallback approach...');
-    
-    // Look for category buttons with broader search
-    const possibleSelectors = [
-      'div[role="button"]',
-      'button',
-      '[aria-label]',
-      '[data-testid*="category"]',
-      'div[tabindex="0"]'
-    ];
-    
-    const vehicleKeywords = ['vehicle', 'car', 'auto', 'motorcycle', 'truck', 'suv'];
-    
-    for (let selector of possibleSelectors) {
-      const elements = document.querySelectorAll(selector);
-      console.log(`Checking ${elements.length} elements with selector: ${selector}`);
+    try {
+      // Look for the "Vehicle type" dropdown
+      const vehicleTypeSelectors = [
+        'div:has-text("Vehicle type")',
+        '[aria-label*="Vehicle type" i]',
+        'div[role="button"]:has-text("Vehicle type")',
+        'div[tabindex="0"]:has-text("Vehicle type")'
+      ];
       
-      for (let element of elements) {
-        const text = (element.textContent || element.getAttribute('aria-label') || '').toLowerCase();
-        console.log(`Checking element text: "${text.substring(0, 50)}..."`);
-        
-        for (let keyword of vehicleKeywords) {
-          if (text.includes(keyword)) {
-            console.log(`Found vehicle category with keyword "${keyword}": ${text.substring(0, 100)}`);
-            element.click();
-            await this.delay(this.getRandomDelay(1500, 2500));
-            return true;
+      let vehicleTypeDropdown = null;
+      
+      // Try to find the vehicle type dropdown
+      for (let selector of vehicleTypeSelectors) {
+        try {
+          const elements = document.querySelectorAll('div[role="button"], div[tabindex="0"], [aria-label]');
+          for (let element of elements) {
+            const text = element.textContent || element.getAttribute('aria-label') || '';
+            if (text.toLowerCase().includes('vehicle type') || text.toLowerCase().includes('vehicle')) {
+              vehicleTypeDropdown = element;
+              console.log('Found vehicle type dropdown:', text.substring(0, 50));
+              break;
+            }
+          }
+          if (vehicleTypeDropdown) break;
+        } catch (error) {
+          continue;
+        }
+      }
+      
+      if (!vehicleTypeDropdown) {
+        throw new Error('Could not find Vehicle type dropdown');
+      }
+      
+      // Click the dropdown to open it
+      vehicleTypeDropdown.click();
+      await this.delay(this.getRandomDelay(1000, 2000));
+      
+      // Now look for "Car/Truck" option
+      const carTruckSelectors = [
+        'div:has-text("Car/Truck")',
+        '[aria-label*="Car/Truck" i]',
+        'div[role="option"]:has-text("Car/Truck")',
+        'div[tabindex="0"]:has-text("Car/Truck")'
+      ];
+      
+      let carTruckOption = null;
+      
+      // Wait a moment for dropdown to open
+      await this.delay(500);
+      
+      // Try to find the Car/Truck option
+      for (let selector of carTruckSelectors) {
+        try {
+          const elements = document.querySelectorAll('div[role="option"], div[tabindex="0"], div[role="button"]');
+          for (let element of elements) {
+            const text = element.textContent || element.getAttribute('aria-label') || '';
+            if (text.toLowerCase().includes('car/truck') || text.toLowerCase().includes('car') && text.toLowerCase().includes('truck')) {
+              carTruckOption = element;
+              console.log('Found Car/Truck option:', text.substring(0, 50));
+              break;
+            }
+          }
+          if (carTruckOption) break;
+        } catch (error) {
+          continue;
+        }
+      }
+      
+      if (!carTruckOption) {
+        // Fallback: look for any vehicle-related option
+        const elements = document.querySelectorAll('div[role="option"], div[tabindex="0"], div[role="button"]');
+        for (let element of elements) {
+          const text = (element.textContent || '').toLowerCase();
+          if (text.includes('car') || text.includes('truck') || text.includes('auto')) {
+            carTruckOption = element;
+            console.log('Found fallback vehicle option:', text.substring(0, 50));
+            break;
           }
         }
       }
-    }
-    
-    // Last resort: look for any clickable element that might lead to categories
-    console.warn('Trying last resort approach - looking for category selection area...');
-    const categoryAreas = document.querySelectorAll('div[data-testid*="category"], div[aria-label*="categor" i], div:has-text("What are you selling")');
-    
-    if (categoryAreas.length > 0) {
-      console.log(`Found ${categoryAreas.length} potential category areas`);
-      categoryAreas[0].click();
-      await this.delay(2000);
       
-      // After clicking, try to find vehicle category again
-      return this.selectCategory();
+      if (!carTruckOption) {
+        throw new Error('Could not find Car/Truck option in dropdown');
+      }
+      
+      // Click the Car/Truck option
+      carTruckOption.click();
+      await this.delay(this.getRandomDelay(1500, 2500));
+      
+      console.log('Successfully selected vehicle category');
+      return true;
+      
+    } catch (error) {
+      console.error('Error selecting category:', error);
+      throw new Error(`Could not select vehicle category: ${error.message}`);
     }
-    
-    throw new Error('Could not find vehicle category after trying all approaches');
   }
 
   async fillTitle(vehicle) {
