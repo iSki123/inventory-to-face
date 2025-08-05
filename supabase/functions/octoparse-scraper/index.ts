@@ -339,6 +339,55 @@ function parseOctoparseData(rawData: any[]): any[] {
       year = parseInt(String(item.year || item.Year || item.YEAR)) || year;
     }
     
+    // Extract images - check multiple possible field names and detect image URLs
+    const extractImages = (data: any): string[] => {
+      const images: string[] = [];
+      const imageExtensions = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i;
+      
+      // Function to check if a string is an image URL
+      const isImageUrl = (url: string): boolean => {
+        if (typeof url !== 'string') return false;
+        return imageExtensions.test(url) || url.includes('image') || url.includes('photo') || url.includes('pic');
+      };
+      
+      // Check common image field names
+      const imageFields = ['images', 'image', 'Image', 'IMAGES', 'photos', 'Photos', 'PHOTOS', 'picture', 'Picture', 'PICTURE', 'pic', 'Pic', 'PIC'];
+      
+      for (const field of imageFields) {
+        if (data[field]) {
+          if (Array.isArray(data[field])) {
+            data[field].forEach((img: any) => {
+              if (typeof img === 'string' && isImageUrl(img)) {
+                images.push(img);
+              }
+            });
+          } else if (typeof data[field] === 'string' && isImageUrl(data[field])) {
+            images.push(data[field]);
+          }
+        }
+      }
+      
+      // Also check all values in the object for potential image URLs
+      Object.values(data).forEach((value: any) => {
+        if (typeof value === 'string' && isImageUrl(value)) {
+          if (!images.includes(value)) {
+            images.push(value);
+          }
+        } else if (Array.isArray(value)) {
+          value.forEach((item: any) => {
+            if (typeof item === 'string' && isImageUrl(item)) {
+              if (!images.includes(item)) {
+                images.push(item);
+              }
+            }
+          });
+        }
+      });
+      
+      console.log(`Extracted ${images.length} images for item ${index}:`, images);
+      return images;
+    };
+    
     const vehicle = {
       year,
       make: item.make || item.Make || item.MAKE || item.brand || item.Brand || 'Unknown',
@@ -353,7 +402,7 @@ function parseOctoparseData(rawData: any[]): any[] {
       description: item.description || item.Description || `${year} ${item.make || item.Make || 'Unknown'} ${item.model || item.Model || 'Unknown'}`,
       vin: item.vin || item.VIN || generateVIN(),
       features: Array.isArray(item.features) ? item.features : [],
-      images: Array.isArray(item.images) ? item.images : [],
+      images: extractImages(item),
       trim: item.trim || item.Trim || '',
       location: item.location || item.Location || '',
       contact_phone: item.phone || item.Phone || '',
