@@ -51,31 +51,58 @@ class SalesonatorAutomator {
     
     try {
       // Wait for page to load fully
-      await this.delay(2000);
+      await this.delay(3000);
       
-      // Look for the "Vehicle type" dropdown more specifically
+      // Facebook Marketplace specific: Look for "Vehicle type" label first
+      console.log('Looking for Vehicle type label...');
       let vehicleTypeDropdown = null;
       
-      // First try to find by the actual dropdown structure
-      const dropdownButtons = document.querySelectorAll('div[role="button"][tabindex="0"]');
-      for (let button of dropdownButtons) {
-        const text = button.textContent || '';
-        // Look for button that contains "Vehicle type" or is the first dropdown in the form
-        if (text.includes('Vehicle type') || (text.trim() === '' && button.querySelector('svg'))) {
-          vehicleTypeDropdown = button;
-          console.log('Found vehicle type dropdown button');
-          break;
+      // Method 1: Find by text content "Vehicle type" 
+      const labels = document.querySelectorAll('label, span, div');
+      for (let label of labels) {
+        const text = (label.textContent || '').trim();
+        if (text === 'Vehicle type' || text.includes('Vehicle type')) {
+          console.log('Found Vehicle type label:', text);
+          // Look for nearby dropdown button or input
+          const container = label.closest('div');
+          if (container) {
+            const dropdown = container.querySelector('div[role="button"], input[role="combobox"], select') ||
+                           container.parentElement?.querySelector('div[role="button"], input[role="combobox"], select');
+            if (dropdown) {
+              vehicleTypeDropdown = dropdown;
+              console.log('Found dropdown near Vehicle type label');
+              break;
+            }
+          }
         }
       }
       
-      // Fallback: look for any dropdown that might be the vehicle type
+      // Method 2: Look for the first dropdown in the form (usually vehicle type)
       if (!vehicleTypeDropdown) {
-        const allButtons = document.querySelectorAll('div[role="button"]');
-        for (let button of allButtons) {
-          const parent = button.closest('form, [data-testid]');
-          if (parent && button.querySelector('svg')) {
-            vehicleTypeDropdown = button;
-            console.log('Found dropdown button as fallback');
+        console.log('Trying to find first dropdown in form...');
+        const form = document.querySelector('form') || document.querySelector('[role="main"]');
+        if (form) {
+          vehicleTypeDropdown = form.querySelector('div[role="button"][aria-haspopup="listbox"], select, input[role="combobox"]');
+          if (vehicleTypeDropdown) {
+            console.log('Found first dropdown in form');
+          }
+        }
+      }
+      
+      // Method 3: Look for dropdown with placeholder or aria-label about vehicle type
+      if (!vehicleTypeDropdown) {
+        console.log('Looking for dropdown with vehicle-related attributes...');
+        const dropdowns = document.querySelectorAll('div[role="button"], select, input[role="combobox"]');
+        for (let dropdown of dropdowns) {
+          const placeholder = dropdown.getAttribute('placeholder') || '';
+          const ariaLabel = dropdown.getAttribute('aria-label') || '';
+          const text = (dropdown.textContent || '').toLowerCase();
+          
+          if (placeholder.toLowerCase().includes('vehicle') || 
+              ariaLabel.toLowerCase().includes('vehicle') ||
+              text.includes('select') || text.includes('choose')) {
+            vehicleTypeDropdown = dropdown;
+            console.log('Found dropdown with vehicle-related attributes');
             break;
           }
         }
@@ -85,49 +112,70 @@ class SalesonatorAutomator {
         throw new Error('Could not find Vehicle type dropdown');
       }
       
-      // Click the dropdown to open it
+      console.log('Clicking vehicle type dropdown...');
+      vehicleTypeDropdown.focus();
+      await this.delay(500);
       vehicleTypeDropdown.click();
-      await this.delay(this.getRandomDelay(1500, 2500));
+      await this.delay(this.getRandomDelay(2000, 3500));
       
       // Now look for "Car/Truck" option in the opened dropdown
+      console.log('Looking for Car/Truck option...');
       let carTruckOption = null;
       
-      // Wait for dropdown menu to appear
-      await this.delay(1000);
-      
-      // Look for Car/Truck option specifically
-      const dropdownOptions = document.querySelectorAll('div[role="option"], li[role="option"], div[data-testid*="option"]');
-      console.log(`Found ${dropdownOptions.length} dropdown options`);
-      
-      for (let option of dropdownOptions) {
-        const text = (option.textContent || '').toLowerCase().trim();
-        console.log('Checking option:', text);
+      // Wait for dropdown menu to appear and try multiple times
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await this.delay(1000);
         
-        if (text === 'car/truck' || text.includes('car/truck') || 
-            (text.includes('car') && text.includes('truck'))) {
-          carTruckOption = option;
-          console.log('Found Car/Truck option:', text);
-          break;
-        }
-      }
-      
-      // Fallback: look for any car-related option
-      if (!carTruckOption) {
+        // Look for dropdown options with various selectors
+        const dropdownOptions = document.querySelectorAll([
+          'div[role="option"]',
+          'li[role="option"]', 
+          'div[data-testid*="option"]',
+          'ul[role="listbox"] > li',
+          'div[aria-selected]',
+          'div[data-value]'
+        ].join(', '));
+        
+        console.log(`Attempt ${attempt + 1}: Found ${dropdownOptions.length} dropdown options`);
+        
         for (let option of dropdownOptions) {
-          const text = (option.textContent || '').toLowerCase().trim();
-          if (text === 'car' || text === 'truck' || text === 'vehicle') {
+          const text = (option.textContent || '').toLowerCase().replace(/\s+/g, ' ').trim();
+          console.log(`Checking option: "${text}"`);
+          
+          // Look for various car/truck related terms
+          if (text === 'car/truck' || 
+              text === 'car & truck' ||
+              text === 'cars & trucks' ||
+              text === 'vehicle' ||
+              text === 'automobile' ||
+              text.includes('car') && text.includes('truck') ||
+              text === 'cars/trucks') {
             carTruckOption = option;
-            console.log('Found fallback vehicle option:', text);
+            console.log('Found Car/Truck option:', text);
             break;
           }
         }
+        
+        if (carTruckOption) break;
+        
+        // If no options found, try clicking dropdown again
+        if (attempt < 2) {
+          console.log('No Car/Truck option found, trying to click dropdown again...');
+          vehicleTypeDropdown.click();
+          await this.delay(1000);
+        }
       }
       
       if (!carTruckOption) {
-        throw new Error('Could not find Car/Truck option in dropdown');
+        // Log all available options for debugging
+        const allOptions = document.querySelectorAll('div[role="option"], li[role="option"], div[data-testid*="option"]');
+        const optionTexts = Array.from(allOptions).map(opt => opt.textContent?.trim()).filter(Boolean);
+        console.log('Available options:', optionTexts);
+        throw new Error(`Could not find Car/Truck option. Available options: ${optionTexts.join(', ')}`);
       }
       
       // Click the Car/Truck option
+      console.log('Clicking Car/Truck option...');
       carTruckOption.click();
       await this.delay(this.getRandomDelay(2000, 3000));
       
