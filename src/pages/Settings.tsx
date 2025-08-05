@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { CityAutocomplete } from '@/components/CityAutocomplete';
 import { Save, User, Phone, MapPin, Building, Crown } from 'lucide-react';
 
 interface UserProfile {
@@ -204,11 +205,11 @@ export default function Settings() {
                       <MapPin className="h-4 w-4" />
                       Location
                     </Label>
-                    <Input
-                      id="location"
+                    <CityAutocomplete
                       value={formData.location}
-                      onChange={(e) => updateField('location', e.target.value)}
-                      placeholder="City, State"
+                      onChange={(value) => updateField('location', value)}
+                      placeholder="Select your city and state"
+                      className="w-full"
                     />
                   </div>
                 </div>

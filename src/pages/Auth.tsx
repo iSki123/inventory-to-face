@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
+import { CityAutocomplete } from '@/components/CityAutocomplete';
 
 const Auth = () => {
   const { user, signIn, signUp, loading } = useAuth();
@@ -183,11 +184,11 @@ const Auth = () => {
                 
                 <div className="space-y-2">
                   <Label htmlFor="signup-location">Location</Label>
-                  <Input
-                    id="signup-location"
-                    placeholder="City, State (e.g., Miami, FL)"
+                  <CityAutocomplete
                     value={signUpData.location}
-                    onChange={(e) => setSignUpData(prev => ({ ...prev, location: e.target.value }))}
+                    onChange={(value) => setSignUpData(prev => ({ ...prev, location: value }))}
+                    placeholder="Select your city and state"
+                    className="w-full"
                   />
                 </div>
                 
