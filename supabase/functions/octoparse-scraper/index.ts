@@ -278,30 +278,23 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
 
   for (const vehicle of vehicleData) {
     try {
-      // Generate AI description if enabled and no description exists
-      let aiDescription = vehicle.description;
-      if (!vehicle.description || vehicle.description === `${vehicle.year} ${vehicle.make} ${vehicle.model}`) {
+      // Generate AI description if short description or missing
+      let aiDescription = null;
+      if (!vehicle.description || vehicle.description.length < 30) {
         try {
           console.log(`Generating AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
-          const descResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-vehicle-description`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
-            },
-            body: JSON.stringify({ vehicle })
+          const { data, error } = await supabaseClient.functions.invoke('generate-vehicle-description', {
+            body: { vehicle }
           });
 
-          if (descResponse.ok) {
-            const descData = await descResponse.json();
-            if (descData.success && descData.description) {
-              aiDescription = descData.description;
-              console.log(`Generated AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
-            }
+          if (!error && data?.success) {
+            aiDescription = data.description;
+            console.log(`Generated AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+          } else {
+            console.log('AI description generation failed:', error?.message || 'Unknown error');
           }
         } catch (error) {
           console.warn('Failed to generate AI description:', error);
-          // Keep original description as fallback
         }
       }
 
