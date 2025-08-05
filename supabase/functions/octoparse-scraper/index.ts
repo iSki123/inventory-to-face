@@ -66,10 +66,17 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Octoparse scraper error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
     return new Response(
       JSON.stringify({ 
         error: error.message || 'Unknown error occurred',
-        success: false 
+        success: false,
+        details: error.stack
       }),
       { 
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -301,9 +308,25 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
       const { data: inserted, error } = await supabaseClient
         .from('vehicles')
         .insert([{
-          ...vehicle,
+          year: vehicle.year,
+          make: vehicle.make,
+          model: vehicle.model,
+          price: vehicle.price,
+          mileage: vehicle.mileage,
+          exterior_color: vehicle.exterior_color,
+          interior_color: vehicle.interior_color,
+          condition: vehicle.condition,
+          fuel_type: vehicle.fuel_type,
+          transmission: vehicle.transmission,
           description: vehicle.description || `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
-          ai_description: aiDescription !== vehicle.description ? aiDescription : null,
+          ai_description: aiDescription,
+          vin: vehicle.vin,
+          features: vehicle.features,
+          images: vehicle.images,
+          trim: vehicle.trim,
+          location: vehicle.location,
+          contact_phone: vehicle.contact_phone,
+          contact_email: vehicle.contact_email,
           user_id: userId,
           status: 'available',
           facebook_post_status: 'draft',
