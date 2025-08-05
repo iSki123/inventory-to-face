@@ -244,14 +244,82 @@ class FacebookMarketplaceAutomation {
   async fillYear(year) {
     if (!year) return;
 
-    const selectors = [
-      'select', // Year is often the first select
-      'input[placeholder*="ear"]',
+    const yearString = year.toString();
+    console.log('Attempting to fill year:', yearString);
+
+    // First try dropdown selectors
+    const dropdownSelectors = [
+      'select', // Standard select dropdown
       '[data-testid*="year"]',
-      '[aria-label*="Year"]'
+      '[aria-label*="Year"]',
+      'div[role="combobox"]',
+      'button[role="combobox"]'
     ];
 
-    await this.tryFillInput(selectors, year.toString(), 'year');
+    for (let selector of dropdownSelectors) {
+      try {
+        const element = document.querySelector(selector);
+        if (element && element.offsetParent !== null) {
+          console.log(`Found year dropdown with selector: ${selector}`);
+          
+          if (element.tagName === 'SELECT') {
+            // Handle standard select dropdown
+            const option = Array.from(element.options).find(opt => 
+              opt.value === yearString || opt.text.includes(yearString)
+            );
+            if (option) {
+              element.value = option.value;
+              element.dispatchEvent(new Event('change', { bubbles: true }));
+              return;
+            }
+          } else {
+            // Handle custom dropdowns (click to open)
+            element.click();
+            await this.delay(1000);
+            
+            // Look for year options in the dropdown
+            const yearOptions = document.querySelectorAll(`
+              [role="option"]:contains("${yearString}"),
+              [data-value="${yearString}"],
+              div:contains("${yearString}"),
+              span:contains("${yearString}")
+            `);
+            
+            // Try a more specific search for year options
+            const allOptions = document.querySelectorAll('[role="option"], li, div[data-value]');
+            for (let option of allOptions) {
+              if (option.textContent && option.textContent.trim() === yearString) {
+                console.log('Found matching year option:', option.textContent);
+                option.click();
+                await this.delay(500);
+                return;
+              }
+            }
+            
+            // If no exact match, try partial match
+            for (let option of allOptions) {
+              if (option.textContent && option.textContent.includes(yearString)) {
+                console.log('Found partial matching year option:', option.textContent);
+                option.click();
+                await this.delay(500);
+                return;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`Error with year dropdown selector ${selector}:`, error);
+      }
+    }
+
+    // Fallback to input field approach
+    const inputSelectors = [
+      'input[placeholder*="ear"]',
+      'input[name*="year"]',
+      'input[type="number"]'
+    ];
+
+    await this.tryFillInput(inputSelectors, yearString, 'year');
   }
 
   async fillMake(make) {

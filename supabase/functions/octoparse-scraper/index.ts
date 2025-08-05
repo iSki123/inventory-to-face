@@ -278,10 +278,38 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
 
   for (const vehicle of vehicleData) {
     try {
+      // Generate AI description if enabled and no description exists
+      let aiDescription = vehicle.description;
+      if (!vehicle.description || vehicle.description === `${vehicle.year} ${vehicle.make} ${vehicle.model}`) {
+        try {
+          console.log(`Generating AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+          const descResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-vehicle-description`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
+            },
+            body: JSON.stringify({ vehicle })
+          });
+
+          if (descResponse.ok) {
+            const descData = await descResponse.json();
+            if (descData.success && descData.description) {
+              aiDescription = descData.description;
+              console.log(`Generated AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to generate AI description:', error);
+          // Keep original description as fallback
+        }
+      }
+
       const { data: inserted, error } = await supabaseClient
         .from('vehicles')
         .insert([{
           ...vehicle,
+          description: aiDescription,
           user_id: userId,
           status: 'available',
           facebook_post_status: 'draft',
