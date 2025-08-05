@@ -212,10 +212,14 @@ class SalesonatorExtension {
 
     // Check if we're on the right page
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab.url.includes('facebook.com/marketplace')) {
-      alert('Please navigate to Facebook Marketplace before starting.');
+    console.log('Current tab URL:', tab.url);
+    
+    if (!tab.url.includes('facebook.com')) {
+      alert('Please navigate to Facebook first.');
       return;
     }
+    
+    // We don't require being on marketplace page since the extension will navigate there
 
     this.isPosting = true;
     this.currentVehicleIndex = 0;
@@ -258,8 +262,9 @@ class SalesonatorExtension {
         vehicle: vehicle
       }, (response) => {
         if (chrome.runtime.lastError) {
-          console.error('Error posting vehicle:', chrome.runtime.lastError);
-          statusEl.textContent = `Error: ${chrome.runtime.lastError.message}`;
+          const errorMessage = chrome.runtime.lastError.message || JSON.stringify(chrome.runtime.lastError);
+          console.error('Error posting vehicle:', errorMessage);
+          statusEl.textContent = `Error: ${errorMessage}`;
           this.stopPosting();
           return;
         }
