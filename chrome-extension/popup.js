@@ -1,9 +1,20 @@
-
 class SalesonatorExtension {
   constructor() {
     this.isPosting = false;
     this.vehicles = [];
     this.currentVehicleIndex = 0;
+    this.isMapping = false;
+    this.currentFieldIndex = 0;
+    this.fieldQueue = ['vehicle-type', 'year', 'make', 'model', 'mileage', 'price', 'description'];
+    this.fieldLabels = {
+      'vehicle-type': '🚗 Vehicle Type',
+      'year': '📅 Year', 
+      'make': '🏭 Make',
+      'model': '🚙 Model',
+      'mileage': '📏 Mileage',
+      'price': '💰 Price',
+      'description': '📝 Description'
+    };
     this.init();
   }
 
@@ -11,55 +22,232 @@ class SalesonatorExtension {
     console.log('Initializing Salesonator Extension...');
     
     // Load saved settings
-    const settings = await chrome.storage.sync.get(['apiUrl', 'delay', 'userToken']);
+    const settings = await chrome.storage.sync.get(['delay', 'userToken']);
     
-    if (settings.apiUrl) {
-      document.getElementById('apiUrl').value = settings.apiUrl;
-    }
     if (settings.delay) {
       document.getElementById('delay').value = settings.delay;
     }
 
-    // Set up event listeners
+    // Set up tab switching
+    this.setupTabs();
+    
+    // Set up event listeners for posting tab
     document.getElementById('fetchVehicles').addEventListener('click', () => this.fetchVehicles());
     document.getElementById('startPosting').addEventListener('click', () => this.startPosting());
     document.getElementById('stopPosting').addEventListener('click', () => this.stopPosting());
     document.getElementById('delay').addEventListener('change', () => this.saveSettings());
-    document.getElementById('login').addEventListener('click', () => this.showLoginForm());
+    
+    // Set up event listeners for mapping tab
+    document.getElementById('startMapping').addEventListener('click', () => this.startMapping());
+    document.getElementById('stopMapping').addEventListener('click', () => this.stopMapping());
+    document.getElementById('clearMappings').addEventListener('click', () => this.clearMappings());
+    
+    // Load saved mappings
+    await this.loadSavedMappings();
+    
+    // Listen for messages from content script
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.type === 'FIELD_MAPPED') {
+        this.handleFieldMapped(message.fieldName, message.selector);
+      }
+    });
 
-    // Check for existing web app authentication first
-    console.log('🔍 Starting web app authentication check...');
-    const webAppAuth = await this.checkWebAppAuthentication();
-    if (webAppAuth) {
-      console.log('✅ Found web app authentication, using it for extension');
-      console.log('🔐 Storing token in extension storage...');
-      await chrome.storage.sync.set({ userToken: webAppAuth.token });
-      console.log('✅ Token stored successfully');
-      
-      // Show success immediately and skip further checks
-      this.showWebAppAuthSuccess();
-      document.getElementById('loginSection').style.display = 'none';
-      document.getElementById('mainSection').style.display = 'block';
-      return; // Exit early, don't run checkAuthentication
-    } else {
-      console.log('❌ No web app authentication found');
-    }
-    
-    // Check authentication status (only if web app auth wasn't found)
-    console.log('🔍 Checking stored authentication...');
-    await this.checkAuthentication();
-    
-    // Check connection status
+    // Check authentication and connection
+    await this.checkWebAppAuthentication();
     this.checkConnection();
   }
 
+  setupTabs() {
+    const tabs = document.querySelectorAll('.tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Remove active class from all tabs
+        tabs.forEach(t => t.classList.remove('active'));
+        tabContents.forEach(tc => tc.style.display = 'none');
+        
+        // Add active class to clicked tab
+        tab.classList.add('active');
+        
+        // Show corresponding content
+        const tabName = tab.dataset.tab;
+        const content = document.getElementById(`${tabName}-tab`);
+        if (content) {
+          content.style.display = 'block';
+        }
+      });
+    });
+  }
+
+  async loadSavedMappings() {
+    try {
+      const result = await chrome.storage.local.get(['fieldMappings']);
+      const mappings = result.fieldMappings || {};
+      
+      let mappedCount = 0;
+      for (const [fieldName, selector] of Object.entries(mappings)) {
+        this.updateFieldDisplay(fieldName, selector);
+        mappedCount++;
+      }
+      
+      const statusEl = document.getElementById('mappingStatus');
+      statusEl.textContent = mappedCount > 0 
+        ? `✅ ${mappedCount} fields mapped` 
+        : 'No mappings saved';
+    } catch (error) {
+      console.error('Error loading mappings:', error);
+    }
+  }
+
+  updateFieldDisplay(fieldName, selector) {
+    const fieldElement = document.getElementById(`${fieldName}-field`);
+    if (fieldElement) {
+      const selectorSpan = fieldElement.querySelector('.field-selector');
+      selectorSpan.textContent = selector || 'Not mapped';
+      
+      if (selector) {
+        fieldElement.classList.add('mapped');
+        fieldElement.classList.remove('pending');
+      } else {
+        fieldElement.classList.remove('mapped', 'pending');
+      }
+    }
+  }
+
+  async startMapping() {
+    try {
+      this.isMapping = true;
+      this.currentFieldIndex = 0;
+      
+      document.getElementById('startMapping').style.display = 'none';
+      document.getElementById('stopMapping').style.display = 'block';
+      document.getElementById('mappingProgress').style.display = 'block';
+      
+      // Get active tab
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      if (!tab.url.includes('facebook.com/marketplace')) {
+        this.showStatus('Please navigate to Facebook Marketplace vehicle creation page first', 'disconnected');
+        this.stopMapping();
+        return;
+      }
+      
+      // Inject mapping script
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        function: this.initFieldMapping
+      });
+      
+      // Start with first field
+      this.nextField();
+      
+      this.showStatus('🎯 Field mapping started! Follow the instructions.', 'connected');
+      
+    } catch (error) {
+      console.error('Error starting mapping:', error);
+      this.showStatus('Error starting mapping: ' + error.message, 'disconnected');
+      this.stopMapping();
+    }
+  }
+
+  async stopMapping() {
+    try {
+      this.isMapping = false;
+      this.currentFieldIndex = 0;
+      
+      document.getElementById('startMapping').style.display = 'block';
+      document.getElementById('stopMapping').style.display = 'none';
+      document.getElementById('mappingProgress').style.display = 'none';
+      
+      // Get active tab and remove mapping mode
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        function: this.stopFieldMapping
+      });
+      
+      // Remove pending status from all fields
+      document.querySelectorAll('.field-item').forEach(item => {
+        item.classList.remove('pending');
+      });
+      
+      this.showStatus('🛑 Field mapping stopped', 'warning');
+      
+    } catch (error) {
+      console.error('Error stopping mapping:', error);
+    }
+  }
+
+  nextField() {
+    if (!this.isMapping || this.currentFieldIndex >= this.fieldQueue.length) {
+      this.stopMapping();
+      this.showStatus('✅ Field mapping completed!', 'connected');
+      this.loadSavedMappings(); // Refresh the mapping display
+      return;
+    }
+    
+    const fieldName = this.fieldQueue[this.currentFieldIndex];
+    const fieldLabel = this.fieldLabels[fieldName];
+    const fieldElement = document.getElementById(`${fieldName}-field`);
+    
+    // Remove pending from all fields
+    document.querySelectorAll('.field-item').forEach(item => {
+      item.classList.remove('pending');
+    });
+    
+    // Add pending to current field
+    fieldElement.classList.add('pending');
+    
+    // Update progress display
+    const progressEl = document.getElementById('mappingProgress');
+    progressEl.textContent = `Step ${this.currentFieldIndex + 1}/${this.fieldQueue.length}: Click on the ${fieldLabel} field on Facebook`;
+    
+    // Send message to content script about current field
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      chrome.tabs.sendMessage(tabs[0].id, {
+        action: 'setCurrentField',
+        fieldName: fieldName,
+        fieldLabel: fieldLabel
+      });
+    });
+  }
+
+  handleFieldMapped(fieldName, selector) {
+    console.log('Field mapped:', fieldName, selector);
+    this.updateFieldDisplay(fieldName, selector);
+    
+    this.currentFieldIndex++;
+    setTimeout(() => this.nextField(), 1000); // Move to next field after 1 second
+  }
+
+  async clearMappings() {
+    try {
+      await chrome.storage.local.remove(['fieldMappings']);
+      
+      // Update UI
+      document.querySelectorAll('.field-item').forEach(item => {
+        const selectorSpan = item.querySelector('.field-selector');
+        selectorSpan.textContent = 'Not mapped';
+        item.classList.remove('mapped', 'pending');
+      });
+      
+      document.getElementById('mappingStatus').textContent = 'No mappings saved';
+      this.showStatus('🗑️ All mappings cleared', 'warning');
+      
+    } catch (error) {
+      console.error('Error clearing mappings:', error);
+      this.showStatus('Error clearing mappings: ' + error.message, 'disconnected');
+    }
+  }
+
+  // Web app authentication (keep existing logic)
   async checkWebAppAuthentication() {
     try {
       console.log('Checking for web app authentication...');
       
-      // Check all open tabs for Salesonator
       const allTabs = await chrome.tabs.query({});
-      console.log('Found tabs:', allTabs.length);
       
       for (const tab of allTabs) {
         if (tab.url && 
@@ -68,39 +256,23 @@ class SalesonatorExtension {
              tab.url.includes('salesonator') ||
              tab.url.includes('inventory-to-face'))) {
           
-          console.log('Checking Salesonator tab:', tab.url);
-          
           try {
-            // Inject and execute a script to check for authentication
             const results = await chrome.scripting.executeScript({
               target: { tabId: tab.id },
               func: () => {
-                console.log('Checking localStorage for auth data...');
-                
-                // Log all localStorage keys for debugging
                 const allKeys = Object.keys(localStorage);
-                console.log('All localStorage keys:', allKeys);
-                
-                // Check for multiple possible auth key patterns
                 const authKeys = allKeys.filter(key => 
                   (key.startsWith('sb-') && key.includes('auth-token')) ||
                   key.includes('supabase.auth.token') ||
                   key.includes('auth-token')
                 );
                 
-                console.log('Found potential auth keys:', authKeys);
-                
                 for (const authKey of authKeys) {
                   const authData = localStorage.getItem(authKey);
-                  console.log('Checking key:', authKey, 'Data length:', authData?.length);
-                  
                   if (authData) {
                     try {
                       const parsed = JSON.parse(authData);
-                      console.log('Parsed auth data keys:', Object.keys(parsed));
-                      
                       if (parsed.access_token && parsed.user) {
-                        console.log('Found valid auth data with access_token');
                         return {
                           token: parsed.access_token,
                           user: parsed.user,
@@ -108,224 +280,79 @@ class SalesonatorExtension {
                         };
                       }
                     } catch (e) {
-                      console.log('Failed to parse auth data for key:', authKey, e);
+                      continue;
                     }
                   }
                 }
-                
-                console.log('No valid auth data found');
                 return null;
               }
             });
             
             const authData = results[0]?.result;
-            console.log('Script execution result:', authData);
             
             if (authData && authData.token) {
-              console.log('Found authentication data in tab:', tab.url);
-              console.log('User ID:', authData.user.id);
-              
-              // Check if token is still valid and user has admin role
-              console.log('Starting role verification for user:', authData.user.id);
-              
-              try {
-                const profileUrl = `https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/profiles?select=role&user_id=eq.${authData.user.id}`;
-                console.log('Checking profile at:', profileUrl);
-                console.log('Using token:', authData.token.substring(0, 20) + '...');
-                
-                console.log('Making fetch request...');
-                const response = await fetch(profileUrl, {
-                  headers: {
-                    'Authorization': `Bearer ${authData.token}`,
-                    'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
-                  }
-                });
-                
-                console.log('✅ Fetch completed, response status:', response.status);
-                console.log('Response ok:', response.ok);
-                
-                if (response.ok) {
-                  const profileData = await response.json();
-                  console.log('✅ Profile data received:', profileData);
-                  console.log('Profile data length:', profileData.length);
-                  const userRole = profileData[0]?.role;
-                  console.log('Extracted user role:', userRole);
-                  
-                  if (userRole === 'Owner' || userRole === 'Manager' || userRole === 'Admin' || userRole === 'admin') {
-                    console.log('✅ User has admin role:', userRole);
-                    console.log('Setting up auto-authentication...');
-                    this.showWebAppAuthSuccess();
-                    return { token: authData.token, user: authData.user };
-                  } else {
-                    console.log('❌ User does not have admin role:', userRole);
-                    this.showError('Admin access required for auto-posting extension');
-                    return null;
-                  }
-                } else {
-                  const errorText = await response.text();
-                  console.log('❌ Failed to verify user role, status:', response.status);
-                  console.log('❌ Error response:', errorText);
-                  this.showError('Failed to verify user permissions');
-                  return null;
+              // Verify user role
+              const profileUrl = `https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/profiles?select=role&user_id=eq.${authData.user.id}`;
+              const response = await fetch(profileUrl, {
+                headers: {
+                  'Authorization': `Bearer ${authData.token}`,
+                  'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
                 }
-              } catch (error) {
-                console.error('❌ Error verifying user role:', error);
-                console.error('❌ Error details:', error.message, error.stack);
-                this.showError('Error checking user permissions: ' + error.message);
-                return null;
+              });
+              
+              if (response.ok) {
+                const profileData = await response.json();
+                const userRole = profileData[0]?.role;
+                
+                if (userRole === 'Owner' || userRole === 'Manager' || userRole === 'Admin' || userRole === 'admin') {
+                  await chrome.storage.sync.set({ userToken: authData.token });
+                  this.showStatus('✅ Auto-authenticated via Salesonator web app!', 'connected');
+                  return;
+                }
               }
             }
           } catch (error) {
-            console.log('Script injection failed for tab:', tab.url, error);
             continue;
           }
         }
       }
       
-      console.log('No admin authentication found');
-      return null;
+      this.showStatus('❌ Please log in to Salesonator first', 'disconnected');
     } catch (error) {
       console.warn('Error checking web app authentication:', error);
-      return null;
-    }
-  }
-
-  showWebAppAuthSuccess() {
-    const statusEl = document.getElementById('status');
-    statusEl.className = 'status connected';
-    statusEl.textContent = '✅ Auto-authenticated via Salesonator web app!';
-  }
-
-  showError(message) {
-    const statusEl = document.getElementById('status');
-    statusEl.className = 'status disconnected';
-    statusEl.textContent = message;
-  }
-
-  async checkAuthentication() {
-    const { userToken } = await chrome.storage.sync.get(['userToken']);
-    const loginSection = document.getElementById('loginSection');
-    const mainSection = document.getElementById('mainSection');
-    
-    if (!userToken) {
-      loginSection.style.display = 'block';
-      mainSection.style.display = 'none';
-    } else {
-      // Verify token is still valid
-      try {
-        const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/auth/v1/user', {
-          headers: {
-            'Authorization': `Bearer ${userToken}`,
-            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
-          }
-        });
-        
-        if (response.ok) {
-          loginSection.style.display = 'none';
-          mainSection.style.display = 'block';
-        } else {
-          // Token is invalid, show login
-          await chrome.storage.sync.remove(['userToken']);
-          loginSection.style.display = 'block';
-          mainSection.style.display = 'none';
-        }
-      } catch (error) {
-        console.error('Error verifying token:', error);
-        loginSection.style.display = 'block';
-        mainSection.style.display = 'none';
-      }
-    }
-  }
-
-  showLoginForm() {
-    const email = prompt('Enter your Salesonator email:');
-    const password = prompt('Enter your Salesonator password:');
-    
-    if (email && password) {
-      this.authenticate(email, password);
-    }
-  }
-
-  async authenticate(email, password) {
-    const statusEl = document.getElementById('status');
-    statusEl.textContent = 'Authenticating...';
-    
-    try {
-      const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/auth/v1/token?grant_type=password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
-        },
-        body: JSON.stringify({
-          email: email,
-          password: password
-        })
-      });
-
-      const data = await response.json();
-      
-      if (data.access_token) {
-        // Store the token
-        await chrome.storage.sync.set({
-          userToken: data.access_token,
-          userEmail: email
-        });
-        
-        statusEl.textContent = 'Authentication successful!';
-        await this.checkAuthentication(); // Refresh the UI
-      } else {
-        throw new Error(data.error_description || 'Authentication failed');
-      }
-    } catch (error) {
-      console.error('Authentication error:', error);
-      statusEl.textContent = `Authentication failed: ${error.message}`;
+      this.showStatus('❌ Authentication check failed', 'disconnected');
     }
   }
 
   async checkConnection() {
-    const statusEl = document.getElementById('status');
-    
     try {
-      // Check if we're on Facebook
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       const isFacebook = tab.url.includes('facebook.com');
       
       if (!isFacebook) {
-        statusEl.className = 'status disconnected';
-        statusEl.textContent = 'Please navigate to Facebook Marketplace';
+        this.showStatus('📍 Please navigate to Facebook Marketplace', 'warning');
         return;
       }
 
-      // Check if user is logged in (this will be checked by content script)
       chrome.tabs.sendMessage(tab.id, { action: 'checkLogin' }, (response) => {
         if (chrome.runtime.lastError) {
-          statusEl.className = 'status disconnected';
-          statusEl.textContent = 'Please navigate to Facebook Marketplace';
+          this.showStatus('📍 Please navigate to Facebook Marketplace', 'warning');
         } else if (response && response.loggedIn) {
-          statusEl.className = 'status connected';
-          statusEl.textContent = 'Connected to Facebook';
+          this.showStatus('✅ Connected to Facebook', 'connected');
         } else {
-          statusEl.className = 'status disconnected';
-          statusEl.textContent = 'Please log in to Facebook';
+          this.showStatus('🔑 Please log in to Facebook', 'disconnected');
         }
       });
       
     } catch (error) {
-      statusEl.className = 'status disconnected';
-      statusEl.textContent = 'Connection error';
+      this.showStatus('❌ Connection error', 'disconnected');
     }
   }
 
   async fetchVehicles() {
-    const statusEl = document.getElementById('status');
-    const countEl = document.getElementById('vehicleCount');
-    const startBtn = document.getElementById('startPosting');
-
     try {
-      statusEl.textContent = 'Fetching vehicles...';
+      this.showStatus('🔄 Fetching vehicles...', 'warning');
       
-      // Get user token from storage
       const { userToken } = await chrome.storage.sync.get(['userToken']);
       
       if (!userToken) {
@@ -351,26 +378,18 @@ class SalesonatorExtension {
       
       if (data.success) {
         this.vehicles = data.vehicles || [];
-        countEl.textContent = `${this.vehicles.length} vehicles ready to post`;
-        startBtn.disabled = this.vehicles.length === 0;
-        statusEl.className = 'status connected';
-        statusEl.textContent = 'Vehicles loaded successfully';
+        document.getElementById('vehicleCount').textContent = `📊 ${this.vehicles.length} vehicles ready to post`;
+        document.getElementById('startPosting').disabled = this.vehicles.length === 0;
+        this.showStatus('✅ Vehicles loaded successfully', 'connected');
       } else {
         throw new Error(data.error || 'Failed to fetch vehicles');
       }
 
     } catch (error) {
       console.error('Error fetching vehicles:', error);
-      statusEl.className = 'status disconnected';
-      statusEl.textContent = `Error: ${error.message}`;
-      countEl.textContent = 'Failed to load vehicles';
-      startBtn.disabled = true;
-      
-      // If authentication failed, show login
-      if (error.message.includes('not authenticated')) {
-        await chrome.storage.sync.remove(['userToken']);
-        await this.checkAuthentication();
-      }
+      this.showStatus(`❌ Error: ${error.message}`, 'disconnected');
+      document.getElementById('vehicleCount').textContent = 'Failed to load vehicles';
+      document.getElementById('startPosting').disabled = true;
     }
   }
 
@@ -380,16 +399,12 @@ class SalesonatorExtension {
       return;
     }
 
-    // Check if we're on the right page
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    console.log('Current tab URL:', tab.url);
     
     if (!tab.url.includes('facebook.com')) {
       alert('Please navigate to Facebook first.');
       return;
     }
-    
-    // We don't require being on marketplace page since the extension will navigate there
 
     this.isPosting = true;
     this.currentVehicleIndex = 0;
@@ -407,120 +422,236 @@ class SalesonatorExtension {
     document.getElementById('stopPosting').style.display = 'none';
     document.getElementById('fetchVehicles').disabled = false;
     
-    const statusEl = document.getElementById('status');
-    statusEl.className = 'status connected';
-    statusEl.textContent = 'Posting stopped';
+    this.showStatus('⏹️ Posting stopped', 'warning');
   }
 
   async postNextVehicle() {
     if (!this.isPosting || this.currentVehicleIndex >= this.vehicles.length) {
       this.stopPosting();
-      document.getElementById('status').textContent = 'All vehicles posted!';
+      this.showStatus('🎉 All vehicles posted!', 'connected');
       return;
     }
 
     const vehicle = this.vehicles[this.currentVehicleIndex];
-    const statusEl = document.getElementById('status');
-    statusEl.textContent = `Posting vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}: ${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+    this.showStatus(`📤 Posting ${this.currentVehicleIndex + 1}/${this.vehicles.length}: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, 'warning');
 
     try {
-      // Send vehicle data to content script
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       
-      // First, try to ping the content script to see if it's loaded
       chrome.tabs.sendMessage(tab.id, { action: 'ping' }, async (pingResponse) => {
         if (chrome.runtime.lastError) {
-          console.log('Content script not loaded, attempting to inject...');
-          
-          // Try to inject the content script manually
           try {
             await chrome.scripting.executeScript({
               target: { tabId: tab.id },
               files: ['content.js']
             });
             
-            // Wait a moment for the script to initialize
             setTimeout(() => {
-              this.sendVehicleToContentScript(tab.id, vehicle, statusEl);
+              this.sendVehicleToContentScript(tab.id, vehicle);
             }, 1000);
           } catch (injectError) {
             console.error('Failed to inject content script:', injectError);
-            statusEl.textContent = 'Error: Could not load automation script. Please refresh Facebook page.';
+            this.showStatus('❌ Could not load automation script. Please refresh Facebook page.', 'disconnected');
             this.stopPosting();
           }
         } else {
-          // Content script is loaded, proceed with posting
-          this.sendVehicleToContentScript(tab.id, vehicle, statusEl);
+          this.sendVehicleToContentScript(tab.id, vehicle);
         }
       });
-
+      
     } catch (error) {
       console.error('Error posting vehicle:', error);
-      statusEl.textContent = `Error: ${error.message}`;
-      this.stopPosting();
+      this.showStatus(`❌ Error posting: ${error.message}`, 'disconnected');
+      this.currentVehicleIndex++;
+      setTimeout(() => this.postNextVehicle(), 5000);
     }
   }
 
-  sendVehicleToContentScript(tabId, vehicle, statusEl) {
+  sendVehicleToContentScript(tabId, vehicle) {
     chrome.tabs.sendMessage(tabId, {
       action: 'postVehicle',
       vehicle: vehicle
     }, (response) => {
       if (chrome.runtime.lastError) {
-        const errorMessage = chrome.runtime.lastError.message || JSON.stringify(chrome.runtime.lastError);
-        console.error('Error posting vehicle:', errorMessage);
-        statusEl.textContent = `Error: ${errorMessage}`;
-        this.stopPosting();
-        return;
-      }
-
-      console.log('Vehicle posting response:', response);
-
-      if (response && response.success) {
-        console.log(`Successfully posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}`);
-        statusEl.textContent = `Posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}`;
-        
-        this.currentVehicleIndex++;
-        const delay = parseInt(document.getElementById('delay').value) * 1000;
-        
-        // Check if there are more vehicles to post
-        if (this.currentVehicleIndex < this.vehicles.length) {
-          statusEl.textContent = `Waiting ${delay/1000}s before next vehicle...`;
-          
-          // Wait before posting next vehicle
-          setTimeout(() => {
-            if (this.isPosting) {
-              this.postNextVehicle();
-            }
-          }, delay);
-        } else {
-          // All vehicles posted
-          statusEl.textContent = 'All vehicles posted successfully!';
-          this.stopPosting();
-        }
+        console.error('Error sending vehicle to content script:', chrome.runtime.lastError);
+        this.showStatus('❌ Communication error with Facebook page', 'disconnected');
+      } else if (response && response.success) {
+        this.showStatus('✅ Vehicle posted successfully!', 'connected');
       } else {
-        console.error('Failed to post vehicle:', response?.error || 'Unknown error');
-        statusEl.textContent = `Failed: ${response?.error || 'Unknown error'}`;
-        this.stopPosting();
+        this.showStatus(`❌ Posting failed: ${response?.error || 'Unknown error'}`, 'disconnected');
       }
+      
+      this.currentVehicleIndex++;
+      const delay = parseInt(document.getElementById('delay').value) * 1000;
+      setTimeout(() => this.postNextVehicle(), delay);
     });
   }
 
   async saveSettings() {
-    const settings = {
-      delay: document.getElementById('delay').value
-    };
-    
-    await chrome.storage.sync.set(settings);
+    const delay = document.getElementById('delay').value;
+    await chrome.storage.sync.set({ delay: parseInt(delay) });
   }
 
-  async logout() {
-    await chrome.storage.sync.remove(['userToken', 'userEmail']);
-    await this.checkAuthentication();
+  showStatus(message, type = 'connected') {
+    const statusEl = document.getElementById('status');
+    statusEl.textContent = message;
+    statusEl.className = `status ${type}`;
+  }
+
+  // Functions to inject into content script for mapping
+  initFieldMapping() {
+    console.log('🎯 Field mapping mode activated');
+    window.currentMappingField = null;
+    
+    // Add visual indicator
+    const indicator = document.createElement('div');
+    indicator.id = 'salesonator-mapping-indicator';
+    indicator.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: linear-gradient(135deg, #1877f2, #166fe5);
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      z-index: 9999;
+      box-shadow: 0 4px 20px rgba(24, 119, 242, 0.3);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+    `;
+    indicator.innerHTML = '🎯 <strong>Field Mapping Mode</strong><br><small>Click on fields to map them</small>';
+    document.body.appendChild(indicator);
+    
+    // Add click listener for field mapping
+    document.addEventListener('click', window.handleFieldClick, true);
+    
+    // Listen for field updates from popup
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.action === 'setCurrentField') {
+        window.currentMappingField = message.fieldName;
+        indicator.innerHTML = `🎯 <strong>Mapping: ${message.fieldLabel}</strong><br><small>Click on this field now!</small>`;
+      }
+    });
+  }
+
+  stopFieldMapping() {
+    console.log('🎯 Field mapping mode deactivated');
+    
+    // Remove indicator
+    const indicator = document.getElementById('salesonator-mapping-indicator');
+    if (indicator) {
+      indicator.remove();
+    }
+    
+    // Remove click listener
+    document.removeEventListener('click', window.handleFieldClick, true);
+    window.currentMappingField = null;
   }
 }
 
-// Initialize extension when popup opens
+// Global function for field click handling (needs to be global for event listener)
+window.handleFieldClick = function(event) {
+  if (!window.currentMappingField) return;
+  
+  event.preventDefault();
+  event.stopPropagation();
+  
+  const element = event.target;
+  const selector = getElementSelector(element);
+  
+  console.log('🎯 Field clicked:', element, 'Selector:', selector);
+  
+  // Highlight the clicked element briefly
+  const originalStyle = element.style.cssText;
+  element.style.cssText += 'border: 3px solid #28a745 !important; background-color: rgba(40, 167, 69, 0.1) !important;';
+  
+  setTimeout(() => {
+    element.style.cssText = originalStyle;
+  }, 1000);
+  
+  // Send mapping info back to popup
+  chrome.runtime.sendMessage({
+    type: 'FIELD_MAPPED',
+    fieldName: window.currentMappingField,
+    selector: selector
+  });
+  
+  // Save to storage
+  saveFieldMapping(window.currentMappingField, selector);
+};
+
+function getElementSelector(element) {
+  const selectors = [];
+  
+  // XPath
+  const xpath = getXPath(element);
+  if (xpath) selectors.push(`xpath:${xpath}`);
+  
+  // ID
+  if (element.id) {
+    selectors.push(`#${element.id}`);
+  }
+  
+  // Class-based
+  if (element.className && typeof element.className === 'string') {
+    const classes = element.className.split(' ').filter(c => c.trim());
+    if (classes.length > 0) {
+      selectors.push(`.${classes.join('.')}`);
+    }
+  }
+  
+  // Attribute-based
+  const attrs = ['aria-label', 'data-testid', 'name', 'placeholder', 'role'];
+  for (const attr of attrs) {
+    const value = element.getAttribute(attr);
+    if (value) {
+      selectors.push(`[${attr}="${value}"]`);
+    }
+  }
+  
+  // Text-based
+  if (element.textContent && element.textContent.trim()) {
+    const text = element.textContent.trim();
+    if (text.length < 50) {
+      selectors.push(`text:${text}`);
+    }
+  }
+  
+  return selectors[0] || element.tagName.toLowerCase();
+}
+
+function getXPath(element) {
+  if (element === document.body) return '/html/body';
+  
+  let ix = 0;
+  const siblings = element.parentNode ? element.parentNode.childNodes : [];
+  
+  for (let i = 0; i < siblings.length; i++) {
+    const sibling = siblings[i];
+    if (sibling === element) {
+      const parentPath = element.parentNode ? getXPath(element.parentNode) : '';
+      return `${parentPath}/${element.tagName.toLowerCase()}[${ix + 1}]`;
+    }
+    if (sibling.nodeType === 1 && sibling.tagName === element.tagName) {
+      ix++;
+    }
+  }
+}
+
+async function saveFieldMapping(fieldName, selector) {
+  try {
+    const result = await chrome.storage.local.get(['fieldMappings']);
+    const mappings = result.fieldMappings || {};
+    mappings[fieldName] = selector;
+    await chrome.storage.local.set({ fieldMappings: mappings });
+    console.log(`💾 Saved mapping for ${fieldName}:`, selector);
+  } catch (error) {
+    console.error('Error saving field mapping:', error);
+  }
+}
+
+// Initialize the extension
 document.addEventListener('DOMContentLoaded', () => {
-  new SalesonatorExtension();
+  window.salesonatorExtension = new SalesonatorExtension();
 });

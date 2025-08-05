@@ -423,18 +423,16 @@ class SalesonatorAutomator {
     this.log('✅ Form filling sequence completed');
   }
 
-  // Select Year dropdown
+  // Select Year dropdown - now uses saved mappings
   async selectYear(year) {
     try {
       this.log(`🗓️ Selecting year: ${year}`);
       
-      // Look for year dropdown more specifically using XPath and standard selectors
-      const yearDropdownSelectors = [
-        'text:Year', // This will use XPath
-        '[aria-label*="Year"]',
-        'div[role="button"]', // Generic fallback
-        'select'
-      ];
+      // Get selectors - prioritize saved mappings
+      const yearDropdownSelectors = this.getFieldSelector('year');
+      if (yearDropdownSelectors.length === 0) {
+        yearDropdownSelectors.push('text:Year', '[aria-label*="Year"]', 'div[role="button"]');
+      }
       
       const yearDropdown = await this.waitForElement(yearDropdownSelectors, 8000);
       await this.scrollIntoView(yearDropdown);
@@ -442,15 +440,15 @@ class SalesonatorAutomator {
       
       this.log('📅 Found year dropdown, clicking to open...');
       yearDropdown.click();
-      await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
+      await this.delay(this.randomDelay(2000, 3000));
       
       // Try multiple approaches for year option selection
       this.log(`📅 Looking for year option: ${year}`);
       const yearOptionSelectors = [
-        `text:${year}`, // Use XPath for text content
-        `//div[text()="${year}"]`, // Direct XPath
-        `//span[text()="${year}"]`, // XPath for span
-        `//*[text()="${year}"]`, // Any element with this text
+        `text:${year}`,
+        `//div[text()="${year}"]`,
+        `//span[text()="${year}"]`,
+        `//*[text()="${year}"]`,
         `[data-value="${year}"]`,
         `div:contains("${year}")`,
         `span:contains("${year}")`
@@ -466,13 +464,11 @@ class SalesonatorAutomator {
             break;
           }
         } catch (e) {
-          // Continue to next selector
+          continue;
         }
       }
       
       if (!yearOption) {
-        this.log('📅 Could not find year option, trying fallback...');
-        // Fallback: look for any clickable element containing the year
         const allOptions = document.querySelectorAll('[role="option"], div[data-value], .option, li');
         for (const option of allOptions) {
           if (option.textContent && option.textContent.trim() === year.toString()) {
@@ -487,8 +483,7 @@ class SalesonatorAutomator {
         await this.scrollIntoView(yearOption);
         await this.delay(this.randomDelay(300, 600));
         yearOption.click();
-        
-        await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
+        await this.delay(this.randomDelay(2000, 3000));
         this.log(`✅ Successfully selected year: ${year}`);
         return true;
       } else {
