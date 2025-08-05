@@ -247,7 +247,7 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
   if (accessToken && source.octoparse_task_id) {
     try {
       // Fetch scraped data from Octoparse API (correct endpoint)
-      const response = await fetch(`https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${source.octoparse_task_id}&offset=0&size=10000`, {
+      const response = await fetch(`https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${source.octoparse_task_id}&offset=0&size=1000`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -427,7 +427,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
     console.log(`Importing data from task ID: ${taskId}`);
     
     // Fetch scraped data from Octoparse API using specific task ID
-    const response = await fetch(`https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${taskId}&offset=0&size=10000`, {
+    const response = await fetch(`https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${taskId}&offset=0&size=1000`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
