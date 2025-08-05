@@ -147,27 +147,67 @@ class SalesonatorAutomator {
     }
   }
 
-  async fillTitle(vehicle) {
-    console.log('Filling title...');
+  async fillVehicleDetails(vehicle) {
+    console.log('Filling vehicle details...');
     
-    const title = `${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ` ${vehicle.trim}` : ''}`;
-    console.log(`Using title: ${title}`);
-    
-    const titleInput = await this.waitForElement('input[placeholder*="title" i], input[aria-label*="title" i]');
-    
-    // Clear and fill title with human-like typing
-    titleInput.focus();
-    await this.delay(500);
-    titleInput.value = '';
-    titleInput.dispatchEvent(new Event('input', { bubbles: true }));
-    
-    for (let char of title) {
-      titleInput.value += char;
-      titleInput.dispatchEvent(new Event('input', { bubbles: true }));
-      await this.delay(this.getRandomDelay(50, 150));
+    // Fill Year
+    console.log('Filling year...');
+    try {
+      const yearDropdown = await this.waitForElement('div[role="combobox"]:has-text("Year"), div[role="button"]:has-text("Year"), [aria-label*="Year" i]', 5000);
+      await this.delay(500);
+      yearDropdown.click();
+      await this.delay(1000);
+      
+      // Look for the year option
+      const yearOption = await this.waitForElement(`div[role="option"]:has-text("${vehicle.year}"), li:has-text("${vehicle.year}")`, 5000);
+      yearOption.click();
+      await this.delay(1000);
+    } catch (error) {
+      console.warn('Could not fill year field:', error);
     }
     
-    await this.delay(500);
+    // Fill Make
+    console.log('Filling make...');
+    try {
+      const makeInput = await this.waitForElement('input[placeholder*="Make" i], input[aria-label*="Make" i]', 5000);
+      await this.delay(500);
+      makeInput.focus();
+      makeInput.value = '';
+      makeInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await this.delay(200);
+      
+      const makeText = vehicle.make.trim();
+      for (const char of makeText) {
+        makeInput.value += char;
+        makeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        await this.delay(this.getRandomDelay(50, 150));
+      }
+      await this.delay(1000);
+    } catch (error) {
+      console.warn('Could not fill make field:', error);
+    }
+    
+    // Fill Model
+    console.log('Filling model...');
+    try {
+      const modelInput = await this.waitForElement('input[placeholder*="Model" i], input[aria-label*="Model" i]', 5000);
+      await this.delay(500);
+      modelInput.focus();
+      modelInput.value = '';
+      modelInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await this.delay(200);
+      
+      const modelText = `${vehicle.model} ${vehicle.trim || ''}`.trim();
+      for (const char of modelText) {
+        modelInput.value += char;
+        modelInput.dispatchEvent(new Event('input', { bubbles: true }));
+        await this.delay(this.getRandomDelay(50, 150));
+      }
+      await this.delay(1000);
+    } catch (error) {
+      console.warn('Could not fill model field:', error);
+    }
+    
     return true;
   }
 
@@ -375,7 +415,7 @@ class SalesonatorAutomator {
       await this.delay(this.getRandomDelay(1500, 3000));
 
       // Step 3: Fill in vehicle details
-      await this.fillTitle(vehicle);
+      await this.fillVehicleDetails(vehicle);
       await this.delay(this.getRandomDelay(800, 1500));
 
       await this.fillPrice(vehicle);
