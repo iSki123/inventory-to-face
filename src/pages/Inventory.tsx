@@ -14,7 +14,7 @@ import { VehicleForm } from "@/components/VehicleForm";
 import { VehicleSourceForm } from "@/components/VehicleSourceForm";
 
 export default function Inventory() {
-  const { vehicles, loading, addVehicle, updateVehicle, deleteVehicle, postToFacebook, refetch } = useVehicles();
+  const { vehicles, loading, addVehicle, updateVehicle, deleteVehicle, bulkDeleteVehicles, postToFacebook, refetch } = useVehicles();
   const { sources, loading: sourcesLoading, addSource, startScraping, importSpecificTask } = useVehicleSources();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -109,6 +109,15 @@ export default function Inventory() {
       await postToFacebook(vehicleId);
     }
     setSelectedVehicles([]);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedVehicles.length === 0) return;
+    
+    const success = await bulkDeleteVehicles(selectedVehicles);
+    if (success) {
+      setSelectedVehicles([]);
+    }
   };
 
   const toggleVehicleSelection = (vehicleId: string) => {
@@ -207,6 +216,31 @@ export default function Inventory() {
                   <Facebook className="mr-2 h-4 w-4" />
                   Post Selected ({selectedVehicles.length})
                 </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" className="text-red-600 hover:text-red-700">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete Selected ({selectedVehicles.length})
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Selected Vehicles</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete {selectedVehicles.length} selected vehicle{selectedVehicles.length > 1 ? 's' : ''}? This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleBulkDelete}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Delete {selectedVehicles.length} Vehicle{selectedVehicles.length > 1 ? 's' : ''}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
                 <Button 
                   onClick={() => setSelectedVehicles([])} 
                   variant="outline"

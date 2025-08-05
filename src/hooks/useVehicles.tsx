@@ -187,6 +187,42 @@ export const useVehicles = () => {
     }
   };
 
+  const bulkDeleteVehicles = async (vehicleIds: string[]) => {
+    try {
+      if (vehicleIds.length === 0) return false;
+
+      const { error } = await supabase
+        .from('vehicles')
+        .delete()
+        .in('id', vehicleIds);
+
+      if (error) {
+        console.error('Error bulk deleting vehicles:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete selected vehicles",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      setVehicles(prev => prev.filter(v => !vehicleIds.includes(v.id)));
+      toast({
+        title: "Success",
+        description: `Successfully deleted ${vehicleIds.length} vehicle${vehicleIds.length > 1 ? 's' : ''}`,
+      });
+      return true;
+    } catch (error) {
+      console.error('Error bulk deleting vehicles:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete selected vehicles",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
   const postToFacebook = async (vehicleId: string) => {
     try {
       // This would integrate with Facebook Marketplace API
@@ -227,6 +263,7 @@ export const useVehicles = () => {
     addVehicle,
     updateVehicle,
     deleteVehicle,
+    bulkDeleteVehicles,
     postToFacebook,
     refetch: fetchVehicles,
   };
