@@ -769,14 +769,19 @@ async function listAvailableTasks() {
 
   try {
     console.log('Fetching available Octoparse tasks...');
+    console.log('Using API key (first 10 chars):', accessToken.substring(0, 10) + '...');
     
-    // Fetch available tasks from Octoparse API
-    const response = await fetch('https://openapi.octoparse.com/api/task/getUserTasks', {
+    // Try the correct Octoparse API endpoint for listing tasks
+    const response = await fetch('https://openapi.octoparse.com/api/task/getUserTaskList', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
       },
     });
+
+    console.log('API Response status:', response.status);
+    console.log('API Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       throw new Error(`Octoparse API error: ${response.status} ${response.statusText}`);
