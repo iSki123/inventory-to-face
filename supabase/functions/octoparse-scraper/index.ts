@@ -406,8 +406,8 @@ function parseOctoparseData(rawData: any[]): any[] {
       console.log('No price found in data');
     }
     
-    // Extract mileage - try multiple field variations
-    let mileage = 0;
+    // Extract mileage - try multiple field variations with default logic
+    let mileage = 10; // Default to 10 if conditions are met
     const mileageValue = getFieldValue(['mileage', 'miles', 'odometer', 'km']) ||
                         item.mileage || item.Mileage || item.MILEAGE || item.miles || item.Miles ||
                         item.odometer || item.Odometer || item.km || item.KM;
@@ -415,8 +415,28 @@ function parseOctoparseData(rawData: any[]): any[] {
     if (mileageValue) {
       console.log('Found mileage value:', mileageValue);
       const mileageStr = String(mileageValue);
-      mileage = parseInt(mileageStr.replace(/[^0-9]/g, '')) || 0;
-      console.log('Processed mileage:', mileage);
+      
+      // Check if the value contains only numbers
+      const numericOnly = mileageStr.replace(/[^0-9]/g, '');
+      
+      if (numericOnly === '' || mileageStr.match(/[a-zA-Z]/)) {
+        // Contains characters or no numbers at all - default to 10
+        mileage = 10;
+        console.log('Mileage contains characters or no numbers, defaulting to 10');
+      } else {
+        const parsedMileage = parseInt(numericOnly);
+        if (parsedMileage < 10) {
+          // Number is less than 10 - default to 10
+          mileage = 10;
+          console.log('Mileage less than 10, defaulting to 10');
+        } else {
+          // Valid number >= 10
+          mileage = parsedMileage;
+          console.log('Processed mileage:', mileage);
+        }
+      }
+    } else {
+      console.log('No mileage found, defaulting to 10');
     }
     
     // Extract year - try multiple field variations
