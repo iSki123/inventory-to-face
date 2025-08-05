@@ -253,27 +253,38 @@ export const useVehicleSources = () => {
     try {
       if (!user) throw new Error('User not authenticated');
 
+      // Get the current session to include auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No valid session found');
+      }
+
       const response = await supabase.functions.invoke('octoparse-scraper', {
         body: {
           action: 'import_task',
           taskId,
           userId: user.id
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
         }
       });
 
       if (response.error) {
-        throw new Error(response.error.message);
+        console.error('Edge function error:', response.error);
+        throw new Error(response.error.message || 'Edge function call failed');
       }
 
       const result = response.data;
-      if (result.success) {
+      if (result?.success) {
         toast({
           title: "Import Successful",
           description: result.message,
         });
         return result;
       } else {
-        throw new Error(result.error || 'Task import failed');
+        console.error('Import failed with result:', result);
+        throw new Error(result?.error || 'Task import failed');
       }
     } catch (error) {
       console.error('Error importing task:', error);
