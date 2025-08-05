@@ -444,49 +444,27 @@ class SalesonatorAutomator {
       yearDropdown.click();
       await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
       
-      // Use keyboard navigation instead of clicking - more reliable for React dropdowns
-      this.log(`📅 Using keyboard navigation to select year ${year}...`);
+      // Use EXACT same method as vehicle type selection - NO KEYBOARD TRICKS
+      this.log('📅 Found year dropdown, clicking to open...');
+      yearDropdown.click();
+      await this.delay(this.randomDelay(2000, 3000)); // Wait longer for dropdown to open
       
-      // Find and focus the dropdown first
-      const dropdownContainer = document.querySelector('[role="listbox"], [role="menu"], .dropdown-menu, [data-testid*="dropdown"]');
-      if (dropdownContainer) {
-        dropdownContainer.focus();
-        await this.delay(500);
-        
-        // Use keyboard to navigate to the year
-        // Recent years are usually at the bottom, so press End key first
-        dropdownContainer.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
-        await this.delay(300);
-        
-        // Then search for the year by typing it
-        for (const char of year.toString()) {
-          dropdownContainer.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
-          await this.delay(100);
-        }
-        
-        await this.delay(500);
-        
-        // Press Enter to select
-        dropdownContainer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-        await this.delay(1000);
-        
-        this.log(`✅ Used keyboard to select year: ${year}`);
-        return true;
-      }
-      
-      // Fallback to click method if keyboard doesn't work
+      // Look for year option more specifically using XPath - EXACT same as vehicle type
       const yearOptionSelectors = [
-        `text:${year}`,
+        `text:${year}`, // Use XPath for text content
         `[data-value="${year}"]`,
-        `option[value="${year}"]`
+        `[role="option"]`
       ];
       
-      const yearOption = await this.waitForElement(yearOptionSelectors, 3000);
+      const yearOption = await this.waitForElement(yearOptionSelectors, 5000);
       await this.scrollIntoView(yearOption);
       await this.delay(this.randomDelay(300, 600));
-      
-      this.log(`📅 Found year option ${year}, clicking...`);
       yearOption.click();
+      
+      await this.delay(this.randomDelay(1000, 2000));
+      
+      this.log(`✅ Successfully selected year: ${year}`);
+      return true;
       
       await this.delay(this.randomDelay(1000, 2000));
       
@@ -529,46 +507,28 @@ class SalesonatorAutomator {
       makeDropdown.click();
       await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
       
-      // Use keyboard navigation for make selection too
-      this.log(`🏭 Using keyboard navigation to select make ${cleanMake}...`);
+      // Use EXACT same method as vehicle type selection
+      this.log('🏭 Found make dropdown, clicking to open...');
+      makeDropdown.click();
+      await this.delay(this.randomDelay(2000, 3000)); // Wait longer for dropdown to open
       
-      const dropdownContainer = document.querySelector('[role="listbox"], [role="menu"], .dropdown-menu, [data-testid*="dropdown"]');
-      if (dropdownContainer) {
-        dropdownContainer.focus();
-        await this.delay(500);
-        
-        // Type the first few characters of the make to navigate to it
-        const searchTerm = cleanMake.substring(0, 3).toLowerCase();
-        for (const char of searchTerm) {
-          dropdownContainer.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
-          await this.delay(200);
-        }
-        
-        await this.delay(500);
-        
-        // Press Enter to select
-        dropdownContainer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-        await this.delay(1000);
-        
-        this.log(`✅ Used keyboard to select make: ${cleanMake}`);
-        return true;
-      }
+      // Look for make option more specifically using XPath - EXACT same as vehicle type
+      const makeOptionSelectors = [
+        `text:${cleanMake}`, // Use XPath for text content
+        `text:${cleanMake.trim()}`,
+        `[data-value*="${cleanMake.toLowerCase()}"]`,
+        `[role="option"]`
+      ];
       
-      // Fallback to click method
-      let makeOption = this.findElementByText(cleanMake);
-      
-      if (!makeOption) {
-        const makeOptionSelectors = [
-          `[data-value*="${cleanMake.toLowerCase()}"]`,
-          `option[value*="${cleanMake}"]`
-        ];
-        makeOption = await this.waitForElement(makeOptionSelectors, 3000);
-      }
+      const makeOption = await this.waitForElement(makeOptionSelectors, 5000);
       await this.scrollIntoView(makeOption);
       await this.delay(this.randomDelay(300, 600));
-      
-      this.log(`🏭 Found make option ${cleanMake}, clicking...`);
       makeOption.click();
+      
+      await this.delay(this.randomDelay(1000, 2000));
+      
+      this.log(`✅ Successfully selected make: ${cleanMake}`);
+      return true;
       
       await this.delay(this.randomDelay(1000, 2000));
       
