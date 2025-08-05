@@ -918,7 +918,6 @@ class SalesonatorAutomator {
     
     return loginIndicators.some(selector => document.querySelector(selector) !== null);
   }
-  }
 
   // Specialized click method for Facebook React dropdowns
   async performFacebookDropdownClick(element) {
