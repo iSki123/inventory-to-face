@@ -412,22 +412,47 @@ class SalesonatorAutomator {
     try {
       this.log(`🗓️ Selecting year: ${year}`);
       
-      const yearDropdown = await this.waitForElement(['[aria-label*="Year"]', 'text:Year'], 5000);
+      // Look for year dropdown more specifically using XPath and standard selectors
+      const yearDropdownSelectors = [
+        'text:Year', // This will use XPath
+        '[aria-label*="Year"]',
+        'div[role="button"]', // Generic fallback
+        'select'
+      ];
+      
+      const yearDropdown = await this.waitForElement(yearDropdownSelectors, 8000);
       await this.scrollIntoView(yearDropdown);
+      await this.delay(this.randomDelay(500, 1000));
+      
+      this.log('📅 Found year dropdown, clicking to open...');
+      yearDropdown.click();
+      await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
+      
+      // Look for the specific year option in the opened dropdown
+      const yearOptionSelectors = [
+        `text:${year}`, // Use XPath for text content
+        `[data-value="${year}"]`,
+        `option[value="${year}"]`
+      ];
+      
+      const yearOption = await this.waitForElement(yearOptionSelectors, 5000);
+      await this.scrollIntoView(yearOption);
       await this.delay(this.randomDelay(300, 600));
       
-      yearDropdown.click();
-      await this.delay(this.randomDelay(1000, 1500));
-      
-      // Find the year option
-      const yearOption = await this.waitForElement([`text:${year}`], 3000);
-      await this.scrollIntoView(yearOption);
-      await this.delay(this.randomDelay(200, 400));
+      this.log(`📅 Found year option ${year}, clicking...`);
       yearOption.click();
       
-      await this.delay(this.randomDelay(500, 1000));
-      this.log(`✅ Successfully selected year: ${year}`);
-      return true;
+      await this.delay(this.randomDelay(1000, 2000));
+      
+      // Verify selection worked by checking if dropdown closed
+      const isStillOpen = document.querySelector('div[role="option"]');
+      if (!isStillOpen) {
+        this.log(`✅ Successfully selected year: ${year}`);
+        return true;
+      } else {
+        this.log(`⚠️ Year dropdown still open, selection may have failed`);
+        return false;
+      }
     } catch (error) {
       this.log(`⚠️ Could not select year: ${year}`, error);
       return false;
@@ -439,22 +464,50 @@ class SalesonatorAutomator {
     try {
       this.log(`🏭 Selecting make: ${make}`);
       
-      const makeDropdown = await this.waitForElement(['[aria-label*="Make"]', 'text:Make'], 5000);
+      // Clean make string (remove extra spaces)
+      const cleanMake = make.trim();
+      
+      // Look for make dropdown more specifically 
+      const makeDropdownSelectors = [
+        'text:Make', // Use XPath
+        '[aria-label*="Make"]',
+        'div[role="button"]', // Generic fallback after year
+        'select'
+      ];
+      
+      const makeDropdown = await this.waitForElement(makeDropdownSelectors, 8000);
       await this.scrollIntoView(makeDropdown);
+      await this.delay(this.randomDelay(500, 1000));
+      
+      this.log('🏭 Found make dropdown, clicking to open...');
+      makeDropdown.click();
+      await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
+      
+      // Look for the specific make option in the opened dropdown
+      const makeOptionSelectors = [
+        `text:${cleanMake}`, // Use XPath for text content
+        `[data-value*="${cleanMake.toLowerCase()}"]`,
+        `option[value*="${cleanMake}"]`
+      ];
+      
+      const makeOption = await this.waitForElement(makeOptionSelectors, 5000);
+      await this.scrollIntoView(makeOption);
       await this.delay(this.randomDelay(300, 600));
       
-      makeDropdown.click();
-      await this.delay(this.randomDelay(1000, 1500));
-      
-      // Find the make option
-      const makeOption = await this.waitForElement([`text:${make}`], 3000);
-      await this.scrollIntoView(makeOption);
-      await this.delay(this.randomDelay(200, 400));
+      this.log(`🏭 Found make option ${cleanMake}, clicking...`);
       makeOption.click();
       
-      await this.delay(this.randomDelay(500, 1000));
-      this.log(`✅ Successfully selected make: ${make}`);
-      return true;
+      await this.delay(this.randomDelay(1000, 2000));
+      
+      // Verify selection worked by checking if dropdown closed
+      const isStillOpen = document.querySelector('div[role="option"]');
+      if (!isStillOpen) {
+        this.log(`✅ Successfully selected make: ${cleanMake}`);
+        return true;
+      } else {
+        this.log(`⚠️ Make dropdown still open, selection may have failed`);
+        return false;
+      }
     } catch (error) {
       this.log(`⚠️ Could not select make: ${make}`, error);
       return false;
@@ -534,27 +587,30 @@ class SalesonatorAutomator {
     try {
       this.log('🚗 Selecting vehicle type dropdown first...');
       
+      // Look for the actual Vehicle type dropdown in the form, not search bar
       const vehicleDropdownSelectors = [
-        'aria:Vehicle type',
-        '[aria-label*="Vehicle type"]', 
-        '[data-testid*="vehicle"]',
-        'select',
-        '[role="combobox"]'
+        'text:Vehicle type', // Use XPath to find by text
+        '[aria-label*="Vehicle type"]',
+        'form select:first-of-type',
+        'form div[role="button"]:first-of-type'
       ];
       
-      const dropdown = await this.waitForElement(vehicleDropdownSelectors, 8000);
+      // Wait longer and be more specific
+      await this.delay(2000); // Wait for page to fully load
+      
+      const dropdown = await this.waitForElement(vehicleDropdownSelectors, 10000);
       await this.scrollIntoView(dropdown);
       await this.delay(this.randomDelay(500, 1000));
       
-      // Click to open dropdown
+      this.log('📝 Found vehicle type dropdown, clicking...');
       dropdown.click();
-      await this.delay(this.randomDelay(1000, 2000));
+      await this.delay(this.randomDelay(2000, 3000)); // Wait longer for dropdown to open
       
-      // Look for Car/Truck option
+      // Look for Car/Truck option more specifically using XPath
       const carTruckSelectors = [
-        'text:Car/Truck',
+        'text:Car/Truck', // Use XPath for text content
         'text:Car',
-        'text:Vehicle',
+        '[data-value*="car"]',
         '[role="option"]'
       ];
       
@@ -563,7 +619,7 @@ class SalesonatorAutomator {
       await this.delay(this.randomDelay(300, 600));
       option.click();
       
-      await this.delay(this.randomDelay(1000, 2000));
+      await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
       this.log('✅ Successfully selected vehicle type');
       return true;
       
