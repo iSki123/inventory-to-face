@@ -16,7 +16,7 @@ serve(async (req) => {
   }
 
   try {
-    const { vehicle } = await req.json();
+    const { vehicle, customPrompt } = await req.json();
 
     if (!vehicle) {
       throw new Error('Vehicle data is required');
@@ -26,10 +26,8 @@ serve(async (req) => {
       throw new Error('OpenAI API key not configured');
     }
 
-    // Generate a compelling vehicle description using ChatGPT
-    const prompt = `Create a compelling and professional vehicle listing description for Facebook Marketplace. Here are the vehicle details:
-
-Year: ${vehicle.year}
+    // Create the base prompt with vehicle details
+    const vehicleDetails = `Year: ${vehicle.year}
 Make: ${vehicle.make}
 Model: ${vehicle.model}
 Price: $${(vehicle.price / 100).toLocaleString()}
@@ -42,7 +40,14 @@ Fuel Type: ${vehicle.fuel_type || 'Gasoline'}
 VIN: ${vehicle.vin || 'Available upon request'}
 ${vehicle.trim ? `Trim: ${vehicle.trim}` : ''}
 ${vehicle.features && vehicle.features.length > 0 ? `Features: ${vehicle.features.join(', ')}` : ''}
-${vehicle.contact_phone ? `Contact: ${vehicle.contact_phone}` : ''}
+${vehicle.contact_phone ? `Contact: ${vehicle.contact_phone}` : ''}`;
+
+    // Use custom prompt if provided, otherwise use default
+    const prompt = customPrompt ? 
+      `${customPrompt}\n\nVehicle Details:\n${vehicleDetails}` :
+      `Create a compelling and professional vehicle listing description for Facebook Marketplace. Here are the vehicle details:
+
+${vehicleDetails}
 
 Write a description that:
 1. Highlights the vehicle's key selling points

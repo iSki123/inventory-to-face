@@ -20,7 +20,7 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    const { action, sourceId, userId, taskId } = await req.json();
+    const { action, sourceId, userId, taskId, aiDescriptionPrompt } = await req.json();
 
     if (!action || !userId) {
       throw new Error('action and userId are required');
@@ -59,7 +59,7 @@ serve(async (req) => {
       case 'process_scraped_data':
         return await processScrapedData(supabaseClient, sourceId, userId);
       case 'import_task':
-        return await importSpecificTask(supabaseClient, taskId, userId);
+        return await importSpecificTask(supabaseClient, taskId, userId, aiDescriptionPrompt);
       default:
         throw new Error('Invalid action');
     }
@@ -511,7 +511,7 @@ function generateMockVehicleData() {
   return vehicles;
 }
 
-async function importSpecificTask(supabaseClient: any, taskId: string, userId: string) {
+async function importSpecificTask(supabaseClient: any, taskId: string, userId: string, aiDescriptionPrompt?: string) {
   const accessToken = Deno.env.get('OCTOPARSE_API_KEY');
   if (!accessToken) {
     throw new Error('Octoparse access token not configured');
@@ -573,10 +573,51 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
 
     for (const vehicle of vehicleData) {
       try {
+        // Generate AI description with custom prompt if provided
+        let aiDescription = null;
+        if (!vehicle.description || vehicle.description.length < 30) {
+          try {
+            console.log(`Generating AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+            const { data, error } = await supabaseClient.functions.invoke('generate-vehicle-description', {
+              body: { 
+                vehicle,
+                customPrompt: aiDescriptionPrompt 
+              }
+            });
+
+            if (!error && data?.success) {
+              aiDescription = data.description;
+              console.log(`Generated AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+            } else {
+              console.log('AI description generation failed:', error?.message || 'Unknown error');
+            }
+          } catch (error) {
+            console.warn('Failed to generate AI description:', error);
+          }
+        }
+
         const { data: inserted, error } = await supabaseClient
           .from('vehicles')
           .insert([{
-            ...vehicle,
+            year: vehicle.year,
+            make: vehicle.make,
+            model: vehicle.model,
+            price: vehicle.price,
+            mileage: vehicle.mileage,
+            exterior_color: vehicle.exterior_color,
+            interior_color: vehicle.interior_color,
+            condition: vehicle.condition,
+            fuel_type: vehicle.fuel_type,
+            transmission: vehicle.transmission,
+            description: vehicle.description || `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+            ai_description: aiDescription,
+            vin: vehicle.vin,
+            features: vehicle.features,
+            images: vehicle.images,
+            trim: vehicle.trim,
+            location: vehicle.location,
+            contact_phone: vehicle.contact_phone,
+            contact_email: vehicle.contact_email,
             user_id: userId,
             status: 'available',
             facebook_post_status: 'draft',

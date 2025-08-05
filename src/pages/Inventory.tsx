@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,6 +26,7 @@ export default function Inventory() {
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState("vehicles");
   const [taskIdInput, setTaskIdInput] = useState("");
+  const [aiDescriptionPrompt, setAiDescriptionPrompt] = useState("Create a compelling and professional vehicle listing description for Facebook Marketplace that highlights the vehicle's key selling points and ends with a call to action for interested buyers.");
   const [isImporting, setIsImporting] = useState(false);
 
   const filteredVehicles = vehicles.filter(vehicle => {
@@ -64,7 +66,7 @@ export default function Inventory() {
     
     setIsImporting(true);
     try {
-      const result = await importSpecificTask(taskIdInput.trim());
+      const result = await importSpecificTask(taskIdInput.trim(), aiDescriptionPrompt);
       if (result) {
         // Refresh vehicles after successful import
         await refetch();
@@ -483,7 +485,20 @@ export default function Inventory() {
                 Directly import vehicle data from a specific Octoparse task ID
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">AI Description Prompt</label>
+                <Textarea
+                  placeholder="Enter custom prompt for AI-generated descriptions..."
+                  value={aiDescriptionPrompt}
+                  onChange={(e) => setAiDescriptionPrompt(e.target.value)}
+                  rows={3}
+                  className="text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  This prompt will be used to generate AI descriptions for vehicles that have missing or short descriptions.
+                </p>
+              </div>
               <div className="flex gap-3">
                 <Input
                   placeholder="Enter Octoparse Task ID (e.g., 7e9f5fcf-7257-470e-a20b-41f84293a152)"
@@ -508,8 +523,8 @@ export default function Inventory() {
                   )}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                This will fetch and import all vehicle data from the specified Octoparse task.
+              <p className="text-xs text-muted-foreground">
+                This will fetch and import all vehicle data from the specified Octoparse task with AI-generated descriptions.
               </p>
             </CardContent>
           </Card>

@@ -249,7 +249,7 @@ export const useVehicleSources = () => {
     }
   }, [user]);
 
-  const importSpecificTask = async (taskId: string) => {
+  const importSpecificTask = async (taskId: string, aiDescriptionPrompt?: string) => {
     try {
       if (!user) throw new Error('User not authenticated');
 
@@ -267,7 +267,8 @@ export const useVehicleSources = () => {
       const requestBody = {
         action: 'import_task',
         taskId,
-        userId: user.id
+        userId: user.id,
+        aiDescriptionPrompt
       };
 
       console.log('Request body:', JSON.stringify(requestBody, null, 2));
