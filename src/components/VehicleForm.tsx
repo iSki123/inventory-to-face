@@ -37,13 +37,14 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Update form data when vehicle prop changes
+  // Update form data when vehicle prop changes or profile loads
   useEffect(() => {
+    console.log('VehicleForm useEffect triggered:', { vehicle, profile });
     if (vehicle) {
       setFormData(vehicle);
     } else {
       // When creating a new vehicle, populate with profile info
-      setFormData({
+      setFormData(prev => ({
         year: new Date().getFullYear(),
         make: '',
         model: '',
@@ -55,9 +56,21 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
         features: [],
         contact_phone: profile?.phone || '',
         location: profile?.location || '',
-      });
+      }));
     }
   }, [vehicle, profile]);
+
+  // Additional effect to ensure contact info is populated when profile loads
+  useEffect(() => {
+    if (profile && !vehicle) {
+      console.log('Populating contact info from profile:', profile);
+      setFormData(prev => ({
+        ...prev,
+        contact_phone: prev.contact_phone || profile.phone || '',
+        location: prev.location || profile.location || '',
+      }));
+    }
+  }, [profile, vehicle]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
