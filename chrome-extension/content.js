@@ -126,6 +126,12 @@ class SalesonatorAutomator {
     return null;
   }
 
+  // Helper function to find elements containing specific text
+  findElementByText(text, tagNames = ['div', 'li', 'button', 'span'], parentElement = document) {
+    const elements = Array.from(parentElement.querySelectorAll(tagNames.join(', ')));
+    return elements.find(el => el.textContent && el.textContent.trim().includes(text));
+  }
+
   // Enhanced human-like typing simulation
   async typeHumanLike(element, text, speed = 'normal') {
     await this.scrollIntoView(element);
@@ -428,14 +434,17 @@ class SalesonatorAutomator {
       yearDropdown.click();
       await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
       
-      // Look for the specific year option in the opened dropdown
-      const yearOptionSelectors = [
-        `text:${year}`, // Use XPath for text content
-        `[data-value="${year}"]`,
-        `option[value="${year}"]`
-      ];
+      // Look for the specific year option using our custom text finder
+      let yearOption = this.findElementByText(year.toString());
       
-      const yearOption = await this.waitForElement(yearOptionSelectors, 5000);
+      if (!yearOption) {
+        // Fallback to regular selectors
+        const yearOptionSelectors = [
+          `[data-value="${year}"]`,
+          `option[value="${year}"]`
+        ];
+        yearOption = await this.waitForElement(yearOptionSelectors, 3000);
+      }
       await this.scrollIntoView(yearOption);
       await this.delay(this.randomDelay(300, 600));
       
@@ -483,14 +492,17 @@ class SalesonatorAutomator {
       makeDropdown.click();
       await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
       
-      // Look for the specific make option in the opened dropdown
-      const makeOptionSelectors = [
-        `text:${cleanMake}`, // Use XPath for text content
-        `[data-value*="${cleanMake.toLowerCase()}"]`,
-        `option[value*="${cleanMake}"]`
-      ];
+      // Look for the specific make option using our custom text finder
+      let makeOption = this.findElementByText(cleanMake);
       
-      const makeOption = await this.waitForElement(makeOptionSelectors, 5000);
+      if (!makeOption) {
+        // Fallback to regular selectors
+        const makeOptionSelectors = [
+          `[data-value*="${cleanMake.toLowerCase()}"]`,
+          `option[value*="${cleanMake}"]`
+        ];
+        makeOption = await this.waitForElement(makeOptionSelectors, 3000);
+      }
       await this.scrollIntoView(makeOption);
       await this.delay(this.randomDelay(300, 600));
       
@@ -519,7 +531,15 @@ class SalesonatorAutomator {
     try {
       this.log(`🚗 Filling model: ${model}`);
       
-      const modelInput = await this.waitForElement(['[aria-label*="Model"]', 'input[placeholder*="Model"]'], 5000);
+      const modelInputSelectors = [
+        '[aria-label*="Model"]', 
+        'input[placeholder*="Model"]',
+        'input[name*="model"]',
+        'text:Model', // May appear as label text
+        'input[type="text"]:not([aria-label*="Year"]):not([aria-label*="Make"])'
+      ];
+      
+      const modelInput = await this.waitForElement(modelInputSelectors, 8000);
       await this.scrollIntoView(modelInput);
       await this.typeHumanLike(modelInput, model);
       
@@ -536,7 +556,15 @@ class SalesonatorAutomator {
     try {
       this.log(`📏 Filling mileage: ${mileage}`);
       
-      const mileageInput = await this.waitForElement(['[aria-label*="Mileage"]', 'input[placeholder*="Mileage"]'], 5000);
+      const mileageInputSelectors = [
+        '[aria-label*="Mileage"]', 
+        'input[placeholder*="Mileage"]',
+        'input[name*="mileage"]',
+        'text:Mileage', // May appear as label text
+        'input[type="number"]:not([aria-label*="Price"]):not([aria-label*="Year"])'
+      ];
+      
+      const mileageInput = await this.waitForElement(mileageInputSelectors, 8000);
       await this.scrollIntoView(mileageInput);
       await this.typeHumanLike(mileageInput, mileage.toString());
       
@@ -553,7 +581,15 @@ class SalesonatorAutomator {
     try {
       this.log(`💰 Filling price: ${price}`);
       
-      const priceInput = await this.waitForElement(['[aria-label*="Price"]', 'input[placeholder*="Price"]'], 5000);
+      const priceInputSelectors = [
+        '[aria-label*="Price"]', 
+        'input[placeholder*="Price"]',
+        'input[name*="price"]',
+        'text:Price', // May appear as label text  
+        'input[type="number"]:not([aria-label*="Mileage"]):not([aria-label*="Year"])'
+      ];
+      
+      const priceInput = await this.waitForElement(priceInputSelectors, 8000);
       await this.scrollIntoView(priceInput);
       await this.typeHumanLike(priceInput, price.toString());
       
