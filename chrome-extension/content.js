@@ -444,11 +444,6 @@ class SalesonatorAutomator {
       yearDropdown.click();
       await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
       
-      // Use EXACT same method as vehicle type selection - NO KEYBOARD TRICKS
-      this.log('📅 Found year dropdown, clicking to open...');
-      yearDropdown.click();
-      await this.delay(this.randomDelay(2000, 3000)); // Wait longer for dropdown to open
-      
       // Look for year option more specifically using XPath - EXACT same as vehicle type
       const yearOptionSelectors = [
         `text:${year}`, // Use XPath for text content
@@ -461,22 +456,10 @@ class SalesonatorAutomator {
       await this.delay(this.randomDelay(300, 600));
       yearOption.click();
       
-      await this.delay(this.randomDelay(1000, 2000));
-      
+      await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
       this.log(`✅ Successfully selected year: ${year}`);
       return true;
       
-      await this.delay(this.randomDelay(1000, 2000));
-      
-      // Verify selection worked by checking if dropdown closed
-      const isStillOpen = document.querySelector('div[role="option"]');
-      if (!isStillOpen) {
-        this.log(`✅ Successfully selected year: ${year}`);
-        return true;
-      } else {
-        this.log(`⚠️ Year dropdown still open, selection may have failed`);
-        return false;
-      }
     } catch (error) {
       this.log(`⚠️ Could not select year: ${year}`, error);
       return false;
@@ -507,11 +490,6 @@ class SalesonatorAutomator {
       makeDropdown.click();
       await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
       
-      // Use EXACT same method as vehicle type selection
-      this.log('🏭 Found make dropdown, clicking to open...');
-      makeDropdown.click();
-      await this.delay(this.randomDelay(2000, 3000)); // Wait longer for dropdown to open
-      
       // Look for make option more specifically using XPath - EXACT same as vehicle type
       const makeOptionSelectors = [
         `text:${cleanMake}`, // Use XPath for text content
@@ -525,22 +503,10 @@ class SalesonatorAutomator {
       await this.delay(this.randomDelay(300, 600));
       makeOption.click();
       
-      await this.delay(this.randomDelay(1000, 2000));
-      
+      await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
       this.log(`✅ Successfully selected make: ${cleanMake}`);
       return true;
       
-      await this.delay(this.randomDelay(1000, 2000));
-      
-      // Verify selection worked by checking if dropdown closed
-      const isStillOpen = document.querySelector('div[role="option"]');
-      if (!isStillOpen) {
-        this.log(`✅ Successfully selected make: ${cleanMake}`);
-        return true;
-      } else {
-        this.log(`⚠️ Make dropdown still open, selection may have failed`);
-        return false;
-      }
     } catch (error) {
       this.log(`⚠️ Could not select make: ${make}`, error);
       return false;
