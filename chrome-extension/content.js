@@ -243,24 +243,30 @@ class FacebookMarketplaceAutomation {
 
   async fillYear(year) {
     if (!year) return;
-
+    
     const yearString = year.toString();
     console.log('Attempting to fill year:', yearString);
 
-    // First try dropdown selectors
-    const dropdownSelectors = [
-      'select', // Standard select dropdown
-      '[data-testid*="year"]',
-      '[aria-label*="Year"]',
-      'div[role="combobox"]',
-      'button[role="combobox"]'
+    // More specific selectors to avoid search bar
+    const specificSelectors = [
+      // Form-specific year fields
+      'div[data-testid*="vehicle"] select',
+      'div[data-testid*="vehicle"] input[type="number"]',
+      'div[data-testid*="vehicle"] input[placeholder*="Year"]',
+      '[data-testid="year_selector"]',
+      '[data-testid*="year_selector"]',
+      'select[name*="year"]',
+      'input[name*="year"]:not([type="search"])',
+      'div.marketplace input[type="number"]',
+      'form input[type="number"]'
     ];
 
-    for (let selector of dropdownSelectors) {
+    // Try specific selectors first
+    for (let selector of specificSelectors) {
       try {
         const element = document.querySelector(selector);
-        if (element && element.offsetParent !== null) {
-          console.log(`Found year dropdown with selector: ${selector}`);
+        if (element && element.offsetParent !== null && !this.isSearchField(element)) {
+          console.log(`Found year field with selector: ${selector}`);
           
           if (element.tagName === 'SELECT') {
             // Handle standard select dropdown
@@ -273,37 +279,52 @@ class FacebookMarketplaceAutomation {
               return;
             }
           } else {
-            // Handle custom dropdowns (click to open)
-            element.click();
-            await this.delay(1000);
-            
-            // Look for year options in the dropdown
-            const yearOptions = document.querySelectorAll(`
-              [role="option"]:contains("${yearString}"),
-              [data-value="${yearString}"],
-              div:contains("${yearString}"),
-              span:contains("${yearString}")
-            `);
-            
-            // Try a more specific search for year options
-            const allOptions = document.querySelectorAll('[role="option"], li, div[data-value]');
-            for (let option of allOptions) {
-              if (option.textContent && option.textContent.trim() === yearString) {
-                console.log('Found matching year option:', option.textContent);
-                option.click();
-                await this.delay(500);
-                return;
-              }
+            // Handle input field
+            await this.simulateTyping(element, yearString);
+            return;
+          }
+        }
+      } catch (error) {
+        console.warn(`Error with year selector ${selector}:`, error);
+      }
+    }
+
+    // Try dropdown selectors
+    const dropdownSelectors = [
+      'div[role="combobox"][aria-label*="Year"]',
+      'button[role="combobox"][aria-label*="Year"]',
+      '[aria-label*="Year"] div[role="combobox"]',
+      '[aria-label*="Year"] button[role="combobox"]'
+    ];
+
+    for (let selector of dropdownSelectors) {
+      try {
+        const element = document.querySelector(selector);
+        if (element && element.offsetParent !== null && !this.isSearchField(element)) {
+          console.log(`Found year dropdown with selector: ${selector}`);
+          
+          // Handle custom dropdowns (click to open)
+          element.click();
+          await this.delay(1000);
+          
+          // Try a more specific search for year options
+          const allOptions = document.querySelectorAll('[role="option"], li, div[data-value]');
+          for (let option of allOptions) {
+            if (option.textContent && option.textContent.trim() === yearString) {
+              console.log('Found matching year option:', option.textContent);
+              option.click();
+              await this.delay(500);
+              return;
             }
-            
-            // If no exact match, try partial match
-            for (let option of allOptions) {
-              if (option.textContent && option.textContent.includes(yearString)) {
-                console.log('Found partial matching year option:', option.textContent);
-                option.click();
-                await this.delay(500);
-                return;
-              }
+          }
+          
+          // If no exact match, try partial match
+          for (let option of allOptions) {
+            if (option.textContent && option.textContent.includes(yearString)) {
+              console.log('Found partial matching year option:', option.textContent);
+              option.click();
+              await this.delay(500);
+              return;
             }
           }
         }
@@ -312,14 +333,34 @@ class FacebookMarketplaceAutomation {
       }
     }
 
-    // Fallback to input field approach
-    const inputSelectors = [
-      'input[placeholder*="ear"]',
-      'input[name*="year"]',
-      'input[type="number"]'
-    ];
+    console.warn('Could not find year field');
+  }
 
-    await this.tryFillInput(inputSelectors, yearString, 'year');
+  // Helper method to check if element is a search field
+  isSearchField(element) {
+    const searchIndicators = [
+      'search',
+      'query',
+      'q=',
+      'facebook.com/search'
+    ];
+    
+    // Check element attributes
+    const placeholder = element.placeholder?.toLowerCase() || '';
+    const name = element.name?.toLowerCase() || '';
+    const id = element.id?.toLowerCase() || '';
+    const className = element.className?.toLowerCase() || '';
+    
+    // Check if element is in search context
+    const parentText = element.closest('[role="search"]') !== null;
+    const isInSearchBox = element.closest('[data-testid*="search"]') !== null;
+    
+    return searchIndicators.some(indicator => 
+      placeholder.includes(indicator) || 
+      name.includes(indicator) || 
+      id.includes(indicator) || 
+      className.includes(indicator)
+    ) || parentText || isInSearchBox;
   }
 
   async fillMake(make) {
@@ -396,7 +437,7 @@ class FacebookMarketplaceAutomation {
   }
 
   async fillDescription(vehicle) {
-    let description = vehicle.description;
+    let description = vehicle.ai_description || vehicle.description;
     
     // Generate a better description if none exists
     if (!description) {
@@ -404,10 +445,12 @@ class FacebookMarketplaceAutomation {
     }
 
     const selectors = [
-      'textarea',
+      'textarea[placeholder*="escription"]',
+      'textarea[aria-label*="escription"]',
       'div[contenteditable="true"]',
       '[data-testid*="description"]',
-      '[aria-label*="description"]'
+      '[aria-label*="description"]',
+      'textarea'
     ];
 
     await this.tryFillTextarea(selectors, description, 'description');
