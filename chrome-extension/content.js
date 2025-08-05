@@ -452,8 +452,8 @@ class FacebookMarketplaceAutomation {
   async fillDescription(vehicle) {
     let description = vehicle.ai_description || vehicle.description;
     
-    // Generate AI description if none exists
-    if (!description || description.length < 50) {
+    // Generate AI description if none exists or is too short
+    if (!description || description.length < 30) {
       console.log('Generating AI description for vehicle...');
       try {
         description = await this.generateAIDescription(vehicle);

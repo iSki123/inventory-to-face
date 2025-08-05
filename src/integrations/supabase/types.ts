@@ -304,6 +304,7 @@ export type Database = {
       }
       vehicles: {
         Row: {
+          ai_description: string | null
           condition: string | null
           contact_email: string | null
           contact_phone: string | null
@@ -338,6 +339,7 @@ export type Database = {
           year: number
         }
         Insert: {
+          ai_description?: string | null
           condition?: string | null
           contact_email?: string | null
           contact_phone?: string | null
@@ -372,6 +374,7 @@ export type Database = {
           year: number
         }
         Update: {
+          ai_description?: string | null
           condition?: string | null
           contact_email?: string | null
           contact_phone?: string | null

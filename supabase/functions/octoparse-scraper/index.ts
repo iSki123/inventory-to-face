@@ -309,7 +309,8 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
         .from('vehicles')
         .insert([{
           ...vehicle,
-          description: aiDescription,
+          description: vehicle.description || `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+          ai_description: aiDescription !== vehicle.description ? aiDescription : null,
           user_id: userId,
           status: 'available',
           facebook_post_status: 'draft',
