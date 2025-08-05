@@ -387,9 +387,12 @@ function parseOctoparseData(rawData: any[]): any[] {
       return defaultValue;
     };
     
-    // Extract price and convert to cents - try multiple field variations
+    // Extract price and convert to cents - prioritize "Retail" and "internet" columns
     let price = 0;
-    const priceValue = getFieldValue(['price', 'msrp', 'cost', 'amount', 'value']) ||
+    const priceValue = getFieldValue(['Retail', 'retail', 'RETAIL', 'internet', 'Internet', 'INTERNET']) ||
+                     getFieldValue(['price', 'msrp', 'cost', 'amount', 'value']) ||
+                     item.Retail || item.retail || item.RETAIL || 
+                     item.internet || item.Internet || item.INTERNET ||
                      item.price || item.Price || item.PRICE || item.msrp || item.MSRP ||
                      item.cost || item.Cost || item.amount || item.Amount;
     
@@ -535,7 +538,24 @@ function parseOctoparseData(rawData: any[]): any[] {
     
     console.log(`Processed vehicle ${index}:`, JSON.stringify(vehicle, null, 2));
     return vehicle;
-  }).filter(vehicle => vehicle.make !== 'Unknown' && vehicle.model !== 'Unknown');
+  }).filter(vehicle => {
+    // Filter out vehicles missing important details
+    const isValid = vehicle.make !== 'Unknown' && 
+                   vehicle.model !== 'Unknown' && 
+                   vehicle.images.length > 0 && // Must have at least one image
+                   vehicle.price > 0; // Must have a valid price
+    
+    if (!isValid) {
+      console.log(`Skipping vehicle due to missing important details: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, {
+        hasImages: vehicle.images.length > 0,
+        hasPrice: vehicle.price > 0,
+        makeKnown: vehicle.make !== 'Unknown',
+        modelKnown: vehicle.model !== 'Unknown'
+      });
+    }
+    
+    return isValid;
+  });
 }
 
 function generateMockVehicleData() {
