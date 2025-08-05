@@ -468,99 +468,38 @@ class SalesonatorAutomator {
         }
       });
       
-      // Find the specific year option from the list we already discovered
-      console.log(`[YEAR DEBUG] ✨ NOW SEARCHING FOR YEAR OPTION: ${year} ✨`);
-      console.log(`[YEAR DEBUG] Total options to search through: ${allOptions.length}`);
-      let yearFound = false;
-      let targetOption = null;
+      // Use the EXACT same approach as make selection - this works!
+      console.log(`[YEAR DEBUG] 🎯 Using same method as make selection...`);
       
-      for (let i = 0; i < allOptions.length; i++) {
-        const option = allOptions[i];
-        const optionText = option.textContent?.trim();
-        
-        if (optionText === year.toString()) {
-          console.log(`[YEAR DEBUG] ✅ FOUND MATCHING YEAR at index ${i}: "${optionText}"`);
-          console.log(`[YEAR DEBUG] Option element:`, option);
-          console.log(`[YEAR DEBUG] Option ID:`, option.id);
-          console.log(`[YEAR DEBUG] Option classes:`, option.className);
-          console.log(`[YEAR DEBUG] Option visible:`, option.offsetParent !== null);
-          console.log(`[YEAR DEBUG] Option aria-selected:`, option.getAttribute('aria-selected'));
-          
-          targetOption = option;
-          yearFound = true;
-          break;
-        }
-      }
+      const yearOptionSelectors = [
+        `text:${year}`, // Use XPath for text content - SAME AS MAKE
+        `text:${year.toString().trim()}`,
+        `[data-value*="${year}"]`,
+        `[role="option"]`
+      ];
       
-      if (!yearFound || !targetOption) {
-        console.error(`[YEAR DEBUG] ❌ FAILED: Year ${year} not found!`);
-        console.log('[YEAR DEBUG] Available years:', Array.from(allOptions).slice(0, 10).map(opt => opt.textContent?.trim()));
+      console.log(`[YEAR DEBUG] Searching for year option with selectors:`, yearOptionSelectors);
+      
+      const yearOption = await this.waitForElement(yearOptionSelectors, 5000);
+      
+      if (!yearOption) {
+        console.error(`[YEAR DEBUG] ❌ Year option not found using waitForElement!`);
+        // Fallback to manual search if needed
+        const fallbackOptions = document.querySelectorAll('[role="option"]');
+        console.log(`[YEAR DEBUG] Available options for fallback:`, Array.from(fallbackOptions).slice(0, 10).map(opt => opt.textContent?.trim()));
         return false;
       }
       
-      console.log(`[YEAR DEBUG] 🎯 ABOUT TO CLICK YEAR OPTION`);
-      console.log(`[YEAR DEBUG] Target element state before click:`, {
-        id: targetOption.id,
-        visible: targetOption.offsetParent !== null,
-        disabled: targetOption.disabled,
-        ariaSelected: targetOption.getAttribute('aria-selected')
-      });
+      console.log(`[YEAR DEBUG] ✅ Found year option using waitForElement:`, yearOption);
+      console.log(`[YEAR DEBUG] Option text:`, yearOption.textContent?.trim());
       
-      // Scroll into view
-      try {
-        console.log(`[YEAR DEBUG] 📜 Scrolling into view...`);
-        await this.scrollIntoView(targetOption);
-        await this.delay(500);
-        console.log(`[YEAR DEBUG] ✅ Scroll completed`);
-      } catch (scrollError) {
-        console.error(`[YEAR DEBUG] ❌ Scroll error:`, scrollError);
-      }
+      await this.scrollIntoView(yearOption);
+      await this.delay(this.randomDelay(300, 600));
       
-      // Attempt click with multiple methods
-      let clickSuccess = false;
+      console.log(`[YEAR DEBUG] 🖱️ Clicking year option...`);
+      yearOption.click(); // Simple click - same as make selection
       
-      try {
-        console.log(`[YEAR DEBUG] 🖱️ METHOD 1: Standard click attempt...`);
-        targetOption.focus();
-        await this.delay(200);
-        targetOption.click();
-        console.log(`[YEAR DEBUG] ✅ Standard click executed`);
-        clickSuccess = true;
-      } catch (clickError) {
-        console.error(`[YEAR DEBUG] ❌ Standard click failed:`, clickError);
-        
-        try {
-          console.log(`[YEAR DEBUG] 🖱️ METHOD 2: Mouse event attempt...`);
-          const clickEvent = new MouseEvent('click', {
-            view: window,
-            bubbles: true,
-            cancelable: true
-          });
-          const dispatched = targetOption.dispatchEvent(clickEvent);
-          console.log(`[YEAR DEBUG] ✅ Mouse event dispatched, result:`, dispatched);
-          clickSuccess = true;
-        } catch (mouseError) {
-          console.error(`[YEAR DEBUG] ❌ Mouse event failed:`, mouseError);
-          
-          try {
-            console.log(`[YEAR DEBUG] 🖱️ METHOD 3: Pointer event attempt...`);
-            const pointerDown = new PointerEvent('pointerdown', { bubbles: true });
-            const pointerUp = new PointerEvent('pointerup', { bubbles: true });
-            targetOption.dispatchEvent(pointerDown);
-            await this.delay(50);
-            targetOption.dispatchEvent(pointerUp);
-            console.log(`[YEAR DEBUG] ✅ Pointer events dispatched`);
-            clickSuccess = true;
-          } catch (pointerError) {
-            console.error(`[YEAR DEBUG] ❌ All click methods failed:`, pointerError);
-          }
-        }
-      }
-      
-      if (!clickSuccess) {
-        console.error(`[YEAR DEBUG] ❌ CRITICAL: No click method succeeded`);
-        return false;
-      }
+      await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
       
       await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
       
