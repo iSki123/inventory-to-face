@@ -26,6 +26,16 @@ serve(async (req) => {
       throw new Error('action and userId are required');
     }
 
+    // Additional validation for import_task action
+    if (action === 'import_task' && !taskId) {
+      throw new Error('taskId is required for import_task action');
+    }
+
+    // Additional validation for actions that require sourceId
+    if (['start_scraping', 'get_scraping_status', 'process_scraped_data'].includes(action) && !sourceId) {
+      throw new Error('sourceId is required for this action');
+    }
+
     // Get user's auth header for verification
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -37,6 +47,7 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
     
     if (authError || !user || user.id !== userId) {
+      console.error('Authentication error:', authError, 'User mismatch:', user?.id, 'vs', userId);
       throw new Error('Unauthorized');
     }
 
