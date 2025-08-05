@@ -427,6 +427,7 @@ class SalesonatorAutomator {
   async selectYear(year) {
     try {
       this.log(`🗓️ Selecting year: ${year}`);
+      console.log(`[YEAR DEBUG] Starting year selection for: ${year}`);
       
       // Look for year dropdown more specifically using XPath and standard selectors
       const yearDropdownSelectors = [
@@ -436,13 +437,34 @@ class SalesonatorAutomator {
         'select'
       ];
       
+      console.log('[YEAR DEBUG] Searching for year dropdown with selectors:', yearDropdownSelectors);
       const yearDropdown = await this.waitForElement(yearDropdownSelectors, 8000);
+      
+      if (!yearDropdown) {
+        console.error('[YEAR DEBUG] No year dropdown found!');
+        throw new Error('Year dropdown not found');
+      }
+      
+      console.log('[YEAR DEBUG] Found year dropdown:', yearDropdown);
+      console.log('[YEAR DEBUG] Dropdown tagName:', yearDropdown.tagName);
+      console.log('[YEAR DEBUG] Dropdown innerHTML:', yearDropdown.innerHTML);
+      console.log('[YEAR DEBUG] Dropdown attributes:', Array.from(yearDropdown.attributes).map(attr => `${attr.name}="${attr.value}"`));
+      
       await this.scrollIntoView(yearDropdown);
       await this.delay(this.randomDelay(500, 1000));
       
       this.log('📅 Found year dropdown, clicking to open...');
+      console.log('[YEAR DEBUG] Clicking year dropdown...');
       yearDropdown.click();
       await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
+      
+      // Check if dropdown opened by looking for options
+      console.log('[YEAR DEBUG] Checking if dropdown opened...');
+      const allOptions = document.querySelectorAll('[role="option"]');
+      console.log('[YEAR DEBUG] Found options after click:', allOptions.length);
+      allOptions.forEach((opt, i) => {
+        console.log(`[YEAR DEBUG] Option ${i}:`, opt.textContent?.trim(), opt);
+      });
       
       // Look for year option more specifically using XPath - EXACT same as vehicle type
       const yearOptionSelectors = [
@@ -451,16 +473,40 @@ class SalesonatorAutomator {
         `[role="option"]`
       ];
       
+      console.log('[YEAR DEBUG] Searching for year option with selectors:', yearOptionSelectors);
       const yearOption = await this.waitForElement(yearOptionSelectors, 5000);
+      
+      if (!yearOption) {
+        console.error(`[YEAR DEBUG] No year option found for: ${year}`);
+        // Try to find any year options to debug
+        const anyYearOptions = document.querySelectorAll('[role="option"]');
+        console.log('[YEAR DEBUG] Available options:', Array.from(anyYearOptions).map(opt => opt.textContent?.trim()));
+        throw new Error(`Year option ${year} not found`);
+      }
+      
+      console.log('[YEAR DEBUG] Found year option:', yearOption);
+      console.log('[YEAR DEBUG] Option text content:', yearOption.textContent?.trim());
+      
       await this.scrollIntoView(yearOption);
       await this.delay(this.randomDelay(300, 600));
+      
+      console.log('[YEAR DEBUG] Clicking year option...');
       yearOption.click();
       
       await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
+      
+      // Verify selection worked
+      console.log('[YEAR DEBUG] Verifying year selection...');
+      const selectedValue = yearDropdown.textContent?.trim() || yearDropdown.value;
+      console.log('[YEAR DEBUG] Selected value:', selectedValue);
+      
       this.log(`✅ Successfully selected year: ${year}`);
+      console.log(`[YEAR DEBUG] Year selection completed successfully`);
       return true;
       
     } catch (error) {
+      console.error(`[YEAR DEBUG] Year selection failed:`, error);
+      console.error(`[YEAR DEBUG] Error stack:`, error.stack);
       this.log(`⚠️ Could not select year: ${year}`, error);
       return false;
     }
