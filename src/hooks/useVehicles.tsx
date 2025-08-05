@@ -252,6 +252,60 @@ export const useVehicles = () => {
     }
   };
 
+  const generateAIDescriptions = async (vehicleIds: string[]) => {
+    setLoading(true);
+    toast({
+      title: "Generating AI Descriptions",
+      description: `Starting AI description generation for ${vehicleIds.length} vehicle${vehicleIds.length > 1 ? 's' : ''}...`,
+    });
+
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const vehicleId of vehicleIds) {
+        try {
+          const vehicle = vehicles.find(v => v.id === vehicleId);
+          if (!vehicle) continue;
+
+          console.log(`Generating AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+          const { data, error } = await supabase.functions.invoke('generate-vehicle-description', {
+            body: { vehicle }
+          });
+
+          if (!error && data?.success) {
+            await updateVehicle(vehicleId, { ai_description: data.description });
+            successCount++;
+            console.log(`Generated AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+          } else {
+            console.error('AI description generation failed:', error?.message || 'Unknown error');
+            errorCount++;
+          }
+        } catch (error) {
+          console.error('Error generating AI description:', error);
+          errorCount++;
+        }
+      }
+
+      toast({
+        title: "AI Description Generation Complete",
+        description: `Generated descriptions for ${successCount} vehicle${successCount !== 1 ? 's' : ''}${errorCount > 0 ? `. ${errorCount} failed.` : '.'}`,
+        variant: successCount > 0 ? "default" : "destructive",
+      });
+
+      await fetchVehicles(); // Refresh to get updated descriptions
+    } catch (error) {
+      console.error('Bulk AI description generation error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate AI descriptions. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (user) {
       fetchVehicles();
@@ -266,6 +320,7 @@ export const useVehicles = () => {
     deleteVehicle,
     bulkDeleteVehicles,
     postToFacebook,
+    generateAIDescriptions,
     refetch: fetchVehicles,
   };
 };

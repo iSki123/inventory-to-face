@@ -228,6 +228,7 @@ export type Database = {
           id: string
           is_active: boolean
           last_name: string | null
+          location: string | null
           phone: string | null
           role: Database["public"]["Enums"]["app_role"]
           updated_at: string
@@ -242,6 +243,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_name?: string | null
+          location?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
@@ -256,6 +258,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_name?: string | null
+          location?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
