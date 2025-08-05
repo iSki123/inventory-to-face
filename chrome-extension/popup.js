@@ -115,11 +115,14 @@ class SalesonatorExtension {
               console.log('User ID:', authData.user.id);
               
               // Check if token is still valid and user has admin role
+              console.log('Starting role verification for user:', authData.user.id);
+              
               try {
                 const profileUrl = `https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/profiles?select=role&user_id=eq.${authData.user.id}`;
                 console.log('Checking profile at:', profileUrl);
                 console.log('Using token:', authData.token.substring(0, 20) + '...');
                 
+                console.log('Making fetch request...');
                 const response = await fetch(profileUrl, {
                   headers: {
                     'Authorization': `Bearer ${authData.token}`,
@@ -127,12 +130,12 @@ class SalesonatorExtension {
                   }
                 });
                 
-                console.log('Profile response status:', response.status);
-                console.log('Profile response headers:', response.headers);
+                console.log('✅ Fetch completed, response status:', response.status);
+                console.log('Response ok:', response.ok);
                 
                 if (response.ok) {
                   const profileData = await response.json();
-                  console.log('Profile data received:', profileData);
+                  console.log('✅ Profile data received:', profileData);
                   console.log('Profile data length:', profileData.length);
                   const userRole = profileData[0]?.role;
                   console.log('Extracted user role:', userRole);
@@ -152,10 +155,13 @@ class SalesonatorExtension {
                   console.log('❌ Failed to verify user role, status:', response.status);
                   console.log('❌ Error response:', errorText);
                   this.showError('Failed to verify user permissions');
+                  return null;
                 }
               } catch (error) {
                 console.error('❌ Error verifying user role:', error);
-                this.showError('Error checking user permissions');
+                console.error('❌ Error details:', error.message, error.stack);
+                this.showError('Error checking user permissions: ' + error.message);
+                return null;
               }
             }
           } catch (error) {
