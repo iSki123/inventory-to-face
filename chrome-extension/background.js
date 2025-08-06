@@ -195,17 +195,19 @@ class SalesonatorBackground {
       
       for (let i = 0; i < imageUrls.length; i++) {
         const imageUrl = imageUrls[i];
-        const storageKey = `image_${btoa(imageUrl).substring(0, 20)}`;
+        // Use same key generation as content script
+        const storageKey = `img_${this.hashString(imageUrl)}`;
         
         try {
-          console.log(`Pre-downloading image ${i + 1}:`, imageUrl);
+          console.log(`Pre-downloading image ${i + 1}:`, imageUrl, 'Key:', storageKey);
           
           const response = await fetch(imageUrl, {
             method: 'GET',
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
               'Accept': 'image/*',
-              'Cache-Control': 'no-cache'
+              'Cache-Control': 'no-cache',
+              'Referer': 'https://www.facebook.com/'
             }
           });
           
@@ -252,6 +254,17 @@ class SalesonatorBackground {
         error: error.message
       };
     }
+  }
+
+  // Simple hash function for consistent storage keys (same as content script)
+  hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(36);
   }
 }
 

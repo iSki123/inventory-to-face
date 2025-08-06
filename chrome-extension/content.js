@@ -797,48 +797,74 @@ class SalesonatorAutomator {
     }
   }
 
-  // Enhanced image upload handling with pre-downloaded images
+  // Enhanced image upload handling with direct file manipulation
   async handleImageUploads(images) {
     try {
-      this.log('📸 Starting image upload process...');
+      this.log('📸 Starting enhanced image upload process...');
       this.log('📸 Processing image uploads for Facebook Marketplace...');
       
-      // First, find the upload trigger element (not the file input directly)
-      const uploadTriggerSelectors = [
-        'text:Add photos',
-        'text:Add photos/videos', 
-        'text:Upload photos',
-        '[aria-label*="Add photos"]',
-        '[aria-label*="Upload"]',
-        '[data-testid*="photo"]'
-      ];
-      
-      const uploadTrigger = await this.waitForElement(uploadTriggerSelectors, 5000);
-      this.log('📸 Found upload trigger:', uploadTrigger.textContent?.trim());
-      
-      // Click to reveal the file input
-      this.log('📸 Clicking upload area to reveal file input...');
-      await this.performFacebookDropdownClick(uploadTrigger);
-      await this.delay(this.randomDelay(1000, 2000));
-      
-      // Now find the actual file input
+      // Find existing file input without triggering dialog
       const fileInputSelectors = [
         'input[type="file"][accept*="image"]',
+        'input[type="file"][multiple]',
         'input[type="file"]'
       ];
       
-      const fileInput = await this.waitForElement(fileInputSelectors, 3000);
-      this.log('📸 Found file input:', fileInput);
+      let fileInput = null;
       
-      // Check if images are already pre-downloaded in storage
-      this.log(`📸 Checking for pre-downloaded images...`);
+      // Try to find existing file input first
+      for (const selector of fileInputSelectors) {
+        const inputs = document.querySelectorAll(selector);
+        for (const input of inputs) {
+          if (input.offsetParent !== null || input.style.display !== 'none') {
+            fileInput = input;
+            break;
+          }
+        }
+        if (fileInput) break;
+      }
+      
+      // If no visible file input found, look for hidden ones and make them accessible
+      if (!fileInput) {
+        this.log('📸 No visible file input found, looking for hidden inputs...');
+        const hiddenInputs = document.querySelectorAll('input[type="file"]');
+        if (hiddenInputs.length > 0) {
+          fileInput = hiddenInputs[0];
+          // Temporarily make it accessible
+          const originalStyle = {
+            opacity: fileInput.style.opacity,
+            position: fileInput.style.position,
+            left: fileInput.style.left,
+            top: fileInput.style.top,
+            width: fileInput.style.width,
+            height: fileInput.style.height
+          };
+          
+          fileInput.style.opacity = '1';
+          fileInput.style.position = 'absolute';
+          fileInput.style.left = '0px';
+          fileInput.style.top = '0px';
+          fileInput.style.width = '1px';
+          fileInput.style.height = '1px';
+          
+          this.log('📸 Made hidden file input accessible');
+        }
+      }
+      
+      if (!fileInput) {
+        throw new Error('No file input found on page');
+      }
+      
+      this.log('📸 Found file input, proceeding with image processing...');
+      
+      // Get pre-downloaded images or download them now
+      this.log(`📸 Processing ${images.length} images...`);
       const files = await this.getPreDownloadedImages(images);
       
-      if (files.length === 0) {
+      if (files.filter(f => f !== null).length === 0) {
         this.log('📸 No pre-downloaded images found, downloading now...');
-        // Fallback: download images now via background script
         const downloadedFiles = await this.downloadImagesViaBackground(images);
-        files.push(...downloadedFiles);
+        files.splice(0, files.length, ...downloadedFiles);
       }
       
       const validFiles = files.filter(file => file !== null);
@@ -850,20 +876,8 @@ class SalesonatorAutomator {
         return false;
       }
       
-      // Create a DataTransfer object to hold the files
-      const dataTransfer = new DataTransfer();
-      validFiles.forEach(file => {
-        dataTransfer.items.add(file);
-      });
-      
-      // Set the files to the file input
-      fileInput.files = dataTransfer.files;
-      
-      // Trigger the change event to notify Facebook's React components
-      const changeEvent = new Event('change', { bubbles: true });
-      fileInput.dispatchEvent(changeEvent);
-      
-      await this.delay(this.randomDelay(2000, 3000));
+      // Use advanced React-compatible file setting
+      await this.setFilesWithReactCompatibility(fileInput, validFiles);
       
       this.log(`✅ Successfully uploaded ${validFiles.length} images`);
       return true;
@@ -874,12 +888,74 @@ class SalesonatorAutomator {
     }
   }
 
-  // Get pre-downloaded images from storage
+  // Advanced React-compatible file setting
+  async setFilesWithReactCompatibility(fileInput, files) {
+    try {
+      this.log('📸 Setting files with React compatibility...');
+      
+      // Method 1: Direct file list assignment with React value setter
+      const dataTransfer = new DataTransfer();
+      files.forEach(file => {
+        dataTransfer.items.add(file);
+      });
+      
+      // Set the files property directly
+      fileInput.files = dataTransfer.files;
+      
+      // Method 2: React-specific value setting (from reverse engineering)
+      const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      const fileSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')?.set;
+      
+      if (fileSetter) {
+        fileSetter.call(fileInput, dataTransfer.files);
+      }
+      
+      // Method 3: Trigger React events in sequence
+      const events = [
+        new Event('input', { bubbles: true }),
+        new Event('change', { bubbles: true }),
+        new Event('blur', { bubbles: true })
+      ];
+      
+      for (const event of events) {
+        fileInput.dispatchEvent(event);
+        await this.delay(100);
+      }
+      
+      // Method 4: Focus and trigger additional React hooks
+      fileInput.focus();
+      await this.delay(200);
+      
+      // Trigger React's synthetic events
+      const syntheticEvent = new Event('change', { bubbles: true });
+      Object.defineProperty(syntheticEvent, 'target', {
+        value: fileInput,
+        enumerable: true
+      });
+      Object.defineProperty(syntheticEvent, 'currentTarget', {
+        value: fileInput,
+        enumerable: true
+      });
+      
+      fileInput.dispatchEvent(syntheticEvent);
+      
+      await this.delay(this.randomDelay(1000, 2000));
+      
+      this.log('📸 React-compatible file setting completed');
+      
+    } catch (error) {
+      this.log('⚠️ Error in React-compatible file setting:', error);
+      throw error;
+    }
+  }
+
+  // Get pre-downloaded images from storage with improved key generation
   async getPreDownloadedImages(imageUrls) {
     const files = [];
     for (let i = 0; i < imageUrls.length; i++) {
       const imageUrl = imageUrls[i];
-      const storageKey = `image_${btoa(imageUrl).substring(0, 20)}`;
+      // Use more reliable key generation
+      const storageKey = `img_${this.hashString(imageUrl)}`;
       
       try {
         const result = await chrome.storage.local.get(storageKey);
@@ -889,7 +965,7 @@ class SalesonatorAutomator {
           const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
           files.push(file);
         } else {
-          this.log(`📸 No pre-downloaded image found for ${i + 1}`);
+          this.log(`📸 No pre-downloaded image found for ${i + 1} (key: ${storageKey})`);
           files.push(null);
         }
       } catch (error) {
@@ -898,6 +974,17 @@ class SalesonatorAutomator {
       }
     }
     return files;
+  }
+
+  // Simple hash function for consistent storage keys
+  hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(36);
   }
 
   // Download images via background script as fallback
