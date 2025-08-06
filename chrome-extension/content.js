@@ -851,15 +851,50 @@ class SalesonatorAutomator {
     try {
       this.log(`🚗 Selecting body style: ${bodyStyle}`);
       
+      // Find the dropdown by looking for the label text and closest clickable element
       const bodyStyleSelectors = [
-        'text:Body style',
+        'div:has-text("Body style") + div[role="button"]',
         '[aria-label*="Body style"]',
-        '[aria-label*="Body"]',
-        'span:contains("Body style")',
-        '[data-testid*="body"]'
+        'div:has-text("Body style")',
+        'span:has-text("Body style")',
+        'label:has-text("Body style") + div',
+        '*[id*="body"] + div[role="button"]'
       ];
       
-      const dropdown = await this.waitForElement(bodyStyleSelectors, 8000);
+      // Look for the actual clickable dropdown element
+      let dropdown = null;
+      for (let selector of bodyStyleSelectors) {
+        try {
+          const elements = document.evaluate(
+            `//div[contains(text(), "Body style")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
+            document,
+            null,
+            XPathResult.FIRST_ORDERED_NODE_TYPE,
+            null
+          );
+          if (elements.singleNodeValue) {
+            dropdown = elements.singleNodeValue;
+            break;
+          }
+        } catch (e) {
+          // Try direct CSS selector
+          const els = document.querySelectorAll('div[role="button"], span[role="button"]');
+          for (let el of els) {
+            if (el.textContent.includes('Body style') || 
+                el.parentElement?.textContent.includes('Body style') ||
+                el.previousElementSibling?.textContent.includes('Body style')) {
+              dropdown = el;
+              break;
+            }
+          }
+        }
+        if (dropdown) break;
+      }
+      
+      if (!dropdown) {
+        throw new Error('Body style dropdown not found');
+      }
+      
       await this.scrollIntoView(dropdown);
       await this.delay(this.randomDelay(500, 1000));
       
@@ -867,14 +902,44 @@ class SalesonatorAutomator {
       dropdown.click();
       await this.delay(this.randomDelay(2000, 3000));
       
-      // Look for body style option
+      // Look for body style option in dropdown menu
       const optionSelectors = [
-        `text:${bodyStyle}`,
-        `[role="option"]:contains("${bodyStyle}")`,
-        `[data-value*="${bodyStyle.toLowerCase()}"]`
+        `//div[@role="option" and contains(text(), "${bodyStyle}")]`,
+        `//div[contains(text(), "${bodyStyle}") and contains(@class, "option")]`,
+        `//li[contains(text(), "${bodyStyle}")]`
       ];
       
-      const option = await this.waitForElement(optionSelectors, 5000);
+      let option = null;
+      for (let selector of optionSelectors) {
+        try {
+          const result = document.evaluate(
+            selector,
+            document,
+            null,
+            XPathResult.FIRST_ORDERED_NODE_TYPE,
+            null
+          );
+          if (result.singleNodeValue) {
+            option = result.singleNodeValue;
+            break;
+          }
+        } catch (e) {
+          // Fallback to contains search
+          const options = document.querySelectorAll('[role="option"], li, div');
+          for (let opt of options) {
+            if (opt.textContent.trim() === bodyStyle || opt.textContent.includes(bodyStyle)) {
+              option = opt;
+              break;
+            }
+          }
+        }
+        if (option) break;
+      }
+      
+      if (!option) {
+        throw new Error(`Body style option "${bodyStyle}" not found`);
+      }
+      
       await this.scrollIntoView(option);
       await this.delay(this.randomDelay(300, 600));
       option.click();
@@ -894,15 +959,38 @@ class SalesonatorAutomator {
     try {
       this.log(`🎨 Selecting exterior color: ${exteriorColor}`);
       
-      const colorSelectors = [
-        'text:Exterior color',
-        '[aria-label*="Exterior color"]',
-        '[aria-label*="Exterior"]',
-        'span:contains("Exterior color")',
-        '[data-testid*="exterior"]'
-      ];
+      // Find the dropdown by looking for the label text and closest clickable element
+      let dropdown = null;
       
-      const dropdown = await this.waitForElement(colorSelectors, 8000);
+      // Try XPath to find exterior color dropdown
+      try {
+        const elements = document.evaluate(
+          `//div[contains(text(), "Exterior color") or contains(text(), "Exterior")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
+          document,
+          null,
+          XPathResult.FIRST_ORDERED_NODE_TYPE,
+          null
+        );
+        if (elements.singleNodeValue) {
+          dropdown = elements.singleNodeValue;
+        }
+      } catch (e) {
+        // Fallback to direct search
+        const els = document.querySelectorAll('div[role="button"], span[role="button"]');
+        for (let el of els) {
+          if (el.textContent.includes('Exterior color') || el.textContent.includes('Exterior') || 
+              el.parentElement?.textContent.includes('Exterior color') ||
+              el.previousElementSibling?.textContent.includes('Exterior color')) {
+            dropdown = el;
+            break;
+          }
+        }
+      }
+      
+      if (!dropdown) {
+        throw new Error('Exterior color dropdown not found');
+      }
+      
       await this.scrollIntoView(dropdown);
       await this.delay(this.randomDelay(500, 1000));
       
@@ -910,14 +998,44 @@ class SalesonatorAutomator {
       dropdown.click();
       await this.delay(this.randomDelay(2000, 3000));
       
-      // Look for color option
+      // Look for color option in dropdown menu
+      let option = null;
       const optionSelectors = [
-        `text:${exteriorColor}`,
-        `[role="option"]:contains("${exteriorColor}")`,
-        `[data-value*="${exteriorColor.toLowerCase()}"]`
+        `//div[@role="option" and contains(text(), "${exteriorColor}")]`,
+        `//div[contains(text(), "${exteriorColor}") and contains(@class, "option")]`,
+        `//li[contains(text(), "${exteriorColor}")]`
       ];
       
-      const option = await this.waitForElement(optionSelectors, 5000);
+      for (let selector of optionSelectors) {
+        try {
+          const result = document.evaluate(
+            selector,
+            document,
+            null,
+            XPathResult.FIRST_ORDERED_NODE_TYPE,
+            null
+          );
+          if (result.singleNodeValue) {
+            option = result.singleNodeValue;
+            break;
+          }
+        } catch (e) {
+          // Fallback search
+          const options = document.querySelectorAll('[role="option"], li, div');
+          for (let opt of options) {
+            if (opt.textContent.trim() === exteriorColor || opt.textContent.includes(exteriorColor)) {
+              option = opt;
+              break;
+            }
+          }
+        }
+        if (option) break;
+      }
+      
+      if (!option) {
+        throw new Error(`Exterior color option "${exteriorColor}" not found`);
+      }
+      
       await this.scrollIntoView(option);
       await this.delay(this.randomDelay(300, 600));
       option.click();
@@ -937,15 +1055,38 @@ class SalesonatorAutomator {
     try {
       this.log(`🪑 Selecting interior color: ${interiorColor}`);
       
-      const colorSelectors = [
-        'text:Interior color',
-        '[aria-label*="Interior color"]',
-        '[aria-label*="Interior"]',
-        'span:contains("Interior color")',
-        '[data-testid*="interior"]'
-      ];
+      // Find the dropdown by looking for the label text and closest clickable element
+      let dropdown = null;
       
-      const dropdown = await this.waitForElement(colorSelectors, 8000);
+      // Try XPath to find interior color dropdown
+      try {
+        const elements = document.evaluate(
+          `//div[contains(text(), "Interior color") or contains(text(), "Interior")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
+          document,
+          null,
+          XPathResult.FIRST_ORDERED_NODE_TYPE,
+          null
+        );
+        if (elements.singleNodeValue) {
+          dropdown = elements.singleNodeValue;
+        }
+      } catch (e) {
+        // Fallback to direct search
+        const els = document.querySelectorAll('div[role="button"], span[role="button"]');
+        for (let el of els) {
+          if (el.textContent.includes('Interior color') || el.textContent.includes('Interior') || 
+              el.parentElement?.textContent.includes('Interior color') ||
+              el.previousElementSibling?.textContent.includes('Interior color')) {
+            dropdown = el;
+            break;
+          }
+        }
+      }
+      
+      if (!dropdown) {
+        throw new Error('Interior color dropdown not found');
+      }
+      
       await this.scrollIntoView(dropdown);
       await this.delay(this.randomDelay(500, 1000));
       
@@ -953,14 +1094,44 @@ class SalesonatorAutomator {
       dropdown.click();
       await this.delay(this.randomDelay(2000, 3000));
       
-      // Look for color option
+      // Look for color option in dropdown menu
+      let option = null;
       const optionSelectors = [
-        `text:${interiorColor}`,
-        `[role="option"]:contains("${interiorColor}")`,
-        `[data-value*="${interiorColor.toLowerCase()}"]`
+        `//div[@role="option" and contains(text(), "${interiorColor}")]`,
+        `//div[contains(text(), "${interiorColor}") and contains(@class, "option")]`,
+        `//li[contains(text(), "${interiorColor}")]`
       ];
       
-      const option = await this.waitForElement(optionSelectors, 5000);
+      for (let selector of optionSelectors) {
+        try {
+          const result = document.evaluate(
+            selector,
+            document,
+            null,
+            XPathResult.FIRST_ORDERED_NODE_TYPE,
+            null
+          );
+          if (result.singleNodeValue) {
+            option = result.singleNodeValue;
+            break;
+          }
+        } catch (e) {
+          // Fallback search
+          const options = document.querySelectorAll('[role="option"], li, div');
+          for (let opt of options) {
+            if (opt.textContent.trim() === interiorColor || opt.textContent.includes(interiorColor)) {
+              option = opt;
+              break;
+            }
+          }
+        }
+        if (option) break;
+      }
+      
+      if (!option) {
+        throw new Error(`Interior color option "${interiorColor}" not found`);
+      }
+      
       await this.scrollIntoView(option);
       await this.delay(this.randomDelay(300, 600));
       option.click();
@@ -980,20 +1151,58 @@ class SalesonatorAutomator {
     try {
       this.log(`📋 Setting clean title checkbox: ${shouldCheck}`);
       
-      const checkboxSelectors = [
-        'text:This vehicle has a clean title',
-        '[aria-label*="clean title"]',
-        '[aria-label*="This vehicle has a clean title"]',
-        'input[type="checkbox"]',
-        '[data-testid*="clean"]',
-        '[data-testid*="title"]'
-      ];
+      // Find checkbox by looking for clean title text and associated input
+      let checkbox = null;
       
-      const checkbox = await this.waitForElement(checkboxSelectors, 8000);
+      // Try XPath to find clean title checkbox
+      try {
+        const elements = document.evaluate(
+          `//div[contains(text(), "clean title") or contains(text(), "This vehicle has a clean title")]//input[@type="checkbox"] | //input[@type="checkbox"][following-sibling::*[contains(text(), "clean title")]] | //input[@type="checkbox"][preceding-sibling::*[contains(text(), "clean title")]]`,
+          document,
+          null,
+          XPathResult.FIRST_ORDERED_NODE_TYPE,
+          null
+        );
+        if (elements.singleNodeValue) {
+          checkbox = elements.singleNodeValue;
+        }
+      } catch (e) {
+        // Fallback to direct search
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        for (let cb of checkboxes) {
+          const parent = cb.closest('div, label');
+          if (parent && (parent.textContent.includes('clean title') || 
+                        parent.textContent.includes('This vehicle has a clean title'))) {
+            checkbox = cb;
+            break;
+          }
+        }
+      }
+      
+      if (!checkbox) {
+        // Try looking for any element with role checkbox
+        const roleCheckboxes = document.querySelectorAll('[role="checkbox"]');
+        for (let cb of roleCheckboxes) {
+          const parent = cb.closest('div, label');
+          if (parent && (parent.textContent.includes('clean title') || 
+                        parent.textContent.includes('This vehicle has a clean title'))) {
+            checkbox = cb;
+            break;
+          }
+        }
+      }
+      
+      if (!checkbox) {
+        throw new Error('Clean title checkbox not found');
+      }
+      
       await this.scrollIntoView(checkbox);
       
       // Check if it's already checked
-      const isChecked = checkbox.checked || checkbox.getAttribute('aria-checked') === 'true';
+      const isChecked = checkbox.checked || 
+                       checkbox.getAttribute('aria-checked') === 'true' ||
+                       checkbox.getAttribute('data-checked') === 'true' ||
+                       checkbox.classList.contains('checked');
       
       if (shouldCheck && !isChecked) {
         this.log('📋 Checking clean title checkbox...');
@@ -1019,15 +1228,38 @@ class SalesonatorAutomator {
     try {
       this.log(`⭐ Selecting vehicle condition: ${condition}`);
       
-      const conditionSelectors = [
-        'text:Vehicle condition',
-        '[aria-label*="Vehicle condition"]',
-        '[aria-label*="Condition"]',
-        'span:contains("Vehicle condition")',
-        '[data-testid*="condition"]'
-      ];
+      // Find the dropdown by looking for the label text and closest clickable element
+      let dropdown = null;
       
-      const dropdown = await this.waitForElement(conditionSelectors, 8000);
+      // Try XPath to find vehicle condition dropdown
+      try {
+        const elements = document.evaluate(
+          `//div[contains(text(), "Vehicle condition") or contains(text(), "Condition")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
+          document,
+          null,
+          XPathResult.FIRST_ORDERED_NODE_TYPE,
+          null
+        );
+        if (elements.singleNodeValue) {
+          dropdown = elements.singleNodeValue;
+        }
+      } catch (e) {
+        // Fallback to direct search
+        const els = document.querySelectorAll('div[role="button"], span[role="button"]');
+        for (let el of els) {
+          if (el.textContent.includes('Vehicle condition') || el.textContent.includes('Condition') || 
+              el.parentElement?.textContent.includes('Vehicle condition') ||
+              el.previousElementSibling?.textContent.includes('Vehicle condition')) {
+            dropdown = el;
+            break;
+          }
+        }
+      }
+      
+      if (!dropdown) {
+        throw new Error('Vehicle condition dropdown not found');
+      }
+      
       await this.scrollIntoView(dropdown);
       await this.delay(this.randomDelay(500, 1000));
       
@@ -1035,14 +1267,44 @@ class SalesonatorAutomator {
       dropdown.click();
       await this.delay(this.randomDelay(2000, 3000));
       
-      // Look for condition option
+      // Look for condition option in dropdown menu
+      let option = null;
       const optionSelectors = [
-        `text:${condition}`,
-        `[role="option"]:contains("${condition}")`,
-        `[data-value*="${condition.toLowerCase()}"]`
+        `//div[@role="option" and contains(text(), "${condition}")]`,
+        `//div[contains(text(), "${condition}") and contains(@class, "option")]`,
+        `//li[contains(text(), "${condition}")]`
       ];
       
-      const option = await this.waitForElement(optionSelectors, 5000);
+      for (let selector of optionSelectors) {
+        try {
+          const result = document.evaluate(
+            selector,
+            document,
+            null,
+            XPathResult.FIRST_ORDERED_NODE_TYPE,
+            null
+          );
+          if (result.singleNodeValue) {
+            option = result.singleNodeValue;
+            break;
+          }
+        } catch (e) {
+          // Fallback search
+          const options = document.querySelectorAll('[role="option"], li, div');
+          for (let opt of options) {
+            if (opt.textContent.trim() === condition || opt.textContent.includes(condition)) {
+              option = opt;
+              break;
+            }
+          }
+        }
+        if (option) break;
+      }
+      
+      if (!option) {
+        throw new Error(`Vehicle condition option "${condition}" not found`);
+      }
+      
       await this.scrollIntoView(option);
       await this.delay(this.randomDelay(300, 600));
       option.click();
@@ -1062,15 +1324,38 @@ class SalesonatorAutomator {
     try {
       this.log(`⛽ Selecting fuel type: ${fuelType}`);
       
-      const fuelSelectors = [
-        'text:Fuel type',
-        '[aria-label*="Fuel type"]',
-        '[aria-label*="Fuel"]',
-        'span:contains("Fuel type")',
-        '[data-testid*="fuel"]'
-      ];
+      // Find the dropdown by looking for the label text and closest clickable element
+      let dropdown = null;
       
-      const dropdown = await this.waitForElement(fuelSelectors, 8000);
+      // Try XPath to find fuel type dropdown
+      try {
+        const elements = document.evaluate(
+          `//div[contains(text(), "Fuel type") or contains(text(), "Fuel")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
+          document,
+          null,
+          XPathResult.FIRST_ORDERED_NODE_TYPE,
+          null
+        );
+        if (elements.singleNodeValue) {
+          dropdown = elements.singleNodeValue;
+        }
+      } catch (e) {
+        // Fallback to direct search
+        const els = document.querySelectorAll('div[role="button"], span[role="button"]');
+        for (let el of els) {
+          if (el.textContent.includes('Fuel type') || el.textContent.includes('Fuel') || 
+              el.parentElement?.textContent.includes('Fuel type') ||
+              el.previousElementSibling?.textContent.includes('Fuel type')) {
+            dropdown = el;
+            break;
+          }
+        }
+      }
+      
+      if (!dropdown) {
+        throw new Error('Fuel type dropdown not found');
+      }
+      
       await this.scrollIntoView(dropdown);
       await this.delay(this.randomDelay(500, 1000));
       
@@ -1078,14 +1363,44 @@ class SalesonatorAutomator {
       dropdown.click();
       await this.delay(this.randomDelay(2000, 3000));
       
-      // Look for fuel type option
+      // Look for fuel type option in dropdown menu
+      let option = null;
       const optionSelectors = [
-        `text:${fuelType}`,
-        `[role="option"]:contains("${fuelType}")`,
-        `[data-value*="${fuelType.toLowerCase()}"]`
+        `//div[@role="option" and contains(text(), "${fuelType}")]`,
+        `//div[contains(text(), "${fuelType}") and contains(@class, "option")]`,
+        `//li[contains(text(), "${fuelType}")]`
       ];
       
-      const option = await this.waitForElement(optionSelectors, 5000);
+      for (let selector of optionSelectors) {
+        try {
+          const result = document.evaluate(
+            selector,
+            document,
+            null,
+            XPathResult.FIRST_ORDERED_NODE_TYPE,
+            null
+          );
+          if (result.singleNodeValue) {
+            option = result.singleNodeValue;
+            break;
+          }
+        } catch (e) {
+          // Fallback search
+          const options = document.querySelectorAll('[role="option"], li, div');
+          for (let opt of options) {
+            if (opt.textContent.trim() === fuelType || opt.textContent.includes(fuelType)) {
+              option = opt;
+              break;
+            }
+          }
+        }
+        if (option) break;
+      }
+      
+      if (!option) {
+        throw new Error(`Fuel type option "${fuelType}" not found`);
+      }
+      
       await this.scrollIntoView(option);
       await this.delay(this.randomDelay(300, 600));
       option.click();
