@@ -1,8 +1,38 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Car, MessageSquare, TrendingUp, DollarSign } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export default function Dashboard() {
+  const testVinDecoding = async () => {
+    try {
+      toast.loading("Testing VIN decoding...");
+      
+      const { data, error } = await supabase.functions.invoke('vin-decoder', {
+        body: { vin: 'KNAGT4L3XH5156979' }
+      });
+
+      if (error) {
+        console.error('VIN decoding error:', error);
+        toast.error(`VIN decoding failed: ${error.message}`);
+        return;
+      }
+
+      console.log('VIN decoding result:', data);
+      
+      if (data.success) {
+        toast.success(`VIN decoded successfully! Vehicle Type: ${data.vehicle_type_nhtsa || 'Unknown'}, Body Style: ${data.body_style_nhtsa || 'Unknown'}`);
+      } else {
+        toast.error(`VIN decoding failed: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error testing VIN decoding:', error);
+      toast.error('Failed to test VIN decoding');
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -11,6 +41,19 @@ export default function Dashboard() {
           Welcome to your dealership automation center
         </p>
       </div>
+
+      {/* VIN Test Button */}
+      <Card>
+        <CardHeader>
+          <CardTitle>VIN Decoder Test</CardTitle>
+          <CardDescription>Test the NHTSA VIN decoding functionality</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={testVinDecoding}>
+            Test VIN: KNAGT4L3XH5156979
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Metrics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
