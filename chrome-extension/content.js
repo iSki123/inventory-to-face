@@ -463,17 +463,16 @@ class SalesonatorAutomator {
       this.log(`🗓️ Selecting year: ${year}`);
       console.log(`[YEAR DEBUG] Starting year selection for: ${year}`);
       
-      // Enhanced year dropdown selectors based on reverse engineering findings
+      // More specific year dropdown selectors for current Facebook interface
       const yearDropdownSelectors = [
-        'text:Year', // XPath text search (most reliable)
-        'aria:Year', // ARIA label approach
-        'text:Select year', // Alternative text
-        'placeholder:Year',
-        '[aria-label*="Year" i]', // Case insensitive
-        '[data-testid*="year" i]',
-        'select[name*="year" i]',
-        'div[role="button"]', // Generic button fallback
-        'div[role="combobox"]', // Generic combobox fallback
+        'input[placeholder*="Year" i]',
+        'div[aria-label*="Year" i]',
+        'label:contains("Year") + div[role="button"]',
+        'label:contains("Year") + div',
+        'form div:contains("Year"):not(label) div[role="button"]',
+        'form select:first-of-type',
+        'div[role="button"]:has-text("2024")',
+        'div[role="button"]:has-text("Year")',
         'select'
       ];
       
@@ -664,14 +663,31 @@ class SalesonatorAutomator {
       this.log(`🚗 Filling model: ${model}`);
       
       const modelInputSelectors = [
-        '[aria-label*="Model"]', 
-        'input[placeholder*="Model"]',
-        'input[name*="model"]',
-        'text:Model', // May appear as label text
-        'input[type="text"]:not([aria-label*="Year"]):not([aria-label*="Make"])'
+        'input[placeholder*="Model" i]',
+        'input[aria-label*="Model" i]', 
+        'label:contains("Model") + input',
+        'label:contains("Model") + div input',
+        'form div:contains("Model") input[type="text"]',
+        'input[name*="model" i]',
+        'input[type="text"]:nth-of-type(3)', // Often the 3rd text input after year/make
+        'input[type="text"]:not([placeholder*="Year" i]):not([placeholder*="Make" i]):not([placeholder*="Price" i])'
       ];
       
       const modelInput = await this.waitForElement(modelInputSelectors, 8000);
+      if (!modelInput) {
+        this.log('⚠️ Model input not found, trying alternative approach...');
+        // Try to find by position relative to make field
+        const allTextInputs = document.querySelectorAll('input[type="text"]');
+        if (allTextInputs.length >= 3) {
+          const possibleModelInput = allTextInputs[2]; // Usually 3rd input
+          await this.scrollIntoView(possibleModelInput);
+          await this.typeHumanLike(possibleModelInput, model);
+          this.log(`✅ Successfully filled model via position: ${model}`);
+          return true;
+        }
+        throw new Error('Model input not found');
+      }
+      
       await this.scrollIntoView(modelInput);
       await this.typeHumanLike(modelInput, model);
       
@@ -689,14 +705,33 @@ class SalesonatorAutomator {
       this.log(`📏 Filling mileage: ${mileage}`);
       
       const mileageInputSelectors = [
-        '[aria-label*="Mileage"]', 
-        'input[placeholder*="Mileage"]',
-        'input[name*="mileage"]',
-        'text:Mileage', // May appear as label text
-        'input[type="number"]:not([aria-label*="Price"]):not([aria-label*="Year"])'
+        'input[placeholder*="Mileage" i]',
+        'input[aria-label*="Mileage" i]', 
+        'label:contains("Mileage") + input',
+        'label:contains("Mileage") + div input',
+        'form div:contains("Mileage") input',
+        'input[name*="mileage" i]',
+        'input[type="number"]:not([placeholder*="Price" i]):not([placeholder*="Year" i])',
+        'input[type="text"][placeholder*="miles" i]'
       ];
       
       const mileageInput = await this.waitForElement(mileageInputSelectors, 8000);
+      if (!mileageInput) {
+        this.log('⚠️ Mileage input not found, trying alternative approach...');
+        // Look for any numeric input that might be mileage
+        const numericInputs = document.querySelectorAll('input[type="number"], input[inputmode="numeric"]');
+        for (const input of numericInputs) {
+          const label = this.findAssociatedLabel(input);
+          if (label && label.toLowerCase().includes('mile')) {
+            await this.scrollIntoView(input);
+            await this.typeHumanLike(input, mileage.toString());
+            this.log(`✅ Successfully filled mileage via label detection: ${mileage}`);
+            return true;
+          }
+        }
+        throw new Error('Mileage input not found');
+      }
+      
       await this.scrollIntoView(mileageInput);
       await this.typeHumanLike(mileageInput, mileage.toString());
       
@@ -1028,6 +1063,40 @@ class SalesonatorAutomator {
     }
     const byteArray = new Uint8Array(byteNumbers);
     return new Blob([byteArray], { type: contentType });
+  }
+
+  // Helper function to find associated label for an input
+  findAssociatedLabel(input) {
+    // Method 1: Check for aria-label
+    if (input.getAttribute('aria-label')) {
+      return input.getAttribute('aria-label');
+    }
+    
+    // Method 2: Check for label element via 'for' attribute
+    if (input.id) {
+      const label = document.querySelector(`label[for="${input.id}"]`);
+      if (label) return label.textContent.trim();
+    }
+    
+    // Method 3: Check for parent label
+    const parentLabel = input.closest('label');
+    if (parentLabel) return parentLabel.textContent.trim();
+    
+    // Method 4: Check for previous sibling label
+    let sibling = input.previousElementSibling;
+    while (sibling) {
+      if (sibling.tagName === 'LABEL') {
+        return sibling.textContent.trim();
+      }
+      sibling = sibling.previousElementSibling;
+    }
+    
+    // Method 5: Check for placeholder
+    if (input.placeholder) {
+      return input.placeholder;
+    }
+    
+    return '';
   }
 
   // Enhanced form submission with verification
