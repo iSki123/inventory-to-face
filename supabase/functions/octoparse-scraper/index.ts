@@ -7,6 +7,95 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Color mapping for Facebook Marketplace standardization
+const COLOR_KEYWORD_MAP: Record<string, string> = {
+  'silver': 'Silver',
+  'gray': 'Gray',
+  'grey': 'Gray',
+  'blue': 'Blue',
+  'black': 'Black',
+  'white': 'White',
+  'pearl': 'White',
+  'red': 'Red',
+  'green': 'Green',
+  'gold': 'Gold',
+  'brown': 'Brown',
+  'beige': 'Beige',
+  'tan': 'Tan',
+  'charcoal': 'Charcoal',
+  'burgundy': 'Burgundy',
+  'orange': 'Orange',
+  'yellow': 'Yellow',
+  'pink': 'Pink',
+  'purple': 'Purple',
+  'cream': 'Off white',
+  'ivory': 'Off white',
+  'champagne': 'Beige',
+  'bronze': 'Brown',
+  'copper': 'Orange',
+  'maroon': 'Burgundy',
+  'wine': 'Burgundy',
+  'crimson': 'Red',
+  'ruby': 'Red',
+  'azure': 'Blue',
+  'navy': 'Blue',
+  'teal': 'Green',
+  'lime': 'Green',
+  'olive': 'Green',
+  'forest': 'Green',
+  'slate': 'Gray',
+  'gunmetal': 'Charcoal',
+  'graphite': 'Charcoal',
+  'platinum': 'Silver',
+  'titanium': 'Silver',
+  'aluminum': 'Silver',
+  'storm': 'Gray',
+  'steel': 'Gray',
+  'midnight': 'Black',
+  'ebony': 'Black',
+  'obsidian': 'Black',
+  'vanilla': 'Off white',
+  'cherry': 'Red',
+  'emerald': 'Green',
+  'sage': 'Green',
+  'chocolate': 'Brown',
+  'coffee': 'Brown',
+  'espresso': 'Brown',
+  'mocha': 'Brown',
+  'sand': 'Tan',
+  'khaki': 'Beige',
+  'rust': 'Orange',
+  'sunshine': 'Yellow',
+  'lemon': 'Yellow',
+  'rose': 'Pink',
+  'violet': 'Purple',
+  'plum': 'Purple',
+  'lavender': 'Purple'
+};
+
+function standardizeExteriorColor(rawColor?: string): string {
+  if (!rawColor || typeof rawColor !== 'string') {
+    return 'Unknown';
+  }
+
+  const normalizedInput = rawColor.toLowerCase().trim();
+  
+  // Check for keyword matches
+  for (const [keyword, standardColor] of Object.entries(COLOR_KEYWORD_MAP)) {
+    if (normalizedInput.includes(keyword)) {
+      return standardColor;
+    }
+  }
+  
+  // If no keyword match found, return Unknown
+  return 'Unknown';
+}
+
+function standardizeInteriorColor(rawColor?: string): string {
+  // Always return Black as per requirements
+  return 'Black';
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -744,6 +833,12 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
           user_id: userId
         }, null, 2));
         
+        // Apply color standardization for Facebook Marketplace compatibility
+        const exterior_color_standardized = standardizeExteriorColor(vehicle.exterior_color);
+        const interior_color_standardized = standardizeInteriorColor(vehicle.interior_color);
+        
+        console.log(`Color standardization: ${vehicle.exterior_color} -> ${exterior_color_standardized}, ${vehicle.interior_color} -> ${interior_color_standardized}`);
+
         const { data: inserted, error } = await supabaseClient
           .from('vehicles')
           .insert([{
@@ -754,6 +849,8 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
             mileage: vehicle.mileage,
             exterior_color: vehicle.exterior_color,
             interior_color: vehicle.interior_color,
+            exterior_color_standardized,
+            interior_color_standardized,
             condition: vehicle.condition,
             fuel_type: vehicle.fuel_type,
             transmission: vehicle.transmission,
