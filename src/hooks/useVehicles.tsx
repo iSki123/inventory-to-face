@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { processVehicleColors } from '@/lib/colorMapping';
 
 export interface Vehicle {
   id: string;
@@ -14,6 +15,8 @@ export interface Vehicle {
   mileage?: number;
   exterior_color?: string;
   interior_color?: string;
+  exterior_color_standardized?: string;
+  interior_color_standardized?: string;
   fuel_type?: string;
   transmission?: string;
   engine?: string;
@@ -80,10 +83,13 @@ export const useVehicles = () => {
     try {
       if (!user) throw new Error('User not authenticated');
 
+      // Process colors before saving
+      const processedData = processVehicleColors(vehicleData);
+
       const { data, error } = await supabase
         .from('vehicles')
         .insert([{
-          ...vehicleData,
+          ...processedData,
           user_id: user.id,
         }])
         .select()
@@ -119,9 +125,14 @@ export const useVehicles = () => {
 
   const updateVehicle = async (id: string, updates: Partial<Vehicle>) => {
     try {
+      // Process colors if they're being updated
+      const processedUpdates = (updates.exterior_color || updates.interior_color) 
+        ? processVehicleColors(updates) 
+        : updates;
+
       const { data, error } = await supabase
         .from('vehicles')
-        .update(updates)
+        .update(processedUpdates)
         .eq('id', id)
         .select()
         .single();

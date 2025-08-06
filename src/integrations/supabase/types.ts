@@ -375,6 +375,7 @@ export type Database = {
           drivetrain: string | null
           engine: string | null
           exterior_color: string | null
+          exterior_color_standardized: string | null
           facebook_post_id: string | null
           facebook_post_status: string | null
           features: string[] | null
@@ -382,6 +383,7 @@ export type Database = {
           id: string
           images: string[] | null
           interior_color: string | null
+          interior_color_standardized: string | null
           is_featured: boolean | null
           last_posted_at: string | null
           lead_count: number | null
@@ -410,6 +412,7 @@ export type Database = {
           drivetrain?: string | null
           engine?: string | null
           exterior_color?: string | null
+          exterior_color_standardized?: string | null
           facebook_post_id?: string | null
           facebook_post_status?: string | null
           features?: string[] | null
@@ -417,6 +420,7 @@ export type Database = {
           id?: string
           images?: string[] | null
           interior_color?: string | null
+          interior_color_standardized?: string | null
           is_featured?: boolean | null
           last_posted_at?: string | null
           lead_count?: number | null
@@ -445,6 +449,7 @@ export type Database = {
           drivetrain?: string | null
           engine?: string | null
           exterior_color?: string | null
+          exterior_color_standardized?: string | null
           facebook_post_id?: string | null
           facebook_post_status?: string | null
           features?: string[] | null
@@ -452,6 +457,7 @@ export type Database = {
           id?: string
           images?: string[] | null
           interior_color?: string | null
+          interior_color_standardized?: string | null
           is_featured?: boolean | null
           last_posted_at?: string | null
           lead_count?: number | null

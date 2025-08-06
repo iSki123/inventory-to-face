@@ -90,6 +90,8 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
         mileage: formData.mileage,
         exterior_color: formData.exterior_color,
         interior_color: formData.interior_color,
+        exterior_color_standardized: formData.exterior_color_standardized,
+        interior_color_standardized: formData.interior_color_standardized,
         fuel_type: formData.fuel_type || 'gasoline',
         transmission: formData.transmission || 'automatic',
         engine: formData.engine,
