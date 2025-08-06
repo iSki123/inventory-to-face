@@ -151,7 +151,7 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
     if (vehicle) {
       setFormData(vehicle);
     } else if (profile) {
-      // When creating a new vehicle, populate with profile info only once
+      // When creating a new vehicle, populate with profile info
       setFormData({
         year: new Date().getFullYear(),
         make: '',
@@ -163,10 +163,23 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
         status: 'available',
         features: [],
         contact_phone: profile?.phone || '',
+        contact_email: profile?.email || '',
         location: profile?.location || '',
       });
     }
-  }, [vehicle, profile?.phone, profile?.location]); // Only depend on specific profile fields
+  }, [vehicle, profile]);
+
+  // Update profile-related fields when profile changes (for both new and existing vehicles)
+  useEffect(() => {
+    if (profile && formData) {
+      setFormData(prev => ({
+        ...prev,
+        contact_phone: prev.contact_phone || profile.phone || '',
+        contact_email: prev.contact_email || profile.email || '',
+        location: prev.location || profile.location || '',
+      }));
+    }
+  }, [profile?.phone, profile?.email, profile?.location]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,6 +245,7 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
           status: 'available',
           features: [],
           contact_phone: profile?.phone || '',
+          contact_email: profile?.email || '',
           location: profile?.location || '',
         });
       }
