@@ -2,10 +2,16 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-authorization, x-requested-with",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
+// Dynamic CORS headers per request (reflect origin)
+const getCorsHeaders = (req: Request) => {
+  const origin = req.headers.get("origin") || "*";
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Vary": "Origin",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-authorization, x-requested-with",
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
+    "Access-Control-Allow-Credentials": "true",
+  } as Record<string, string>;
 };
 
 
@@ -149,7 +155,7 @@ function standardizeInteriorColor(rawColor?: string): string {
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: getCorsHeaders(req) });
   }
 
   try {
@@ -221,7 +227,7 @@ serve(async (req) => {
         details: error.stack
       }),
       { 
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         status: 400 
       }
     );
@@ -283,7 +289,7 @@ async function startScraping(supabaseClient: any, sourceId: string, userId: stri
         message: 'Scraping started successfully',
         estimatedCompletion: '5-10 minutes'
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
     
   } catch (error) {
@@ -308,7 +314,7 @@ async function startScraping(supabaseClient: any, sourceId: string, userId: stri
         scrapedVehicles: mockScrapedData,
         warning: 'Using mock data due to API error'
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 }
@@ -333,7 +339,7 @@ async function getScrapingStatus(supabaseClient: any, sourceId: string) {
         lastScraped: source?.last_scraped_at,
         taskId: source?.octoparse_task_id
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 
@@ -360,7 +366,7 @@ async function getScrapingStatus(supabaseClient: any, sourceId: string) {
         taskId: source.octoparse_task_id,
         progress: result.progress || 100
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
     
   } catch (error) {
@@ -373,7 +379,7 @@ async function getScrapingStatus(supabaseClient: any, sourceId: string) {
         lastScraped: source.last_scraped_at,
         taskId: source.octoparse_task_id
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 }
@@ -500,7 +506,7 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
       message: `Successfully imported ${insertedVehicles.length} vehicles`,
       dataSource: accessToken && source.octoparse_task_id ? 'octoparse' : 'mock'
     }),
-    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
   );
 }
 
@@ -849,7 +855,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
           message: 'No vehicle data found in the specified task. The task may be empty or still processing.',
           taskId
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
     
@@ -965,7 +971,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
         message: `Successfully imported ${insertedVehicles.length} of ${vehicleData.length} vehicles from task ${taskId}`,
         taskId
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
     
   } catch (error) {
@@ -976,7 +982,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
         error: error.message || 'Failed to import task data',
         taskId
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 500 }
     );
   }
 }
@@ -1026,7 +1032,7 @@ async function listAvailableTasks() {
         })),
         message: `Found ${tasks.length} available tasks`
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
     
   } catch (error) {
@@ -1037,7 +1043,7 @@ async function listAvailableTasks() {
         error: error.message || 'Failed to fetch available tasks',
         tasks: []
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 500 }
     );
   }
 }
