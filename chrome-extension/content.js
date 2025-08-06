@@ -461,52 +461,145 @@ class SalesonatorAutomator {
   async selectYear(year) {
     try {
       this.log(`🗓️ Selecting year: ${year}`);
+      console.log(`[YEAR DEBUG] Starting year selection for: ${year}`);
       
-      // Find year dropdown
+      // Find year dropdown more reliably
       const yearDropdownSelectors = [
         'text:Year',
         '[aria-label*="Year"]',
+        'div[role="button"]:has-text("Year")',
         'span:has-text("Year")',
-        'div:has-text("Year")',
-        'button:has-text("Year")',
-        '[role="combobox"]:has-text("Year")'
+        '[data-testid*="year"]'
       ];
+      
+      console.log(`[YEAR DEBUG] Searching for year dropdown with selectors:`, yearDropdownSelectors);
       
       const yearDropdown = await this.waitForElement(yearDropdownSelectors, 8000);
       if (!yearDropdown) {
         throw new Error('Year dropdown not found');
       }
       
+      console.log(`[YEAR DEBUG] Found year dropdown:`, yearDropdown);
+      console.log(`[YEAR DEBUG] Dropdown tagName:`, yearDropdown.tagName);
+      console.log(`[YEAR DEBUG] Dropdown innerHTML:`, yearDropdown.innerHTML);
+      console.log(`[YEAR DEBUG] Dropdown attributes:`, Array.from(yearDropdown.attributes).map(a => `${a.name}="${a.value}"`));
+      
       await this.scrollIntoView(yearDropdown);
-      await this.delay(500);
-      
       this.log('📅 Found year dropdown, clicking to open...');
-      await this.performFacebookDropdownClick(yearDropdown);
-      await this.delay(1500);
       
-      // Find and click the year option
-      const allOptions = document.querySelectorAll('[role="option"]');
-      const yearOption = Array.from(allOptions).find(opt => 
-        opt.textContent?.trim() === year.toString()
-      );
+      console.log(`[YEAR DEBUG] Clicking year dropdown...`);
+      yearDropdown.click();
+      await this.delay(2000);
       
-      if (!yearOption) {
-        throw new Error(`Year option ${year} not found`);
+      console.log(`[YEAR DEBUG] Checking if dropdown opened...`);
+      const optionsAfterClick = document.querySelectorAll('[role="option"]');
+      console.log(`[YEAR DEBUG] Found options after click:`, optionsAfterClick.length);
+      
+      // Log first 20 options to debug
+      Array.from(optionsAfterClick).slice(0, 20).forEach((opt, idx) => {
+        console.log(`[YEAR DEBUG] Option ${idx}: ${opt.textContent?.trim()}`, opt);
+      });
+      
+      console.log(`[YEAR DEBUG] 🎯 Using enhanced option selection...`);
+      
+      // Use multiple approaches to find the year option
+      let yearOption = null;
+      
+      // Method 1: Find by exact text match using waitForElement
+      try {
+        const yearSelectors = [
+          `text:${year}`,
+          `[role="option"]:has-text("${year}")`,
+          `div:has-text("${year}")`,
+          `span:has-text("${year}")`,
+          `li:has-text("${year}")`,
+          `[data-value="${year}"]`,
+          `[aria-label*="${year}"]`,
+          `*[title="${year}"]`
+        ];
+        
+        console.log(`[YEAR DEBUG] Searching for year option with selectors:`, yearSelectors);
+        yearOption = await this.waitForElement(yearSelectors, 3000);
+        console.log(`[YEAR DEBUG] ✅ Found year option using waitForElement:`, yearOption);
+        console.log(`[YEAR DEBUG] Option text:`, yearOption?.textContent || yearOption?.innerHTML);
+        console.log(`[YEAR DEBUG] Option tagName:`, yearOption?.tagName);
+        console.log(`[YEAR DEBUG] Option role:`, yearOption?.getAttribute('role'));
+        console.log(`[YEAR DEBUG] Option ID:`, yearOption?.id);
+        console.log(`[YEAR DEBUG] Option classes:`, yearOption?.className);
+        
+        // Verify this is actually the year option we want
+        const optionText = yearOption?.textContent?.trim();
+        const manualYearOption = Array.from(optionsAfterClick).find(opt => 
+          opt.textContent?.trim() === year.toString()
+        );
+        console.log(`[YEAR DEBUG] 🔍 Manual search would find:`, manualYearOption);
+        console.log(`[YEAR DEBUG] 🔍 Are they the same element?`, yearOption === manualYearOption);
+        
+        if (yearOption !== manualYearOption) {
+          console.log(`[YEAR DEBUG] ⚠️ DIFFERENT ELEMENTS! Switching to manual match...`);
+          yearOption = manualYearOption;
+        }
+        
+      } catch (waitError) {
+        console.log(`[YEAR DEBUG] ⚠️ waitForElement failed, falling back to manual search:`, waitError.message);
+        
+        // Method 2: Manual search through options
+        yearOption = Array.from(optionsAfterClick).find(opt => 
+          opt.textContent?.trim() === year.toString()
+        );
       }
       
-      this.log(`📅 Found year option, clicking: ${year}`);
+      if (!yearOption) {
+        throw new Error(`Year option ${year} not found among ${optionsAfterClick.length} options`);
+      }
+      
+      console.log(`[YEAR DEBUG] 📅 Found year option, clicking: ${year}`);
       await this.performFacebookDropdownClick(yearOption);
       await this.delay(2000);
       
-      // Verify selection
+      // Enhanced verification
+      console.log(`[YEAR DEBUG] Verifying year selection...`);
       await this.delay(500);
-      const verification = yearDropdown.textContent?.includes(year.toString()) ||
-                          document.body.textContent?.includes(`${year} `);
+      console.log(`[YEAR DEBUG] Dropdown selected value:`, yearDropdown.textContent?.trim());
       
-      if (verification) {
+      // Check if year appears in any input fields
+      const allInputs = document.querySelectorAll('input');
+      console.log(`[YEAR DEBUG] Checking year inputs:`, allInputs.length);
+      allInputs.forEach((input, idx) => {
+        console.log(`[YEAR DEBUG] Input ${idx} value: ${input.value} name: ${input.name} aria-label: ${input.getAttribute('aria-label')}`);
+      });
+      
+      // Check dropdown text content
+      const dropdownText = yearDropdown.textContent?.trim();
+      const dropdownDataValue = yearDropdown.getAttribute('data-value');
+      console.log(`[YEAR DEBUG] Final dropdown text:`, dropdownText);
+      console.log(`[YEAR DEBUG] Final dropdown data-value:`, dropdownDataValue);
+      
+      // Check if year appears anywhere in the form
+      const formContent = document.querySelector('form')?.textContent || document.body.textContent;
+      const yearAppearsInForm = formContent.includes(year.toString()) && 
+                               (formContent.includes(`${year} `) || formContent.includes(` ${year}`));
+      console.log(`[YEAR DEBUG] Year appears in form:`, yearAppearsInForm);
+      
+      // Multiple verification methods
+      const verifications = {
+        dropdownContainsYear: dropdownText?.includes(year.toString()),
+        dataValueMatches: dropdownDataValue === year.toString(),
+        yearInForm: yearAppearsInForm,
+        yearInInput: Array.from(allInputs).some(input => input.value === year.toString())
+      };
+      
+      console.log(`[YEAR DEBUG] Year in dropdown:`, verifications.dropdownContainsYear);
+      console.log(`[YEAR DEBUG] Year in input:`, verifications.yearInInput);
+      console.log(`[YEAR DEBUG] Overall success:`, Object.values(verifications).some(v => v));
+      
+      const success = Object.values(verifications).some(v => v);
+      
+      if (success) {
         this.log('✅ Successfully selected year:', year);
         return true;
       } else {
+        console.log(`[YEAR DEBUG] Year selection may have failed - no evidence of selection found`);
         this.log('⚠️ Year selection verification failed for:', year);
         return false;
       }
@@ -979,35 +1072,80 @@ class SalesonatorAutomator {
     return Math.abs(hash).toString(36);
   }
 
-  // Download images via background script as fallback
+  // Download images via background script using Supabase proxy
   async downloadImagesViaBackground(imageUrls) {
     const files = [];
-    for (let i = 0; i < imageUrls.length; i++) {
-      const imageUrl = imageUrls[i];
-      try {
-        this.log(`📸 Downloading image ${i + 1}: ${imageUrl}`);
+    
+    // Try bulk download first for efficiency
+    try {
+      this.log(`📸 Attempting bulk download of ${imageUrls.length} images...`);
+      
+      const bulkResponse = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({
+          action: 'preDownloadImages',
+          imageUrls: imageUrls
+        }, resolve);
+      });
+      
+      if (bulkResponse && bulkResponse.success && bulkResponse.results) {
+        this.log(`📸 Bulk download completed: ${bulkResponse.successCount}/${bulkResponse.totalCount} successful`);
         
-        const response = await new Promise((resolve) => {
-          chrome.runtime.sendMessage({
-            action: 'fetchImage',
-            url: imageUrl
-          }, resolve);
-        });
-        
-        if (response && response.success) {
-          this.log(`📸 Successfully downloaded image ${i + 1} via proxy`);
-          const blob = this.base64ToBlob(response.data, 'image/jpeg');
-          const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
-          files.push(file);
-        } else {
-          this.log(`⚠️ Failed to download image ${i + 1}:`, response?.error || 'Unknown error');
+        // Retrieve the stored images
+        for (let i = 0; i < imageUrls.length; i++) {
+          const imageUrl = imageUrls[i];
+          const storageKey = `img_${this.hashString(imageUrl)}`;
+          
+          try {
+            const result = await chrome.storage.local.get(storageKey);
+            if (result[storageKey]) {
+              this.log(`📸 Retrieved bulk-downloaded image ${i + 1}`);
+              const blob = this.base64ToBlob(result[storageKey], 'image/jpeg');
+              const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
+              files.push(file);
+            } else {
+              this.log(`⚠️ Bulk-downloaded image ${i + 1} not found in storage`);
+              files.push(null);
+            }
+          } catch (error) {
+            this.log(`⚠️ Error retrieving bulk-downloaded image ${i + 1}:`, error);
+            files.push(null);
+          }
+        }
+      } else {
+        throw new Error('Bulk download failed or returned no results');
+      }
+    } catch (bulkError) {
+      this.log(`⚠️ Bulk download failed, falling back to individual downloads:`, bulkError.message);
+      
+      // Fallback to individual downloads
+      for (let i = 0; i < imageUrls.length; i++) {
+        const imageUrl = imageUrls[i];
+        try {
+          this.log(`📸 Downloading image ${i + 1}: ${imageUrl}`);
+          
+          const response = await new Promise((resolve) => {
+            chrome.runtime.sendMessage({
+              action: 'fetchImage',
+              url: imageUrl
+            }, resolve);
+          });
+          
+          if (response && response.success) {
+            this.log(`📸 Successfully downloaded image ${i + 1} via proxy`);
+            const blob = this.base64ToBlob(response.data, 'image/jpeg');
+            const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
+            files.push(file);
+          } else {
+            this.log(`⚠️ Failed to download image ${i + 1}:`, response?.error || 'Unknown error');
+            files.push(null);
+          }
+        } catch (error) {
+          this.log(`⚠️ Failed to download image ${i + 1}:`, error.message);
           files.push(null);
         }
-      } catch (error) {
-        this.log(`⚠️ Failed to download image ${i + 1}:`, error.message);
-        files.push(null);
       }
     }
+    
     return files;
   }
 
