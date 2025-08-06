@@ -265,8 +265,8 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Vehicle' : 'Add New Vehicle'}</DialogTitle>
+          <DialogDescription>Fill in vehicle details and save.</DialogDescription>
         </DialogHeader>
-        <DialogDescription id="vehicle-form-desc" className="sr-only">Fill in vehicle details and save.</DialogDescription>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Basic Information */}

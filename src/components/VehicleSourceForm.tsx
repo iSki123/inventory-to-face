@@ -69,8 +69,8 @@ export function VehicleSourceForm({ open, onOpenChange, onSubmit, source, isEdit
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Vehicle Source' : 'Add Vehicle Source'}</DialogTitle>
+          <DialogDescription>Configure a data source for scraping inventory.</DialogDescription>
         </DialogHeader>
-        <DialogDescription id="vehicle-source-form-desc" className="sr-only">Configure a data source for scraping inventory.</DialogDescription>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

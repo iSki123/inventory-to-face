@@ -53,7 +53,7 @@ export interface Vehicle {
 export const useVehicles = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
 
   const fetchVehicles = async () => {
@@ -161,10 +161,18 @@ export const useVehicles = () => {
       // Process colors before saving
       const processedData = processVehicleColors(vehicleData);
 
+      // Default contact info from profile when missing
+      const defaults = {
+        contact_phone: (processedData as any).contact_phone ?? profile?.phone ?? '',
+        contact_email: (processedData as any).contact_email ?? profile?.email ?? '',
+        location: (processedData as any).location ?? profile?.location ?? '',
+      };
+
       const { data, error } = await supabase
         .from('vehicles')
         .insert([{
           ...processedData,
+          ...defaults,
           user_id: user.id,
         }])
         .select()
