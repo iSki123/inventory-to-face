@@ -508,8 +508,13 @@ function parseOctoparseData(rawData: any[]): any[] {
   console.log('Raw data from Octoparse:', JSON.stringify(rawData, null, 2));
   console.log(`Total items to process: ${rawData.length}`);
   
+  if (!rawData || !Array.isArray(rawData)) {
+    console.error('Invalid rawData - not an array:', typeof rawData);
+    return [];
+  }
+  
   // Parse and transform Octoparse data to our vehicle format
-  return rawData.map((item: any, index: number) => {
+  const parsedVehicles = rawData.map((item: any, index: number) => {
     console.log(`\n=== Processing item ${index} ===`);
     console.log('Raw item data:', JSON.stringify(item, null, 2));
     
@@ -524,7 +529,7 @@ function parseOctoparseData(rawData: any[]): any[] {
         for (const key of Object.keys(item)) {
           if (key.toLowerCase() === lowerField || key.toLowerCase().includes(lowerField)) {
             const value = item[key];
-            if (value !== null && value !== undefined && value !== '') {
+            if (value !== null && value !== undefined && value !== '' && value !== 'N/A' && value !== 'n/a') {
               return value;
             }
           }
@@ -599,12 +604,12 @@ function parseOctoparseData(rawData: any[]): any[] {
     // Extract make - try multiple field variations
     const make = getFieldValue(['make', 'brand', 'manufacturer']) ||
                 item.make || item.Make || item.MAKE || item.brand || item.Brand || 
-                item.manufacturer || item.Manufacturer || 'Unknown';
+                item.manufacturer || item.Manufacturer || '';
     console.log('Found make:', make);
     
     // Extract model - try multiple field variations  
     const model = getFieldValue(['model', 'model_name']) ||
-                 item.model || item.Model || item.MODEL || item.model_name || item.modelName || 'Unknown';
+                 item.model || item.Model || item.MODEL || item.model_name || item.modelName || '';
     console.log('Found model:', model);
     
     // Extract VIN - try multiple field variations
@@ -632,19 +637,23 @@ function parseOctoparseData(rawData: any[]): any[] {
                        item.description || item.Description || item.desc || item.details ||
                        `${year} ${make} ${model}`;
     
-    // Extract images - check multiple possible field names and detect image URLs
+    // Extract images - more flexible image detection
     const extractImages = (data: any): string[] => {
       const images: string[] = [];
       const imageExtensions = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i;
+      const httpPattern = /^https?:\/\//i;
       
       // Function to check if a string is an image URL
       const isImageUrl = (url: string): boolean => {
-        if (typeof url !== 'string') return false;
-        return imageExtensions.test(url) || url.includes('image') || url.includes('photo') || url.includes('pic');
+        if (typeof url !== 'string' || url.length < 10) return false;
+        return httpPattern.test(url) && (imageExtensions.test(url) || url.includes('image') || url.includes('photo') || url.includes('pic') || url.includes('inventoryphotos'));
       };
       
-      // Check common image field names
-      const imageFields = ['images', 'image', 'Image', 'IMAGES', 'photos', 'Photos', 'PHOTOS', 'picture', 'Picture', 'PICTURE', 'pic', 'Pic', 'PIC', 'img', 'IMG'];
+      // Check common image field names first
+      const imageFields = [
+        'images', 'image', 'Image', 'IMAGES', 'IMAGE_URL', 'Image_URL', 'img', 'IMG', 'img2', 'img3', 'img4', 
+        'photos', 'Photos', 'PHOTOS', 'picture', 'Picture', 'PICTURE', 'pic', 'Pic', 'PIC', 'backup_img'
+      ];
       
       for (const field of imageFields) {
         if (data[field]) {
@@ -660,25 +669,27 @@ function parseOctoparseData(rawData: any[]): any[] {
         }
       }
       
-      // Also check all values in the object for potential image URLs
-      Object.values(data).forEach((value: any) => {
-        if (typeof value === 'string' && isImageUrl(value)) {
-          if (!images.includes(value)) {
-            images.push(value);
-          }
-        } else if (Array.isArray(value)) {
-          value.forEach((item: any) => {
-            if (typeof item === 'string' && isImageUrl(item)) {
-              if (!images.includes(item)) {
-                images.push(item);
-              }
+      // Also check all values in the object for potential image URLs if we haven't found many
+      if (images.length < 3) {
+        Object.entries(data).forEach(([key, value]: [string, any]) => {
+          if (typeof value === 'string' && isImageUrl(value)) {
+            if (!images.includes(value)) {
+              images.push(value);
             }
-          });
-        }
-      });
+          } else if (Array.isArray(value)) {
+            value.forEach((item: any) => {
+              if (typeof item === 'string' && isImageUrl(item)) {
+                if (!images.includes(item)) {
+                  images.push(item);
+                }
+              }
+            });
+          }
+        });
+      }
       
-      console.log(`Extracted ${images.length} images for item ${index}:`, images);
-      return images;
+      console.log(`Extracted ${images.length} images for ${make} ${model} (item ${index}):`, images.slice(0, 3));
+      return images.slice(0, 10); // Limit to 10 images max
     };
     
     const vehicle = {
@@ -704,23 +715,28 @@ function parseOctoparseData(rawData: any[]): any[] {
     
     console.log(`Processed vehicle ${index}:`, JSON.stringify(vehicle, null, 2));
     return vehicle;
-  }).filter(vehicle => {
-    // Filter out vehicles missing important details
-    const isValid = vehicle.make !== 'Unknown' && 
-                   vehicle.model !== 'Unknown' && 
-                   vehicle.images.length > 0 && // Must have at least one image
-                   vehicle.price > 0; // Must have a valid price
+  });
+
+  console.log(`Parsed ${parsedVehicles.length} raw vehicles before filtering`);
+  
+  return parsedVehicles.filter(vehicle => {
+    // More lenient filtering - only require essential fields
+    const hasBasicInfo = vehicle.make !== 'Unknown' && vehicle.model !== 'Unknown';
+    const hasPrice = vehicle.price > 0;
+    const hasMinimalData = hasBasicInfo && hasPrice;
     
-    if (!isValid) {
-      console.log(`Skipping vehicle due to missing important details: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, {
-        hasImages: vehicle.images.length > 0,
+    if (!hasMinimalData) {
+      console.log(`Skipping vehicle due to missing essential data: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, {
+        hasBasicInfo,
         hasPrice: vehicle.price > 0,
-        makeKnown: vehicle.make !== 'Unknown',
-        modelKnown: vehicle.model !== 'Unknown'
+        price: vehicle.price,
+        images: vehicle.images.length
       });
+    } else {
+      console.log(`Including vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} - Price: $${vehicle.price/100}, Images: ${vehicle.images.length}`);
     }
     
-    return isValid;
+    return hasMinimalData;
   });
 }
 
