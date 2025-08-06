@@ -98,6 +98,11 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
           else updates.transmission = 'Automatic transmission';
         }
 
+        // Default transmission if not provided by NHTSA and not already set
+        if (!vinData.transmission_nhtsa && !formData.transmission) {
+          updates.transmission = 'Automatic transmission';
+        }
+
         // Store NHTSA vehicle type data
         if (vinData.vehicle_type_nhtsa) {
           updates.vehicle_type_nhtsa = vinData.vehicle_type_nhtsa;
@@ -149,7 +154,10 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
   // Update form data when vehicle prop changes or profile loads
   useEffect(() => {
     if (vehicle) {
-      setFormData(vehicle);
+      setFormData({
+        ...vehicle,
+        transmission: vehicle.transmission || 'Automatic transmission',
+      });
     } else if (profile) {
       // When creating a new vehicle, populate with profile info
       setFormData({
