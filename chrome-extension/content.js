@@ -461,151 +461,58 @@ class SalesonatorAutomator {
   async selectYear(year) {
     try {
       this.log(`🗓️ Selecting year: ${year}`);
-      console.log(`[YEAR DEBUG] Starting year selection for: ${year}`);
       
-      // More specific year dropdown selectors for current Facebook interface
+      // Find year dropdown
       const yearDropdownSelectors = [
-        'input[placeholder*="Year" i]',
-        'div[aria-label*="Year" i]',
-        'label:contains("Year") + div[role="button"]',
-        'label:contains("Year") + div',
-        'form div:contains("Year"):not(label) div[role="button"]',
-        'form select:first-of-type',
-        'div[role="button"]:has-text("2024")',
-        'div[role="button"]:has-text("Year")',
-        'select'
+        'text:Year',
+        '[aria-label*="Year"]',
+        'span:has-text("Year")',
+        'div:has-text("Year")',
+        'button:has-text("Year")',
+        '[role="combobox"]:has-text("Year")'
       ];
       
-      console.log('[YEAR DEBUG] Searching for year dropdown with selectors:', yearDropdownSelectors);
       const yearDropdown = await this.waitForElement(yearDropdownSelectors, 8000);
-      
       if (!yearDropdown) {
-        console.error('[YEAR DEBUG] No year dropdown found!');
         throw new Error('Year dropdown not found');
       }
       
-      console.log('[YEAR DEBUG] Found year dropdown:', yearDropdown);
-      console.log('[YEAR DEBUG] Dropdown tagName:', yearDropdown.tagName);
-      console.log('[YEAR DEBUG] Dropdown innerHTML:', yearDropdown.innerHTML);
-      console.log('[YEAR DEBUG] Dropdown attributes:', Array.from(yearDropdown.attributes).map(attr => `${attr.name}="${attr.value}"`));
-      
       await this.scrollIntoView(yearDropdown);
-      await this.delay(this.randomDelay(500, 1000));
+      await this.delay(500);
       
       this.log('📅 Found year dropdown, clicking to open...');
-      console.log('[YEAR DEBUG] Clicking year dropdown...');
-      yearDropdown.click();
-      await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
+      await this.performFacebookDropdownClick(yearDropdown);
+      await this.delay(1500);
       
-      // Check if dropdown opened by looking for options
-      console.log('[YEAR DEBUG] Checking if dropdown opened...');
+      // Find and click the year option
       const allOptions = document.querySelectorAll('[role="option"]');
-      console.log('[YEAR DEBUG] Found options after click:', allOptions.length);
-      allOptions.forEach((opt, i) => {
-        if (i < 20) { // Only log first 20 to avoid truncation
-          console.log(`[YEAR DEBUG] Option ${i}:`, opt.textContent?.trim(), opt);
-        }
-      });
-      
-      // Enhanced option selection with multiple approaches
-      console.log(`[YEAR DEBUG] 🎯 Using enhanced option selection...`);
-      
-      const yearOptionSelectors = [
-        `text:${year}`, // XPath exact text match
-        `text:${year.toString().trim()}`, // Trimmed version
-        `aria:${year}`, // ARIA approach
-        `[data-value="${year}"]`, // Exact data-value
-        `[data-value*="${year}"]`, // Contains data-value
-        `[value="${year}"]`, // Standard value attribute
-        `[role="option"][aria-label*="${year}"]`, // Role with ARIA
-        `[role="option"]` // Generic option fallback
-      ];
-      
-      console.log(`[YEAR DEBUG] Searching for year option with selectors:`, yearOptionSelectors);
-      
-      const yearOption = await this.waitForElement(yearOptionSelectors, 5000);
+      const yearOption = Array.from(allOptions).find(opt => 
+        opt.textContent?.trim() === year.toString()
+      );
       
       if (!yearOption) {
-        console.error(`[YEAR DEBUG] ❌ Year option not found using waitForElement!`);
-        // Fallback to manual search if needed
-        const fallbackOptions = document.querySelectorAll('[role="option"]');
-        console.log(`[YEAR DEBUG] Available options for fallback:`, Array.from(fallbackOptions).slice(0, 10).map(opt => opt.textContent?.trim()));
-        return false;
+        throw new Error(`Year option ${year} not found`);
       }
       
-      console.log(`[YEAR DEBUG] ✅ Found year option using waitForElement:`, yearOption);
-      console.log(`[YEAR DEBUG] Option text:`, yearOption.textContent?.trim());
-      console.log(`[YEAR DEBUG] Option tagName:`, yearOption.tagName);
-      console.log(`[YEAR DEBUG] Option role:`, yearOption.getAttribute('role'));
-      console.log(`[YEAR DEBUG] Option ID:`, yearOption.id);
-      console.log(`[YEAR DEBUG] Option classes:`, yearOption.className);
+      this.log(`📅 Found year option, clicking: ${year}`);
+      await this.performFacebookDropdownClick(yearOption);
+      await this.delay(2000);
       
-      // Let's check what the manual search would find for comparison
-      const manualOptions = document.querySelectorAll('[role="option"]');
-      const manualMatch = Array.from(manualOptions).find(opt => opt.textContent?.trim() === year.toString());
-      console.log(`[YEAR DEBUG] 🔍 Manual search would find:`, manualMatch);
-      console.log(`[YEAR DEBUG] 🔍 Are they the same element?`, yearOption === manualMatch);
+      // Verify selection
+      await this.delay(500);
+      const verification = yearDropdown.textContent?.includes(year.toString()) ||
+                          document.body.textContent?.includes(`${year} `);
       
-      if (manualMatch && yearOption !== manualMatch) {
-        console.log(`[YEAR DEBUG] ⚠️ DIFFERENT ELEMENTS! Switching to manual match...`);
-        await this.performFacebookDropdownClick(manualMatch);
+      if (verification) {
+        this.log('✅ Successfully selected year:', year);
+        return true;
       } else {
-        console.log(`[YEAR DEBUG] 🖱️ Using React-compatible click sequence...`);
-        await this.performFacebookDropdownClick(yearOption);
-      }
-      
-      await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
-      
-      await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
-      
-      // Verify selection worked - check multiple ways
-      console.log('[YEAR DEBUG] Verifying year selection...');
-      const selectedValue = yearDropdown.textContent?.trim() || yearDropdown.value;
-      console.log('[YEAR DEBUG] Dropdown selected value:', selectedValue);
-      
-      // Check if any input fields have the year value
-      const yearInputs = document.querySelectorAll('input[type="text"], input[type="number"], input[name*="year"], [aria-label*="Year"]');
-      console.log('[YEAR DEBUG] Checking year inputs:', yearInputs.length);
-      yearInputs.forEach((input, i) => {
-        console.log(`[YEAR DEBUG] Input ${i} value:`, input.value, 'name:', input.name, 'aria-label:', input.getAttribute('aria-label'));
-      });
-      
-      // Check if the dropdown still shows the placeholder or selected value
-      const dropdownText = yearDropdown.textContent?.trim();
-      const dropdownValue = yearDropdown.getAttribute('data-value') || yearDropdown.value;
-      console.log('[YEAR DEBUG] Final dropdown text:', dropdownText);
-      console.log('[YEAR DEBUG] Final dropdown data-value:', dropdownValue);
-      
-      // More aggressive verification - check if year appears anywhere in the form
-      const formContainer = yearDropdown.closest('form') || document.querySelector('form');
-      if (formContainer) {
-        const yearInForm = formContainer.textContent?.includes(year.toString());
-        console.log('[YEAR DEBUG] Year appears in form:', yearInForm);
-      }
-      
-      // Check if this looks like success (either dropdown shows year or some input has year)
-      const hasYearInDropdown = dropdownText?.includes(year.toString()) || dropdownValue?.includes(year.toString());
-      const hasYearInInput = Array.from(yearInputs).some(input => input.value?.includes(year.toString()));
-      const selectionSuccess = hasYearInDropdown || hasYearInInput;
-      
-      console.log('[YEAR DEBUG] Year in dropdown:', hasYearInDropdown);
-      console.log('[YEAR DEBUG] Year in input:', hasYearInInput);
-      console.log('[YEAR DEBUG] Overall success:', selectionSuccess);
-      
-      if (!selectionSuccess) {
-        console.warn('[YEAR DEBUG] Year selection may have failed - no evidence of selection found');
-        this.log(`⚠️ Year selection verification failed for: ${year}`);
+        this.log('⚠️ Year selection verification failed for:', year);
         return false;
       }
-      
-      this.log(`✅ Successfully selected year: ${year}`);
-      console.log(`[YEAR DEBUG] Year selection completed successfully`);
-      return true;
       
     } catch (error) {
-      console.error(`[YEAR DEBUG] Year selection failed:`, error);
-      console.error(`[YEAR DEBUG] Error stack:`, error.stack);
-      this.log(`⚠️ Could not select year: ${year}`, error);
+      this.log('⚠️ Could not select year:', year, error);
       return false;
     }
   }
@@ -663,38 +570,49 @@ class SalesonatorAutomator {
       this.log(`🚗 Filling model: ${model}`);
       
       const modelInputSelectors = [
-        'input[placeholder*="Model" i]',
-        'input[aria-label*="Model" i]', 
-        'label:contains("Model") + input',
-        'label:contains("Model") + div input',
-        'form div:contains("Model") input[type="text"]',
-        'input[name*="model" i]',
-        'input[type="text"]:nth-of-type(3)', // Often the 3rd text input after year/make
-        'input[type="text"]:not([placeholder*="Year" i]):not([placeholder*="Make" i]):not([placeholder*="Price" i])'
+        '[aria-label*="Model"]',
+        'input[placeholder*="Model"]',
+        'input[name*="model"]',
+        '[data-testid*="model"]'
       ];
       
       const modelInput = await this.waitForElement(modelInputSelectors, 8000);
       if (!modelInput) {
-        this.log('⚠️ Model input not found, trying alternative approach...');
-        // Try to find by position relative to make field
-        const allTextInputs = document.querySelectorAll('input[type="text"]');
-        if (allTextInputs.length >= 3) {
-          const possibleModelInput = allTextInputs[2]; // Usually 3rd input
-          await this.scrollIntoView(possibleModelInput);
-          await this.typeHumanLike(possibleModelInput, model);
-          this.log(`✅ Successfully filled model via position: ${model}`);
-          return true;
-        }
         throw new Error('Model input not found');
       }
       
       await this.scrollIntoView(modelInput);
-      await this.typeHumanLike(modelInput, model);
       
-      this.log(`✅ Successfully filled model: ${model}`);
-      return true;
+      // Clear existing value and set new one
+      modelInput.focus();
+      modelInput.select();
+      await this.delay(100);
+      
+      // Use React-compatible value setting
+      this.setNativeValue(modelInput, model);
+      
+      // Trigger React events
+      modelInput.dispatchEvent(new Event('input', { bubbles: true }));
+      modelInput.dispatchEvent(new Event('change', { bubbles: true }));
+      modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
+      
+      await this.delay(500);
+      
+      // Verify value was set
+      if (modelInput.value === model) {
+        this.log('✅ Successfully filled model:', model);
+        return true;
+      } else {
+        this.log('⚠️ Model value verification failed. Expected:', model, 'Got:', modelInput.value);
+        // Try typing approach as fallback
+        modelInput.focus();
+        modelInput.select();
+        await this.typeHumanLike(modelInput, model);
+        return true;
+      }
+      
     } catch (error) {
-      this.log(`⚠️ Could not fill model: ${model}`, error);
+      this.log('⚠️ Could not fill model:', model, error);
       return false;
     }
   }
@@ -705,40 +623,50 @@ class SalesonatorAutomator {
       this.log(`📏 Filling mileage: ${mileage}`);
       
       const mileageInputSelectors = [
-        'input[placeholder*="Mileage" i]',
-        'input[aria-label*="Mileage" i]', 
-        'label:contains("Mileage") + input',
-        'label:contains("Mileage") + div input',
-        'form div:contains("Mileage") input',
-        'input[name*="mileage" i]',
-        'input[type="number"]:not([placeholder*="Price" i]):not([placeholder*="Year" i])',
-        'input[type="text"][placeholder*="miles" i]'
+        '[aria-label*="Mileage"]',
+        'input[placeholder*="Mileage"]',
+        'input[placeholder*="mileage"]',
+        'input[name*="mileage"]',
+        '[data-testid*="mileage"]'
       ];
       
       const mileageInput = await this.waitForElement(mileageInputSelectors, 8000);
       if (!mileageInput) {
-        this.log('⚠️ Mileage input not found, trying alternative approach...');
-        // Look for any numeric input that might be mileage
-        const numericInputs = document.querySelectorAll('input[type="number"], input[inputmode="numeric"]');
-        for (const input of numericInputs) {
-          const label = this.findAssociatedLabel(input);
-          if (label && label.toLowerCase().includes('mile')) {
-            await this.scrollIntoView(input);
-            await this.typeHumanLike(input, mileage.toString());
-            this.log(`✅ Successfully filled mileage via label detection: ${mileage}`);
-            return true;
-          }
-        }
         throw new Error('Mileage input not found');
       }
       
       await this.scrollIntoView(mileageInput);
-      await this.typeHumanLike(mileageInput, mileage.toString());
       
-      this.log(`✅ Successfully filled mileage: ${mileage}`);
-      return true;
+      // Clear existing value and set new one
+      mileageInput.focus();
+      mileageInput.select();
+      await this.delay(100);
+      
+      // Use React-compatible value setting
+      this.setNativeValue(mileageInput, mileage.toString());
+      
+      // Trigger React events
+      mileageInput.dispatchEvent(new Event('input', { bubbles: true }));
+      mileageInput.dispatchEvent(new Event('change', { bubbles: true }));
+      mileageInput.dispatchEvent(new Event('blur', { bubbles: true }));
+      
+      await this.delay(500);
+      
+      // Verify value was set
+      if (mileageInput.value === mileage.toString()) {
+        this.log('✅ Successfully filled mileage:', mileage);
+        return true;
+      } else {
+        this.log('⚠️ Mileage value verification failed. Expected:', mileage.toString(), 'Got:', mileageInput.value);
+        // Try typing approach as fallback
+        mileageInput.focus();
+        mileageInput.select();
+        await this.typeHumanLike(mileageInput, mileage.toString());
+        return true;
+      }
+      
     } catch (error) {
-      this.log(`⚠️ Could not fill mileage: ${mileage}`, error);
+      this.log('⚠️ Could not fill mileage:', mileage, error);
       return false;
     }
   }
@@ -749,21 +677,50 @@ class SalesonatorAutomator {
       this.log(`💰 Filling price: ${price}`);
       
       const priceInputSelectors = [
-        '[aria-label*="Price"]', 
+        '[aria-label*="Price"]',
         'input[placeholder*="Price"]',
+        'input[placeholder*="price"]',
         'input[name*="price"]',
-        'text:Price', // May appear as label text  
-        'input[type="number"]:not([aria-label*="Mileage"]):not([aria-label*="Year"])'
+        '[data-testid*="price"]'
       ];
       
       const priceInput = await this.waitForElement(priceInputSelectors, 8000);
-      await this.scrollIntoView(priceInput);
-      await this.typeHumanLike(priceInput, price.toString());
+      if (!priceInput) {
+        throw new Error('Price input not found');
+      }
       
-      this.log(`✅ Successfully filled price: ${price}`);
-      return true;
+      await this.scrollIntoView(priceInput);
+      
+      // Clear existing value and set new one
+      priceInput.focus();
+      priceInput.select();
+      await this.delay(100);
+      
+      // Use React-compatible value setting
+      this.setNativeValue(priceInput, price.toString());
+      
+      // Trigger React events
+      priceInput.dispatchEvent(new Event('input', { bubbles: true }));
+      priceInput.dispatchEvent(new Event('change', { bubbles: true }));
+      priceInput.dispatchEvent(new Event('blur', { bubbles: true }));
+      
+      await this.delay(500);
+      
+      // Verify value was set
+      if (priceInput.value === price.toString()) {
+        this.log('✅ Successfully filled price:', price);
+        return true;
+      } else {
+        this.log('⚠️ Price value verification failed. Expected:', price.toString(), 'Got:', priceInput.value);
+        // Try typing approach as fallback
+        priceInput.focus();
+        priceInput.select();
+        await this.typeHumanLike(priceInput, price.toString());
+        return true;
+      }
+      
     } catch (error) {
-      this.log(`⚠️ Could not fill price: ${price}`, error);
+      this.log('⚠️ Could not fill price:', price, error);
       return false;
     }
   }
@@ -1038,16 +995,16 @@ class SalesonatorAutomator {
         });
         
         if (response && response.success) {
-          this.log(`📸 Successfully downloaded image ${i + 1}`);
+          this.log(`📸 Successfully downloaded image ${i + 1} via proxy`);
           const blob = this.base64ToBlob(response.data, 'image/jpeg');
           const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
           files.push(file);
         } else {
-          this.log(`⚠️ Failed to download image ${i + 1}:`, response?.error);
+          this.log(`⚠️ Failed to download image ${i + 1}:`, response?.error || 'Unknown error');
           files.push(null);
         }
       } catch (error) {
-        this.log(`⚠️ Error downloading image ${i + 1}:`, error);
+        this.log(`⚠️ Failed to download image ${i + 1}:`, error.message);
         files.push(null);
       }
     }
