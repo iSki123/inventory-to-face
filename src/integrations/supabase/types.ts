@@ -367,19 +367,23 @@ export type Database = {
       vehicles: {
         Row: {
           ai_description: string | null
+          body_style_nhtsa: string | null
           condition: string | null
           contact_email: string | null
           contact_phone: string | null
           created_at: string
           description: string | null
           drivetrain: string | null
+          drivetrain_nhtsa: string | null
           engine: string | null
+          engine_nhtsa: string | null
           exterior_color: string | null
           exterior_color_standardized: string | null
           facebook_post_id: string | null
           facebook_post_status: string | null
           features: string[] | null
           fuel_type: string | null
+          fuel_type_nhtsa: string | null
           id: string
           images: string[] | null
           interior_color: string | null
@@ -395,28 +399,35 @@ export type Database = {
           price: number
           status: string | null
           transmission: string | null
+          transmission_nhtsa: string | null
           trim: string | null
           updated_at: string
           user_id: string
+          vehicle_type_nhtsa: string | null
           view_count: number | null
           vin: string | null
+          vin_decoded_at: string | null
           year: number
         }
         Insert: {
           ai_description?: string | null
+          body_style_nhtsa?: string | null
           condition?: string | null
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
           description?: string | null
           drivetrain?: string | null
+          drivetrain_nhtsa?: string | null
           engine?: string | null
+          engine_nhtsa?: string | null
           exterior_color?: string | null
           exterior_color_standardized?: string | null
           facebook_post_id?: string | null
           facebook_post_status?: string | null
           features?: string[] | null
           fuel_type?: string | null
+          fuel_type_nhtsa?: string | null
           id?: string
           images?: string[] | null
           interior_color?: string | null
@@ -432,28 +443,35 @@ export type Database = {
           price: number
           status?: string | null
           transmission?: string | null
+          transmission_nhtsa?: string | null
           trim?: string | null
           updated_at?: string
           user_id: string
+          vehicle_type_nhtsa?: string | null
           view_count?: number | null
           vin?: string | null
+          vin_decoded_at?: string | null
           year: number
         }
         Update: {
           ai_description?: string | null
+          body_style_nhtsa?: string | null
           condition?: string | null
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
           description?: string | null
           drivetrain?: string | null
+          drivetrain_nhtsa?: string | null
           engine?: string | null
+          engine_nhtsa?: string | null
           exterior_color?: string | null
           exterior_color_standardized?: string | null
           facebook_post_id?: string | null
           facebook_post_status?: string | null
           features?: string[] | null
           fuel_type?: string | null
+          fuel_type_nhtsa?: string | null
           id?: string
           images?: string[] | null
           interior_color?: string | null
@@ -469,11 +487,14 @@ export type Database = {
           price?: number
           status?: string | null
           transmission?: string | null
+          transmission_nhtsa?: string | null
           trim?: string | null
           updated_at?: string
           user_id?: string
+          vehicle_type_nhtsa?: string | null
           view_count?: number | null
           vin?: string | null
+          vin_decoded_at?: string | null
           year?: number
         }
         Relationships: []

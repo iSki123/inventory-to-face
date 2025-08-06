@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { processVehicleColors } from '@/lib/colorMapping';
+import { decodeVin } from '@/lib/vinDecoding';
 
 export interface Vehicle {
   id: string;
@@ -21,6 +22,13 @@ export interface Vehicle {
   transmission?: string;
   engine?: string;
   drivetrain?: string;
+  body_style_nhtsa?: string;
+  fuel_type_nhtsa?: string;
+  transmission_nhtsa?: string;
+  engine_nhtsa?: string;
+  vehicle_type_nhtsa?: string;
+  drivetrain_nhtsa?: string;
+  vin_decoded_at?: string;
   price: number;
   original_price?: number;
   condition?: 'new' | 'used' | 'certified';
@@ -84,7 +92,33 @@ export const useVehicles = () => {
       if (!user) throw new Error('User not authenticated');
 
       // Process colors before saving
-      const processedData = processVehicleColors(vehicleData);
+      let processedData = processVehicleColors(vehicleData);
+
+      // Decode VIN if provided
+      if (processedData.vin) {
+        try {
+          const vinData = await decodeVin(processedData.vin);
+          if (vinData.success) {
+            processedData = {
+              ...processedData,
+              body_style_nhtsa: vinData.body_style_nhtsa,
+              fuel_type_nhtsa: vinData.fuel_type_nhtsa,
+              transmission_nhtsa: vinData.transmission_nhtsa,
+              engine_nhtsa: vinData.engine_nhtsa,
+              vehicle_type_nhtsa: vinData.vehicle_type_nhtsa,
+              drivetrain_nhtsa: vinData.drivetrain_nhtsa,
+              vin_decoded_at: vinData.vin_decoded_at
+            };
+            toast({
+              title: "Success",
+              description: "VIN decoded successfully",
+            });
+          }
+        } catch (vinError) {
+          console.warn('VIN decoding failed:', vinError);
+          // Continue without VIN data
+        }
+      }
 
       const { data, error } = await supabase
         .from('vehicles')
@@ -126,9 +160,38 @@ export const useVehicles = () => {
   const updateVehicle = async (id: string, updates: Partial<Vehicle>) => {
     try {
       // Process colors if they're being updated
-      const processedUpdates = (updates.exterior_color || updates.interior_color) 
+      let processedUpdates = (updates.exterior_color || updates.interior_color) 
         ? processVehicleColors(updates) 
         : updates;
+
+      // Decode VIN if it's being updated and different from existing
+      if (updates.vin) {
+        const existingVehicle = vehicles.find(v => v.id === id);
+        if (!existingVehicle?.vin_decoded_at || existingVehicle.vin !== updates.vin) {
+          try {
+            const vinData = await decodeVin(updates.vin);
+            if (vinData.success) {
+              processedUpdates = {
+                ...processedUpdates,
+                body_style_nhtsa: vinData.body_style_nhtsa,
+                fuel_type_nhtsa: vinData.fuel_type_nhtsa,
+                transmission_nhtsa: vinData.transmission_nhtsa,
+                engine_nhtsa: vinData.engine_nhtsa,
+                vehicle_type_nhtsa: vinData.vehicle_type_nhtsa,
+                drivetrain_nhtsa: vinData.drivetrain_nhtsa,
+                vin_decoded_at: vinData.vin_decoded_at
+              };
+              toast({
+                title: "Success",
+                description: "VIN decoded successfully",
+              });
+            }
+          } catch (vinError) {
+            console.warn('VIN decoding failed:', vinError);
+            // Continue without VIN data
+          }
+        }
+      }
 
       const { data, error } = await supabase
         .from('vehicles')
