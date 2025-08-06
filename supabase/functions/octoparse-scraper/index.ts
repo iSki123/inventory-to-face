@@ -754,10 +754,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
 
     for (const vehicle of vehicleData) {
       try {
-        // Skip VIN decoding for now to isolate the issue
-        console.log(`Processing vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
-        
-        // Generate AI description with custom prompt if provided, but don't fail if it doesn't work
+        // Generate AI description if needed
         let aiDescription = null;
         let finalDescription = vehicle.description || `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
         
@@ -771,28 +768,16 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
               }
             });
 
-            // Accept both success=true responses and fallback descriptions from errors
             if (data?.description) {
               aiDescription = data.description;
-              finalDescription = aiDescription; // Use AI description as the main description
+              finalDescription = aiDescription;
               console.log(`Generated AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
-            } else {
-              console.log('AI description generation failed, continuing without it:', error?.message || 'Unknown error');
             }
           } catch (error) {
             console.warn('Failed to generate AI description, continuing without it:', error);
           }
         }
-
         console.log(`Inserting vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
-        console.log('Vehicle data to insert:', JSON.stringify({
-          year: vehicle.year,
-          make: vehicle.make,
-          model: vehicle.model,
-          price: vehicle.price,
-          mileage: vehicle.mileage,
-          user_id: userId
-        }, null, 2));
         
         const { data: inserted, error } = await supabaseClient
           .from('vehicles')
@@ -818,21 +803,17 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
             contact_email: vehicle.contact_email,
             user_id: userId,
             status: 'available',
-            facebook_post_status: 'draft',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            facebook_post_status: 'draft'
           }])
           .select()
           .single();
 
-        console.log('Database insertion result:', { data: inserted, error: error });
-        
         if (!error && inserted) {
           insertedVehicles.push(inserted);
-          console.log(`Successfully inserted vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} with ID: ${inserted.id}`);
+          console.log(`Successfully inserted vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
         } else {
-          console.error(`Failed to insert vehicle ${vehicle.year} ${vehicle.make} ${vehicle.model}:`, error);
-          errors.push({ vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`, error: error?.message });
+          console.error(`Failed to insert vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, error);
+          errors.push({ vehicle, error: error.message });
         }
       } catch (error) {
         console.error('Error processing vehicle:', error);
