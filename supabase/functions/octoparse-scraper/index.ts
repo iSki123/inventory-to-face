@@ -637,12 +637,20 @@ function generateMockVehicleData() {
 }
 
 async function importSpecificTask(supabaseClient: any, taskId: string, userId: string, aiDescriptionPrompt?: string) {
+  console.log('=== IMPORT SPECIFIC TASK STARTED ===');
+  console.log('Task ID:', taskId, 'User ID:', userId);
+  
   const accessToken = Deno.env.get('OCTOPARSE_API_KEY');
+  console.log('Access token exists:', !!accessToken);
+  console.log('Access token length:', accessToken?.length || 0);
+  
   if (!accessToken) {
-    throw new Error('Octoparse access token not configured');
+    console.error('Octoparse access token not configured');
+    throw new Error('Octoparse access token not configured - please contact support to update the API key');
   }
 
   try {
+    console.log('Calling importSpecificTask...');
     console.log(`Importing data from task ID: ${taskId}`);
     console.log(`Using Octoparse API URL: https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${taskId}&offset=0&size=1000`);
     
@@ -676,7 +684,13 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
     } else {
       const errorText = await response.text();
       console.error(`Failed to fetch data for task ${taskId}:`, response.status, errorText);
-      throw new Error(`Failed to fetch data for task ${taskId}: ${response.status} ${response.statusText}`);
+      
+      // If it's a 401 error, provide specific guidance about API key
+      if (response.status === 401) {
+        throw new Error(`Octoparse API key is invalid or expired. Please contact support to update the API key. Error: ${errorText}`);
+      }
+      
+      throw new Error(`Failed to fetch data for task ${taskId}: ${response.status} Unauthorized`);
     }
     
     if (vehicleData.length === 0) {
