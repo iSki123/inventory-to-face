@@ -12,7 +12,12 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let requestBody;
   try {
+    // Parse request body first and store it
+    requestBody = await req.json();
+    console.log('Request received:', JSON.stringify(requestBody, null, 2));
+
     // Initialize Supabase client
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -20,7 +25,7 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    const { action, sourceId, userId, taskId, aiDescriptionPrompt } = await req.json();
+    const { action, sourceId, userId, taskId, aiDescriptionPrompt } = requestBody;
 
     if (!action || !userId) {
       throw new Error('action and userId are required');
@@ -77,12 +82,9 @@ serve(async (req) => {
       headers: Object.fromEntries(req.headers.entries())
     });
     
-    // Log the specific action and parameters that caused the error
-    try {
-      const requestBody = await req.clone().json();
+    // Log the request body that caused the error
+    if (requestBody) {
       console.error('Request body:', JSON.stringify(requestBody, null, 2));
-    } catch (parseError) {
-      console.error('Could not parse request body:', parseError.message);
     }
     
     return new Response(
