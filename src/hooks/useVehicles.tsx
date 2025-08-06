@@ -96,10 +96,42 @@ export const useVehicles = () => {
 
             if (!vinError && vinData?.success) {
               console.log(`VIN decoded for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
-              // Update local state with decoded data
-              setVehicles(prev => prev.map(v => 
-                v.id === vehicle.id 
-                  ? { ...v, ...vinData.vinData }
+              const decoded = vinData.vinData || {};
+              const mapped: Partial<Vehicle> = { ...decoded };
+
+              // Map body style to Facebook-friendly categories
+              if (decoded.body_style_nhtsa) {
+                const bs = (decoded.body_style_nhtsa as string).toLowerCase();
+                if (bs.includes('convertible')) mapped.body_style_nhtsa = 'Convertible';
+                else if (bs.includes('coupe')) mapped.body_style_nhtsa = 'Coupe';
+                else if (bs.includes('hatchback')) mapped.body_style_nhtsa = 'Hatchback';
+                else if (bs.includes('sedan')) mapped.body_style_nhtsa = 'Sedan';
+                else if (bs.includes('suv') || bs.includes('sport utility')) mapped.body_style_nhtsa = 'SUV';
+                else if (bs.includes('pickup') || bs.includes('truck')) mapped.body_style_nhtsa = 'Truck';
+                else if (bs.includes('van') || bs.includes('minivan')) mapped.body_style_nhtsa = 'Van/Minivan';
+                else if (bs.includes('wagon')) mapped.body_style_nhtsa = 'Wagon';
+              }
+
+              // Map fuel type to UI field
+              if (decoded.fuel_type_nhtsa) {
+                const ft = (decoded.fuel_type_nhtsa as string).toLowerCase();
+                if (ft.includes('electric')) mapped.fuel_type = 'Electric';
+                else if (ft.includes('hybrid') && ft.includes('plug')) mapped.fuel_type = 'Plug-in hybrid';
+                else if (ft.includes('hybrid')) mapped.fuel_type = 'Hybrid';
+                else if (ft.includes('diesel')) mapped.fuel_type = 'Diesel';
+                else if (ft.includes('flex')) mapped.fuel_type = 'Flex';
+                else mapped.fuel_type = 'Gasoline';
+              }
+
+              // Map transmission to UI field
+              if (decoded.transmission_nhtsa) {
+                const tr = (decoded.transmission_nhtsa as string).toLowerCase();
+                mapped.transmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+              }
+
+              setVehicles(prev => prev.map(v =>
+                v.id === vehicle.id
+                  ? { ...v, ...mapped }
                   : v
               ));
             } else {
@@ -163,10 +195,42 @@ export const useVehicles = () => {
 
           if (!vinError && vinData?.success) {
             console.log(`VIN decoded automatically for new vehicle: ${newVehicle.year} ${newVehicle.make} ${newVehicle.model}`);
-            // Update local state with decoded data
+            const decoded = vinData.vinData || {};
+            const mapped: Partial<Vehicle> = { ...decoded };
+
+            // Map body style to Facebook-friendly categories
+            if (decoded.body_style_nhtsa) {
+              const bs = (decoded.body_style_nhtsa as string).toLowerCase();
+              if (bs.includes('convertible')) mapped.body_style_nhtsa = 'Convertible';
+              else if (bs.includes('coupe')) mapped.body_style_nhtsa = 'Coupe';
+              else if (bs.includes('hatchback')) mapped.body_style_nhtsa = 'Hatchback';
+              else if (bs.includes('sedan')) mapped.body_style_nhtsa = 'Sedan';
+              else if (bs.includes('suv') || bs.includes('sport utility')) mapped.body_style_nhtsa = 'SUV';
+              else if (bs.includes('pickup') || bs.includes('truck')) mapped.body_style_nhtsa = 'Truck';
+              else if (bs.includes('van') || bs.includes('minivan')) mapped.body_style_nhtsa = 'Van/Minivan';
+              else if (bs.includes('wagon')) mapped.body_style_nhtsa = 'Wagon';
+            }
+
+            // Map fuel type to UI field
+            if (decoded.fuel_type_nhtsa) {
+              const ft = (decoded.fuel_type_nhtsa as string).toLowerCase();
+              if (ft.includes('electric')) mapped.fuel_type = 'Electric';
+              else if (ft.includes('hybrid') && ft.includes('plug')) mapped.fuel_type = 'Plug-in hybrid';
+              else if (ft.includes('hybrid')) mapped.fuel_type = 'Hybrid';
+              else if (ft.includes('diesel')) mapped.fuel_type = 'Diesel';
+              else if (ft.includes('flex')) mapped.fuel_type = 'Flex';
+              else mapped.fuel_type = 'Gasoline';
+            }
+
+            // Map transmission to UI field
+            if (decoded.transmission_nhtsa) {
+              const tr = (decoded.transmission_nhtsa as string).toLowerCase();
+              mapped.transmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+            }
+
             setVehicles(prev => prev.map(v => 
               v.id === newVehicle.id 
-                ? { ...v, ...vinData.vinData }
+                ? { ...v, ...mapped }
                 : v
             ));
           }
