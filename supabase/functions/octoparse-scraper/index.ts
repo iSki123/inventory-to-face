@@ -8,13 +8,19 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('=== OCTOPARSE FUNCTION STARTED ===');
+  console.log('Method:', req.method);
+  console.log('URL:', req.url);
+  
   if (req.method === "OPTIONS") {
+    console.log('OPTIONS request - returning CORS headers');
     return new Response(null, { headers: corsHeaders });
   }
 
   let requestBody;
   try {
     // Parse request body first and store it
+    console.log('About to parse request body...');
     requestBody = await req.json();
     console.log('Request received:', JSON.stringify(requestBody, null, 2));
 
@@ -56,16 +62,22 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
+    console.log('Processing action:', action);
     switch (action) {
       case 'start_scraping':
+        console.log('Calling startScraping...');
         return await startScraping(supabaseClient, sourceId, userId);
       case 'get_scraping_status':
+        console.log('Calling getScrapingStatus...');
         return await getScrapingStatus(supabaseClient, sourceId);
       case 'process_scraped_data':
+        console.log('Calling processScrapedData...');
         return await processScrapedData(supabaseClient, sourceId, userId);
       case 'import_task':
+        console.log('Calling importSpecificTask...');
         return await importSpecificTask(supabaseClient, taskId, userId, aiDescriptionPrompt);
       case 'list_tasks':
+        console.log('Calling listAvailableTasks...');
         return await listAvailableTasks();
       default:
         throw new Error('Invalid action');
@@ -677,8 +689,12 @@ function generateMockVehicleData() {
 }
 
 async function importSpecificTask(supabaseClient: any, taskId: string, userId: string, aiDescriptionPrompt?: string) {
+  console.log('=== IMPORT SPECIFIC TASK STARTED ===');
+  console.log('Task ID:', taskId, 'User ID:', userId);
+  
   const accessToken = Deno.env.get('OCTOPARSE_API_KEY');
   if (!accessToken) {
+    console.error('OCTOPARSE_API_KEY not found');
     throw new Error('Octoparse access token not configured');
   }
 
