@@ -724,6 +724,31 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
 
     for (const vehicle of vehicleData) {
       try {
+        // Decode VIN if provided
+        let vinDecodedData = {};
+        if (vehicle.vin) {
+          try {
+            const { data: vinData, error: vinError } = await supabaseClient.functions.invoke('vin-decoder', {
+              body: { vin: vehicle.vin }
+            });
+
+            if (!vinError && vinData?.success) {
+              vinDecodedData = {
+                body_style_nhtsa: vinData.body_style_nhtsa,
+                fuel_type_nhtsa: vinData.fuel_type_nhtsa,
+                transmission_nhtsa: vinData.transmission_nhtsa,
+                engine_nhtsa: vinData.engine_nhtsa,
+                vehicle_type_nhtsa: vinData.vehicle_type_nhtsa,
+                drivetrain_nhtsa: vinData.drivetrain_nhtsa,
+                vin_decoded_at: vinData.vin_decoded_at
+              };
+              console.log(`VIN decoded for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+            }
+          } catch (error) {
+            console.warn('VIN decoding failed:', error);
+          }
+        }
+
         // Generate AI description with custom prompt if provided, but don't fail if it doesn't work
         let aiDescription = null;
         let finalDescription = vehicle.description || `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
@@ -783,6 +808,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
             location: vehicle.location,
             contact_phone: vehicle.contact_phone,
             contact_email: vehicle.contact_email,
+            ...vinDecodedData,
             user_id: userId,
             status: 'available',
             facebook_post_status: 'draft',
