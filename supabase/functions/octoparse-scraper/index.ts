@@ -607,16 +607,40 @@ function parseOctoparseData(rawData: any[]): any[] {
       console.log('Processed year:', year);
     }
     
-    // Extract make - try multiple field variations
-    const make = getFieldValue(['make', 'brand', 'manufacturer']) ||
+    // Extract make/model - try multiple field variations with title fallback
+    let make = getFieldValue(['make', 'brand', 'manufacturer']) ||
                 item.make || item.Make || item.MAKE || item.brand || item.Brand || 
                 item.manufacturer || item.Manufacturer || '';
-    console.log('Found make:', make);
+    console.log('Found make (initial):', make);
     
-    // Extract model - try multiple field variations  
-    const model = getFieldValue(['model', 'model_name']) ||
+    let model = getFieldValue(['model', 'model_name']) ||
                  item.model || item.Model || item.MODEL || item.model_name || item.modelName || '';
-    console.log('Found model:', model);
+    console.log('Found model (initial):', model);
+
+    // Fallback: parse from title/name fields like "2022 Ford F-150 XLT"
+    if (!make || !String(make).trim() || !model || !String(model).trim()) {
+      const titleRaw = getFieldValue(['title','Title','vehicle','Vehicle','name','Name','vehicle_title','listing_title','heading','Heading']);
+      if (titleRaw) {
+        const title = String(titleRaw).replace(/\s+/g, ' ').trim();
+        console.log('Parsing from title:', title);
+        const yearMatch = title.match(/\b(19|20)\d{2}\b/);
+        if (yearMatch) {
+          const parsedYear = parseInt(yearMatch[0]);
+          if (!Number.isNaN(parsedYear)) year = parsedYear;
+          const afterYear = title.slice(title.indexOf(yearMatch[0]) + yearMatch[0].length).trim();
+          const parts = afterYear.split(' ');
+          if ((!make || !String(make).trim()) && parts.length > 0) make = parts[0];
+          if ((!model || !String(model).trim()) && parts.length > 1) {
+            model = parts.slice(1).join(' ').split('|')[0].split('-').slice(0,2).join(' ').trim();
+          }
+        }
+      }
+    }
+
+    // Final cleanup
+    make = (make || '').toString().trim();
+    model = (model || '').toString().trim();
+    console.log('Final make/model:', make, model);
     
     // Extract VIN - try multiple field variations
     const vin = getFieldValue(['vin', 'vehicle_id', 'serial']) ||
