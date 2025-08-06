@@ -640,14 +640,9 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
   console.log('=== IMPORT SPECIFIC TASK STARTED ===');
   console.log('Task ID:', taskId, 'User ID:', userId);
   
-  const accessToken = Deno.env.get('OCTOPARSE_API_KEY');
-  console.log('Access token exists:', !!accessToken);
-  console.log('Access token length:', accessToken?.length || 0);
-  
-  if (!accessToken) {
-    console.error('Octoparse access token not configured');
-    throw new Error('Octoparse access token not configured - please contact support to update the API key');
-  }
+  // Get fresh access token
+  const accessToken = await getOctoparseAccessToken();
+  console.log('Fresh access token obtained:', !!accessToken);
 
   try {
     console.log('Calling importSpecificTask...');
@@ -879,6 +874,50 @@ async function listAvailableTasks() {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );
+  }
+}
+
+async function getOctoparseAccessToken(): Promise<string> {
+  const username = Deno.env.get('OCTOPARSE_USERNAME');
+  const password = Deno.env.get('OCTOPARSE_PASSWORD');
+  
+  if (!username || !password) {
+    throw new Error('Octoparse username and password not configured - please contact support to update credentials');
+  }
+
+  console.log('Requesting fresh Octoparse access token...');
+  
+  try {
+    const formData = new FormData();
+    formData.append('username', username);
+    formData.append('password', password);
+    formData.append('grant_type', 'password');
+
+    const response = await fetch('https://dataapi.octoparse.com/token', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/x-www-form-urlencoded',
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Failed to get access token:', response.status, errorText);
+      throw new Error(`Failed to get access token: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    console.log('Token response received:', { token_type: result.token_type, expires_in: result.expires_in });
+    
+    if (!result.access_token) {
+      throw new Error('No access token in response');
+    }
+
+    return result.access_token;
+  } catch (error) {
+    console.error('Error getting Octoparse access token:', error);
+    throw new Error(`Failed to get access token: ${error.message}`);
   }
 }
 
