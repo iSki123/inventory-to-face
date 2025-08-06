@@ -18,3 +18,6 @@ verify_jwt = false
 
 [functions.image-proxy]
 verify_jwt = false
+
+[functions.vin-decoder]
+verify_jwt = false

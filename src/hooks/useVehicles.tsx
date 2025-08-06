@@ -38,6 +38,14 @@ export interface Vehicle {
   is_featured?: boolean;
   view_count?: number;
   lead_count?: number;
+  // NHTSA VIN decoded fields
+  body_style_nhtsa?: string;
+  drivetrain_nhtsa?: string;
+  engine_nhtsa?: string;
+  fuel_type_nhtsa?: string;
+  transmission_nhtsa?: string;
+  vehicle_type_nhtsa?: string;
+  vin_decoded_at?: string;
   created_at: string;
   updated_at: string;
 }

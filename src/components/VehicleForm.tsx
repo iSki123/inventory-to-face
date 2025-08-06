@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Vehicle } from "@/hooks/useVehicles";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface VehicleFormProps {
   open: boolean;
@@ -36,6 +38,44 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
     features: [],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDecodingVin, setIsDecodingVin] = useState(false);
+
+  const handleDecodeVin = async () => {
+    if (!formData.vin || formData.vin.length !== 17) {
+      toast.error('Please enter a valid 17-character VIN');
+      return;
+    }
+
+    setIsDecodingVin(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('vin-decoder', {
+        body: { 
+          vin: formData.vin,
+          vehicleId: vehicle?.id // Pass vehicle ID if editing existing vehicle
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.success && data?.vinData) {
+        // Update form with decoded VIN data
+        setFormData(prev => ({
+          ...prev,
+          ...data.vinData
+        }));
+        toast.success('VIN decoded successfully! Vehicle details updated.');
+      } else {
+        throw new Error(data?.error || 'Failed to decode VIN');
+      }
+    } catch (error) {
+      console.error('VIN decoding error:', error);
+      toast.error('Failed to decode VIN. Please try again.');
+    } finally {
+      setIsDecodingVin(false);
+    }
+  };
 
   // Update form data when vehicle prop changes or profile loads
   useEffect(() => {
@@ -98,6 +138,14 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
         is_featured: formData.is_featured || false,
         view_count: formData.view_count || 0,
         lead_count: formData.lead_count || 0,
+        // NHTSA decoded fields
+        body_style_nhtsa: formData.body_style_nhtsa,
+        drivetrain_nhtsa: formData.drivetrain_nhtsa,
+        engine_nhtsa: formData.engine_nhtsa,
+        fuel_type_nhtsa: formData.fuel_type_nhtsa,
+        transmission_nhtsa: formData.transmission_nhtsa,
+        vehicle_type_nhtsa: formData.vehicle_type_nhtsa,
+        vin_decoded_at: formData.vin_decoded_at,
       };
       
       await onSubmit(submissionData);
@@ -185,13 +233,25 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
             </div>
             <div>
               <Label htmlFor="vin">VIN</Label>
-              <Input
-                id="vin"
-                value={formData.vin || ''}
-                onChange={(e) => updateField('vin', e.target.value)}
-                placeholder="17-character VIN"
-                maxLength={17}
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="vin"
+                  value={formData.vin || ''}
+                  onChange={(e) => updateField('vin', e.target.value)}
+                  placeholder="17-character VIN"
+                  maxLength={17}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDecodeVin}
+                  disabled={!formData.vin || formData.vin.length !== 17 || isDecodingVin}
+                >
+                  {isDecodingVin ? 'Decoding...' : 'Decode VIN'}
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -316,6 +376,50 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
               />
             </div>
           </div>
+
+          {/* VIN Decoded Information (NHTSA) */}
+          {(formData.body_style_nhtsa || formData.vehicle_type_nhtsa || formData.fuel_type_nhtsa || formData.transmission_nhtsa || formData.drivetrain_nhtsa || formData.engine_nhtsa) && (
+            <div className="space-y-3 p-4 bg-muted/30 rounded-md border">
+              <h3 className="text-sm font-semibold text-muted-foreground">VIN Decoded Information (NHTSA)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                {formData.vehicle_type_nhtsa && (
+                  <div>
+                    <span className="font-medium">Vehicle Type:</span> {formData.vehicle_type_nhtsa}
+                  </div>
+                )}
+                {formData.body_style_nhtsa && (
+                  <div>
+                    <span className="font-medium">Body Style:</span> {formData.body_style_nhtsa}
+                  </div>
+                )}
+                {formData.fuel_type_nhtsa && (
+                  <div>
+                    <span className="font-medium">Fuel Type:</span> {formData.fuel_type_nhtsa}
+                  </div>
+                )}
+                {formData.transmission_nhtsa && (
+                  <div>
+                    <span className="font-medium">Transmission:</span> {formData.transmission_nhtsa}
+                  </div>
+                )}
+                {formData.drivetrain_nhtsa && (
+                  <div>
+                    <span className="font-medium">Drivetrain:</span> {formData.drivetrain_nhtsa}
+                  </div>
+                )}
+                {formData.engine_nhtsa && (
+                  <div>
+                    <span className="font-medium">Engine:</span> {formData.engine_nhtsa}
+                  </div>
+                )}
+              </div>
+              {formData.vin_decoded_at && (
+                <p className="text-xs text-muted-foreground">
+                  Decoded on: {new Date(formData.vin_decoded_at).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Status */}
           <div>
