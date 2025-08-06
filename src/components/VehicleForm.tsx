@@ -19,10 +19,14 @@ interface VehicleFormProps {
   isEditing?: boolean;
 }
 
-const fuelTypes = ['gasoline', 'diesel', 'hybrid', 'electric', 'plug-in hybrid'];
-const transmissions = ['automatic', 'manual', 'cvt'];
-const drivetrains = ['fwd', 'rwd', 'awd', '4wd'];
-const conditions = ['new', 'used', 'certified'];
+// Facebook Marketplace standard options
+const bodyStyles = ['Coupe', 'Truck', 'Sedan', 'Hatchback', 'SUV', 'Convertible', 'Wagon', 'Minivan', 'Small Car', 'Other'];
+const exteriorColors = ['Black', 'Blue', 'Brown', 'Gold', 'Green', 'Gray', 'Pink', 'Purple', 'Red', 'Silver', 'Orange', 'White', 'Yellow', 'Charcoal', 'Off white'];
+const interiorColors = ['Black', 'Blue', 'Brown', 'Gold', 'Green', 'Gray', 'Pink', 'Purple', 'Red', 'Silver', 'Orange', 'White', 'Yellow', 'Charcoal', 'Off white'];
+const fuelTypes = ['Diesel', 'Electric', 'Gasoline', 'Flex', 'Hybrid', 'Petrol', 'Plug-in hybrid', 'Other'];
+const transmissions = ['Manual transmission', 'Automatic transmission'];
+const vehicleTypes = ['Car/Truck', 'Motorcycle', 'Powersport', 'RV/Camper', 'Trailer', 'Boat', 'Commercial/Industrial', 'Other'];
+const conditions = ['new', 'used'];
 const statuses = ['available', 'pending', 'sold', 'draft'];
 
 export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }: VehicleFormProps) {
@@ -33,8 +37,8 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
     model: '',
     price: 0,
     condition: 'used',
-    fuel_type: 'gasoline',
-    transmission: 'automatic',
+    fuel_type: 'Gasoline',
+    transmission: 'Automatic transmission',
     status: 'available',
     features: [],
   });
@@ -63,34 +67,52 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
       if (data?.success && data?.vinData) {
         const vinData = data.vinData;
         
-        // Map NHTSA decoded data to form fields
+        // Map NHTSA decoded data to Facebook Marketplace format
         const updates: Partial<Vehicle> = {
           ...vinData // Store all NHTSA fields
         };
 
-        // Map fuel type from NHTSA to our standardized values
+        // Map body style from NHTSA to Facebook format
+        if (vinData.body_style_nhtsa) {
+          const bodyStyle = vinData.body_style_nhtsa.toLowerCase();
+          if (bodyStyle.includes('suv') || bodyStyle.includes('sport utility')) updates.body_style_nhtsa = 'SUV';
+          else if (bodyStyle.includes('coupe')) updates.body_style_nhtsa = 'Coupe';
+          else if (bodyStyle.includes('sedan')) updates.body_style_nhtsa = 'Sedan';
+          else if (bodyStyle.includes('truck')) updates.body_style_nhtsa = 'Truck';
+          else if (bodyStyle.includes('hatchback')) updates.body_style_nhtsa = 'Hatchback';
+          else if (bodyStyle.includes('convertible')) updates.body_style_nhtsa = 'Convertible';
+          else if (bodyStyle.includes('wagon')) updates.body_style_nhtsa = 'Wagon';
+          else if (bodyStyle.includes('minivan')) updates.body_style_nhtsa = 'Minivan';
+          else updates.body_style_nhtsa = 'Other';
+        }
+
+        // Map fuel type from NHTSA to Facebook format
         if (vinData.fuel_type_nhtsa) {
           const fuelType = vinData.fuel_type_nhtsa.toLowerCase();
-          if (fuelType.includes('electric')) updates.fuel_type = 'electric';
-          else if (fuelType.includes('hybrid')) updates.fuel_type = 'hybrid';
-          else if (fuelType.includes('diesel')) updates.fuel_type = 'diesel';
-          else updates.fuel_type = 'gasoline';
+          if (fuelType.includes('electric')) updates.fuel_type = 'Electric';
+          else if (fuelType.includes('hybrid') && fuelType.includes('plug')) updates.fuel_type = 'Plug-in hybrid';
+          else if (fuelType.includes('hybrid')) updates.fuel_type = 'Hybrid';
+          else if (fuelType.includes('diesel')) updates.fuel_type = 'Diesel';
+          else if (fuelType.includes('flex')) updates.fuel_type = 'Flex';
+          else updates.fuel_type = 'Gasoline';
         }
 
-        // Map transmission from NHTSA
+        // Map transmission from NHTSA to Facebook format
         if (vinData.transmission_nhtsa) {
           const transmission = vinData.transmission_nhtsa.toLowerCase();
-          if (transmission.includes('manual')) updates.transmission = 'manual';
-          else if (transmission.includes('cvt')) updates.transmission = 'cvt';
-          else updates.transmission = 'automatic';
+          if (transmission.includes('manual')) updates.transmission = 'Manual transmission';
+          else updates.transmission = 'Automatic transmission';
         }
 
-        // Map drivetrain from NHTSA
-        if (vinData.drivetrain_nhtsa) {
-          const drivetrain = vinData.drivetrain_nhtsa.toLowerCase();
-          if (drivetrain.includes('front')) updates.drivetrain = 'fwd';
-          else if (drivetrain.includes('rear')) updates.drivetrain = 'rwd';
-          else if (drivetrain.includes('all') || drivetrain.includes('4wd')) updates.drivetrain = 'awd';
+        // Map vehicle type from NHTSA
+        if (vinData.vehicle_type_nhtsa) {
+          const vehicleType = vinData.vehicle_type_nhtsa.toLowerCase();
+          if (vehicleType.includes('motorcycle')) updates.vehicle_type_nhtsa = 'Motorcycle';
+          else if (vehicleType.includes('rv') || vehicleType.includes('camper')) updates.vehicle_type_nhtsa = 'RV/Camper';
+          else if (vehicleType.includes('trailer')) updates.vehicle_type_nhtsa = 'Trailer';
+          else if (vehicleType.includes('boat')) updates.vehicle_type_nhtsa = 'Boat';
+          else if (vehicleType.includes('commercial') || vehicleType.includes('industrial')) updates.vehicle_type_nhtsa = 'Commercial/Industrial';
+          else updates.vehicle_type_nhtsa = 'Car/Truck';
         }
 
         // Map engine information
@@ -127,8 +149,8 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
         model: '',
         price: 0,
         condition: 'used',
-        fuel_type: 'gasoline',
-        transmission: 'automatic',
+        fuel_type: 'Gasoline',
+        transmission: 'Automatic transmission',
         status: 'available',
         features: [],
         contact_phone: profile?.phone || '',
@@ -157,8 +179,8 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
         interior_color: formData.interior_color,
         exterior_color_standardized: formData.exterior_color_standardized,
         interior_color_standardized: formData.interior_color_standardized,
-        fuel_type: formData.fuel_type || 'gasoline',
-        transmission: formData.transmission || 'automatic',
+        fuel_type: formData.fuel_type || 'Gasoline',
+        transmission: formData.transmission || 'Automatic transmission',
         engine: formData.engine,
         drivetrain: formData.drivetrain,
         original_price: formData.original_price,
@@ -196,8 +218,8 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
           model: '',
           price: 0,
           condition: 'used',
-          fuel_type: 'gasoline',
-          transmission: 'automatic',
+          fuel_type: 'Gasoline',
+          transmission: 'Automatic transmission',
           status: 'available',
           features: [],
           contact_phone: profile?.phone || '',
@@ -370,30 +392,37 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
             </div>
           </div>
 
+          {/* Facebook Marketplace Required Fields */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="drivetrain">Drivetrain</Label>
-              <Select value={formData.drivetrain} onValueChange={(value) => updateField('drivetrain', value)}>
+              <Label htmlFor="vehicle_type">Vehicle Type</Label>
+              <Select value={formData.vehicle_type_nhtsa || 'Car/Truck'} onValueChange={(value) => updateField('vehicle_type_nhtsa', value)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select drivetrain" />
+                  <SelectValue placeholder="Select vehicle type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {drivetrains.map(drive => (
-                    <SelectItem key={drive} value={drive}>
-                      {drive.toUpperCase()}
+                  {vehicleTypes.map(type => (
+                    <SelectItem key={type} value={type}>
+                      {type}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label htmlFor="engine">Engine</Label>
-              <Input
-                id="engine"
-                value={formData.engine || ''}
-                onChange={(e) => updateField('engine', e.target.value)}
-                placeholder="V6, 4-Cylinder, etc."
-              />
+              <Label htmlFor="body_style">Body Style</Label>
+              <Select value={formData.body_style_nhtsa || ''} onValueChange={(value) => updateField('body_style_nhtsa', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select body style" />
+                </SelectTrigger>
+                <SelectContent>
+                  {bodyStyles.map(style => (
+                    <SelectItem key={style} value={style}>
+                      {style}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -401,21 +430,33 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="exterior_color">Exterior Color</Label>
-              <Input
-                id="exterior_color"
-                value={formData.exterior_color || ''}
-                onChange={(e) => updateField('exterior_color', e.target.value)}
-                placeholder="Black, White, Silver..."
-              />
+              <Select value={formData.exterior_color_standardized || ''} onValueChange={(value) => updateField('exterior_color_standardized', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select exterior color" />
+                </SelectTrigger>
+                <SelectContent>
+                  {exteriorColors.map(color => (
+                    <SelectItem key={color} value={color}>
+                      {color}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="interior_color">Interior Color</Label>
-              <Input
-                id="interior_color"
-                value={formData.interior_color || ''}
-                onChange={(e) => updateField('interior_color', e.target.value)}
-                placeholder="Black, Tan, Gray..."
-              />
+              <Select value={formData.interior_color_standardized} onValueChange={(value) => updateField('interior_color_standardized', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select interior color" />
+                </SelectTrigger>
+                <SelectContent>
+                  {interiorColors.map(color => (
+                    <SelectItem key={color} value={color}>
+                      {color}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
