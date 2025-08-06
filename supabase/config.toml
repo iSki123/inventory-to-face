@@ -15,3 +15,6 @@ verify_jwt = false
 
 [functions.facebook-poster]
 verify_jwt = false
+
+[functions.image-proxy]
+verify_jwt = false

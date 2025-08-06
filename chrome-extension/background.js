@@ -45,62 +45,91 @@ class SalesonatorBackground {
       }
       
       if (request.action === 'fetchImage') {
-        // Handle CORS-protected image fetching
-        console.log('Fetching image with CORS bypass:', request.url);
-        
-        fetch(request.url, {
-          method: 'GET',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'image/*',
-            'Cache-Control': 'no-cache'
-          }
-        })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-          return response.blob();
-        })
-        .then(blob => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            sendResponse({
-              success: true,
-              data: reader.result
-            });
-          };
-          reader.onerror = () => {
-            sendResponse({
-              success: false,
-              error: 'Failed to convert blob to base64'
-            });
-          };
-          reader.readAsDataURL(blob);
-        })
-        .catch(error => {
-          console.error('Image fetch failed:', error);
-          sendResponse({
-            success: false,
-            error: error.message
+        try {
+          console.log('Fetching image via Supabase proxy:', request.url);
+          
+          // Use Supabase image proxy to bypass CORS
+          const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/image-proxy', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+            },
+            body: JSON.stringify({
+              imageUrls: [request.url]
+            })
           });
-        });
+
+          if (!response.ok) {
+            throw new Error(`Proxy request failed: ${response.status}`);
+          }
+
+          const data = await response.json();
+          
+          if (data.results && data.results[0] && data.results[0].success) {
+            const result = data.results[0];
+            console.log('Successfully fetched image via proxy, size:', result.size);
+            sendResponse({ 
+              success: true, 
+              data: result.base64
+            });
+          } else {
+            const error = data.results?.[0]?.error || 'Unknown proxy error';
+            console.error('Proxy returned error:', error);
+            sendResponse({ success: false, error });
+          }
+        } catch (error) {
+          console.error('Error fetching image via proxy:', error);
+          sendResponse({ success: false, error: error.message });
+        }
         
         return true; // Keep message channel open for async response
       }
       
       if (request.action === 'preDownloadImages') {
-        // Pre-download and store images for later use
-        console.log('Pre-downloading images:', request.images);
-        
-        this.preDownloadImages(request.images)
-          .then(result => {
-            sendResponse(result);
-          })
-          .catch(error => {
-            console.error('Pre-download failed:', error);
-            sendResponse({ success: false, error: error.message });
+        try {
+          console.log('Pre-downloading images via Supabase proxy...');
+          
+          const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/image-proxy', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+            },
+            body: JSON.stringify({
+              imageUrls: request.imageUrls
+            })
           });
+
+          if (!response.ok) {
+            throw new Error(`Proxy request failed: ${response.status}`);
+          }
+
+          const data = await response.json();
+          
+          // Store successful downloads in chrome storage
+          for (const result of data.results) {
+            if (result.success) {
+              const storageKey = `img_${this.hashString(result.url)}`;
+              const base64Data = result.base64.split(',')[1]; // Remove data URL prefix
+              await chrome.storage.local.set({
+                [storageKey]: base64Data
+              });
+              console.log(`Stored image with key: ${storageKey}`);
+            }
+          }
+          
+          console.log(`Pre-download complete: ${data.summary.successful}/${data.summary.total} successful`);
+          sendResponse({ 
+            success: true, 
+            results: data.results,
+            successCount: data.summary.successful,
+            totalCount: data.summary.total
+          });
+        } catch (error) {
+          console.error('Error pre-downloading images:', error);
+          sendResponse({ success: false, error: error.message });
+        }
         
         return true; // Keep message channel open for async response
       }
