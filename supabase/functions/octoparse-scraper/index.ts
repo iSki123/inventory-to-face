@@ -2,16 +2,10 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-// Dynamic CORS headers per request (reflect origin)
-const getCorsHeaders = (req: Request) => {
-  const origin = req.headers.get("origin") || "*";
-  return {
-    "Access-Control-Allow-Origin": origin,
-    "Vary": "Origin",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-authorization, x-requested-with",
-    "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
-    "Access-Control-Allow-Credentials": "true",
-  } as Record<string, string>;
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-authorization, x-requested-with",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 };
 
 
@@ -155,7 +149,7 @@ function standardizeInteriorColor(rawColor?: string): string {
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: getCorsHeaders(req) });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
@@ -227,7 +221,7 @@ serve(async (req) => {
         details: error.stack
       }),
       { 
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400 
       }
     );
@@ -289,7 +283,7 @@ async function startScraping(supabaseClient: any, sourceId: string, userId: stri
         message: 'Scraping started successfully',
         estimatedCompletion: '5-10 minutes'
       }),
-      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
     
   } catch (error) {
@@ -314,7 +308,7 @@ async function startScraping(supabaseClient: any, sourceId: string, userId: stri
         scrapedVehicles: mockScrapedData,
         warning: 'Using mock data due to API error'
       }),
-      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 }
@@ -339,7 +333,7 @@ async function getScrapingStatus(supabaseClient: any, sourceId: string) {
         lastScraped: source?.last_scraped_at,
         taskId: source?.octoparse_task_id
       }),
-      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
@@ -366,7 +360,7 @@ async function getScrapingStatus(supabaseClient: any, sourceId: string) {
         taskId: source.octoparse_task_id,
         progress: result.progress || 100
       }),
-      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
     
   } catch (error) {
@@ -379,7 +373,7 @@ async function getScrapingStatus(supabaseClient: any, sourceId: string) {
         lastScraped: source.last_scraped_at,
         taskId: source.octoparse_task_id
       }),
-      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 }
@@ -506,7 +500,7 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
       message: `Successfully imported ${insertedVehicles.length} vehicles`,
       dataSource: accessToken && source.octoparse_task_id ? 'octoparse' : 'mock'
     }),
-    { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 }
 
@@ -607,40 +601,16 @@ function parseOctoparseData(rawData: any[]): any[] {
       console.log('Processed year:', year);
     }
     
-    // Extract make/model - try multiple field variations with title fallback
-    let make = getFieldValue(['make', 'brand', 'manufacturer']) ||
+    // Extract make - try multiple field variations
+    const make = getFieldValue(['make', 'brand', 'manufacturer']) ||
                 item.make || item.Make || item.MAKE || item.brand || item.Brand || 
                 item.manufacturer || item.Manufacturer || '';
-    console.log('Found make (initial):', make);
+    console.log('Found make:', make);
     
-    let model = getFieldValue(['model', 'model_name']) ||
+    // Extract model - try multiple field variations  
+    const model = getFieldValue(['model', 'model_name']) ||
                  item.model || item.Model || item.MODEL || item.model_name || item.modelName || '';
-    console.log('Found model (initial):', model);
-
-    // Fallback: parse from title/name fields like "2022 Ford F-150 XLT"
-    if (!make || !String(make).trim() || !model || !String(model).trim()) {
-      const titleRaw = getFieldValue(['title','Title','vehicle','Vehicle','name','Name','vehicle_title','listing_title','heading','Heading']);
-      if (titleRaw) {
-        const title = String(titleRaw).replace(/\s+/g, ' ').trim();
-        console.log('Parsing from title:', title);
-        const yearMatch = title.match(/\b(19|20)\d{2}\b/);
-        if (yearMatch) {
-          const parsedYear = parseInt(yearMatch[0]);
-          if (!Number.isNaN(parsedYear)) year = parsedYear;
-          const afterYear = title.slice(title.indexOf(yearMatch[0]) + yearMatch[0].length).trim();
-          const parts = afterYear.split(' ');
-          if ((!make || !String(make).trim()) && parts.length > 0) make = parts[0];
-          if ((!model || !String(model).trim()) && parts.length > 1) {
-            model = parts.slice(1).join(' ').split('|')[0].split('-').slice(0,2).join(' ').trim();
-          }
-        }
-      }
-    }
-
-    // Final cleanup
-    make = (make || '').toString().trim();
-    model = (model || '').toString().trim();
-    console.log('Final make/model:', make, model);
+    console.log('Found model:', model);
     
     // Extract VIN - try multiple field variations
     const vin = getFieldValue(['vin', 'vehicle_id', 'serial']) ||
@@ -750,23 +720,21 @@ function parseOctoparseData(rawData: any[]): any[] {
   console.log(`Parsed ${parsedVehicles.length} raw vehicles before filtering`);
   
   return parsedVehicles.filter(vehicle => {
-    // Include if we already have make+model OR we can enrich via VIN when images exist
+    // Only require make and model; price can be 0 or missing (we'll default to 0)
     const hasMakeModel = Boolean(vehicle.make && String(vehicle.make).trim()) && Boolean(vehicle.model && String(vehicle.model).trim());
-    const hasVinWithImages = Boolean(vehicle.vin && String(vehicle.vin).length === 17) && (Array.isArray(vehicle.images) && vehicle.images.length > 0);
 
-    if (!(hasMakeModel || hasVinWithImages)) {
-      console.log(`Skipping vehicle due to insufficient data: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, {
+    if (!hasMakeModel) {
+      console.log(`Skipping vehicle due to missing make/model: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, {
         hasMake: Boolean(vehicle.make),
         hasModel: Boolean(vehicle.model),
-        hasVin: Boolean(vehicle.vin),
-        images: vehicle.images?.length || 0,
-        price: vehicle.price
+        price: vehicle.price,
+        images: vehicle.images.length
       });
     } else {
-      console.log(`Including vehicle candidate: ${vehicle.year} ${vehicle.make || '(unknown)'} ${vehicle.model || ''} - VIN: ${vehicle.vin || 'none'} Images: ${vehicle.images.length}`);
+      console.log(`Including vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} - Price: $${(vehicle.price || 0)/100}, Images: ${vehicle.images.length}`);
     }
 
-    return hasMakeModel || hasVinWithImages;
+    return hasMakeModel;
   });
 }
 
@@ -881,7 +849,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
           message: 'No vehicle data found in the specified task. The task may be empty or still processing.',
           taskId
         }),
-        { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
@@ -921,39 +889,6 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
           } catch (error) {
             console.warn('Failed to generate AI description, continuing without it:', error);
           }
-        }
-
-        // Enrich missing make/model/year from VIN when images exist
-        if ((!vehicle.make || !vehicle.model || !vehicle.year) && vehicle.vin && String(vehicle.vin).length === 17) {
-          try {
-            const vinResp = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/${vehicle.vin}?format=json`);
-            if (vinResp.ok) {
-              const vinJson = await vinResp.json();
-              const results = vinJson.Results || [];
-              const getVar = (name: string) => {
-                const r = results.find((x: any) => x.Variable === name);
-                return r?.Value || null;
-              };
-              const makeVIN = getVar('Make');
-              const modelVIN = getVar('Model');
-              const yearVIN = parseInt(getVar('Model Year') || getVar('ModelYear'));
-              if (!vehicle.make && makeVIN) vehicle.make = String(makeVIN);
-              if (!vehicle.model && modelVIN) vehicle.model = String(modelVIN);
-              if ((!vehicle.year || isNaN(vehicle.year)) && yearVIN) vehicle.year = yearVIN;
-              console.log('VIN enrichment applied:', { make: vehicle.make, model: vehicle.model, year: vehicle.year });
-            } else {
-              console.warn('VIN enrichment failed with status:', vinResp.status);
-            }
-          } catch (e) {
-            console.warn('VIN enrichment error:', e);
-          }
-        }
-
-        // If still missing required fields (make/model), skip this row to avoid DB errors
-        if (!vehicle.make || !vehicle.model) {
-          console.warn(`Skipping vehicle after VIN enrichment due to missing make/model. VIN: ${vehicle.vin || 'N/A'}`);
-          errors.push({ vehicle: vehicle.vin || 'unknown', error: 'Missing make/model after VIN enrichment' });
-          continue;
         }
 
         console.log(`Inserting vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
@@ -1030,7 +965,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
         message: `Successfully imported ${insertedVehicles.length} of ${vehicleData.length} vehicles from task ${taskId}`,
         taskId
       }),
-      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
     
   } catch (error) {
@@ -1041,7 +976,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
         error: error.message || 'Failed to import task data',
         taskId
       }),
-      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 500 }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );
   }
 }
@@ -1091,7 +1026,7 @@ async function listAvailableTasks() {
         })),
         message: `Found ${tasks.length} available tasks`
       }),
-      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
     
   } catch (error) {
@@ -1102,7 +1037,7 @@ async function listAvailableTasks() {
         error: error.message || 'Failed to fetch available tasks',
         tasks: []
       }),
-      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 500 }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );
   }
 }

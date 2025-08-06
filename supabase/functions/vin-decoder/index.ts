@@ -2,22 +2,16 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-// Dynamic CORS headers per request (reflect origin)
-const getCorsHeaders = (req: Request) => {
-  const origin = req.headers.get("origin") || "*";
-  return {
-    "Access-Control-Allow-Origin": origin,
-    "Vary": "Origin",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-authorization, x-requested-with",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Credentials": "true",
-  } as Record<string, string>;
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-authorization, x-requested-with",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: getCorsHeaders(req) });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
@@ -89,7 +83,7 @@ serve(async (req) => {
         vinData,
         message: vehicleId ? 'Vehicle updated with VIN data' : 'VIN decoded successfully'
       }),
-      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
@@ -101,7 +95,7 @@ serve(async (req) => {
         success: false
       }),
       { 
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400 
       }
     );
