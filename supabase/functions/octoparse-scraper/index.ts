@@ -67,22 +67,34 @@ serve(async (req) => {
     }
 
   } catch (error) {
-    console.error('Octoparse scraper error:', error);
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
+    console.error('=== OCTOPARSE SCRAPER ERROR ===');
+    console.error('Error type:', error.constructor.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Request details:', {
+      method: req.method,
+      url: req.url,
+      headers: Object.fromEntries(req.headers.entries())
     });
+    
+    // Log the specific action and parameters that caused the error
+    try {
+      const requestBody = await req.clone().json();
+      console.error('Request body:', JSON.stringify(requestBody, null, 2));
+    } catch (parseError) {
+      console.error('Could not parse request body:', parseError.message);
+    }
     
     return new Response(
       JSON.stringify({ 
         error: error.message || 'Unknown error occurred',
         success: false,
+        errorType: error.constructor.name,
         details: error.stack
       }),
       { 
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400 
+        status: 500 
       }
     );
   }
