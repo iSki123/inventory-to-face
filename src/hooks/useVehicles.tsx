@@ -74,7 +74,42 @@ export const useVehicles = () => {
         return;
       }
 
-      setVehicles((data as Vehicle[]) || []);
+      const vehicles = (data as Vehicle[]) || [];
+      setVehicles(vehicles);
+
+      // Auto-decode VINs for vehicles that have VINs but no decoded data
+      const vehiclesToDecode = vehicles.filter(v => 
+        v.vin && v.vin.length === 17 && !v.vin_decoded_at
+      );
+
+      if (vehiclesToDecode.length > 0) {
+        console.log(`Auto-decoding ${vehiclesToDecode.length} VINs...`);
+        // Decode VINs in background without blocking UI
+        vehiclesToDecode.forEach(async (vehicle) => {
+          try {
+            const { data: vinData, error: vinError } = await supabase.functions.invoke('vin-decoder', {
+              body: { 
+                vin: vehicle.vin,
+                vehicleId: vehicle.id 
+              }
+            });
+
+            if (!vinError && vinData?.success) {
+              console.log(`VIN decoded for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+              // Update local state with decoded data
+              setVehicles(prev => prev.map(v => 
+                v.id === vehicle.id 
+                  ? { ...v, ...vinData.vinData }
+                  : v
+              ));
+            } else {
+              console.error(`VIN decode failed for ${vehicle.vin}:`, vinError);
+            }
+          } catch (error) {
+            console.error(`Error decoding VIN ${vehicle.vin}:`, error);
+          }
+        });
+      }
     } catch (error) {
       console.error('Error fetching vehicles:', error);
       toast({
