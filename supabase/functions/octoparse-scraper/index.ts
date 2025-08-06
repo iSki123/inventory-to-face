@@ -720,23 +720,21 @@ function parseOctoparseData(rawData: any[]): any[] {
   console.log(`Parsed ${parsedVehicles.length} raw vehicles before filtering`);
   
   return parsedVehicles.filter(vehicle => {
-    // More lenient filtering - only require essential fields
-    const hasBasicInfo = vehicle.make !== 'Unknown' && vehicle.model !== 'Unknown';
-    const hasPrice = vehicle.price > 0;
-    const hasMinimalData = hasBasicInfo && hasPrice;
-    
-    if (!hasMinimalData) {
-      console.log(`Skipping vehicle due to missing essential data: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, {
-        hasBasicInfo,
-        hasPrice: vehicle.price > 0,
+    // Only require make and model; price can be 0 or missing (we'll default to 0)
+    const hasMakeModel = Boolean(vehicle.make && String(vehicle.make).trim()) && Boolean(vehicle.model && String(vehicle.model).trim());
+
+    if (!hasMakeModel) {
+      console.log(`Skipping vehicle due to missing make/model: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, {
+        hasMake: Boolean(vehicle.make),
+        hasModel: Boolean(vehicle.model),
         price: vehicle.price,
         images: vehicle.images.length
       });
     } else {
-      console.log(`Including vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} - Price: $${vehicle.price/100}, Images: ${vehicle.images.length}`);
+      console.log(`Including vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} - Price: $${(vehicle.price || 0)/100}, Images: ${vehicle.images.length}`);
     }
-    
-    return hasMinimalData;
+
+    return hasMakeModel;
   });
 }
 
@@ -805,44 +803,41 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
     console.log(`Importing data from task ID: ${taskId}`);
     console.log(`Using Octoparse API URL: https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${taskId}&offset=0&size=1000`);
     
-    // Fetch scraped data from Octoparse API using specific task ID
-    const response = await fetch(`https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${taskId}&offset=0&size=1000`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-      },
-    });
+    // Fetch scraped data from Octoparse API using specific task ID (paginate to get all items)
+    const pageSize = 500;
+    let offset = 0;
+    let allRawData: any[] = [];
 
-    let vehicleData = [];
-    
-    console.log(`Octoparse API response status: ${response.status}`);
-    console.log(`Octoparse API response headers:`, Object.fromEntries(response.headers.entries()));
-    
-    if (response.ok) {
-      const result = await response.json();
-      console.log('Octoparse API response for task import:', JSON.stringify(result, null, 2));
-      
-      // Check if we have an error in the response
-      if (result.error && result.error !== 'success') {
-        console.error('Octoparse API returned error:', result.error, result.error_Description);
-        throw new Error(`Octoparse API error: ${result.error} - ${result.error_Description || 'No description'}`);
+    while (true) {
+      const url = `https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${taskId}&offset=${offset}&size=${pageSize}`;
+      console.log('Fetching page:', { offset, pageSize, url });
+      const pageResp = await fetch(url, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+
+      console.log(`Octoparse page response status: ${pageResp.status}`);
+
+      if (!pageResp.ok) {
+        const errorText = await pageResp.text();
+        console.error('Octoparse page fetch failed:', pageResp.status, errorText);
+        throw new Error(`Failed to fetch data page (offset ${offset}): ${pageResp.status}`);
       }
-      
-      // Handle Octoparse response format
-      const rawData = result.data?.dataList || result.dataList || result.data || [];
-      vehicleData = parseOctoparseData(rawData);
-      console.log(`Parsed ${vehicleData.length} vehicles from task ${taskId}`);
-    } else {
-      const errorText = await response.text();
-      console.error(`Failed to fetch data for task ${taskId}:`, response.status, errorText);
-      
-      // If it's a 401 error, provide specific guidance about API key
-      if (response.status === 401) {
-        throw new Error(`Octoparse API key is invalid or expired. Please contact support to update the API key. Error: ${errorText}`);
+
+      const pageJson = await pageResp.json();
+      const pageList = pageJson.data?.dataList || pageJson.dataList || pageJson.data || [];
+      console.log(`Fetched ${pageList.length} rows at offset ${offset}`);
+
+      allRawData = allRawData.concat(pageList);
+
+      if (pageList.length < pageSize) {
+        break; // last page
       }
-      
-      throw new Error(`Failed to fetch data for task ${taskId}: ${response.status} Unauthorized`);
+      offset += pageSize;
     }
+
+    let vehicleData = parseOctoparseData(allRawData);
+    console.log(`Parsed ${vehicleData.length} vehicles from task ${taskId} (raw rows: ${allRawData.length})`);
     
     if (vehicleData.length === 0) {
       return new Response(
@@ -861,6 +856,12 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
     const insertedVehicles = [];
     const errors = [];
 
+    // Fetch user profile for default contact info
+    const { data: userProfile } = await supabaseClient
+      .from('profiles')
+      .select('phone, location, email')
+      .eq('user_id', userId)
+      .maybeSingle();
     for (const vehicle of vehicleData) {
       try {
         // Generate AI description with custom prompt if provided, but don't fail if it doesn't work
@@ -927,9 +928,9 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
             features: vehicle.features,
             images: vehicle.images,
             trim: vehicle.trim,
-            location: vehicle.location,
-            contact_phone: vehicle.contact_phone,
-            contact_email: vehicle.contact_email,
+            location: vehicle.location || userProfile?.location || '',
+            contact_phone: vehicle.contact_phone || userProfile?.phone || '',
+            contact_email: vehicle.contact_email || userProfile?.email || '',
             user_id: userId,
             status: 'available',
             facebook_post_status: 'draft',
