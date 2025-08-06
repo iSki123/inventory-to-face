@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -70,6 +70,7 @@ export function VehicleSourceForm({ open, onOpenChange, onSubmit, source, isEdit
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Vehicle Source' : 'Add Vehicle Source'}</DialogTitle>
         </DialogHeader>
+        <DialogDescription id="vehicle-source-form-desc" className="sr-only">Configure a data source for scraping inventory.</DialogDescription>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

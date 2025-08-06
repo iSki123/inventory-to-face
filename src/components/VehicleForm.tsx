@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -252,6 +252,7 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Vehicle' : 'Add New Vehicle'}</DialogTitle>
         </DialogHeader>
+        <DialogDescription id="vehicle-form-desc" className="sr-only">Fill in vehicle details and save.</DialogDescription>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Basic Information */}
