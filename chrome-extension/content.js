@@ -450,8 +450,36 @@ class SalesonatorAutomator {
     // SIXTH: Fill Price
     await this.fillPrice(vehicleData.price);
     
-    // SEVENTH: Fill Description (this one works)
-    const description = vehicleData.description || `${vehicleData.year} ${vehicleData.make} ${vehicleData.model} for sale. Contact for more details.`;
+    // SEVENTH: Fill Body Style
+    if (vehicleData.bodyStyle || vehicleData.body_style) {
+      await this.selectBodyStyle(vehicleData.bodyStyle || vehicleData.body_style);
+    }
+    
+    // EIGHTH: Fill Exterior Color
+    if (vehicleData.exteriorColor || vehicleData.exterior_color) {
+      await this.selectExteriorColor(vehicleData.exteriorColor || vehicleData.exterior_color);
+    }
+    
+    // NINTH: Fill Interior Color
+    if (vehicleData.interiorColor || vehicleData.interior_color) {
+      await this.selectInteriorColor(vehicleData.interiorColor || vehicleData.interior_color);
+    }
+    
+    // TENTH: Check Clean Title (always default to checked)
+    await this.selectCleanTitle(true);
+    
+    // ELEVENTH: Select Vehicle Condition (always default to "Excellent")
+    await this.selectVehicleCondition(vehicleData.condition || 'Excellent');
+    
+    // TWELFTH: Select Fuel Type
+    if (vehicleData.fuelType || vehicleData.fuel_type) {
+      await this.selectFuelType(vehicleData.fuelType || vehicleData.fuel_type);
+    }
+    
+    // THIRTEENTH: Fill Description with AI description from database if available
+    const description = vehicleData.ai_description || 
+                       vehicleData.description || 
+                       `${vehicleData.year} ${vehicleData.make} ${vehicleData.model} for sale. Contact for more details.`;
     await this.fillDescription(description);
     
     this.log('✅ Form filling sequence completed');
@@ -814,6 +842,260 @@ class SalesonatorAutomator {
       
     } catch (error) {
       this.log('⚠️ Could not fill price:', price, error);
+      return false;
+    }
+  }
+
+  // Select Body Style dropdown
+  async selectBodyStyle(bodyStyle) {
+    try {
+      this.log(`🚗 Selecting body style: ${bodyStyle}`);
+      
+      const bodyStyleSelectors = [
+        'text:Body style',
+        '[aria-label*="Body style"]',
+        '[aria-label*="Body"]',
+        'span:contains("Body style")',
+        '[data-testid*="body"]'
+      ];
+      
+      const dropdown = await this.waitForElement(bodyStyleSelectors, 8000);
+      await this.scrollIntoView(dropdown);
+      await this.delay(this.randomDelay(500, 1000));
+      
+      this.log('🚗 Found body style dropdown, clicking...');
+      dropdown.click();
+      await this.delay(this.randomDelay(2000, 3000));
+      
+      // Look for body style option
+      const optionSelectors = [
+        `text:${bodyStyle}`,
+        `[role="option"]:contains("${bodyStyle}")`,
+        `[data-value*="${bodyStyle.toLowerCase()}"]`
+      ];
+      
+      const option = await this.waitForElement(optionSelectors, 5000);
+      await this.scrollIntoView(option);
+      await this.delay(this.randomDelay(300, 600));
+      option.click();
+      
+      await this.delay(this.randomDelay(1000, 2000));
+      this.log(`✅ Successfully selected body style: ${bodyStyle}`);
+      return true;
+      
+    } catch (error) {
+      this.log(`⚠️ Could not select body style: ${bodyStyle}`, error);
+      return false;
+    }
+  }
+
+  // Select Exterior Color dropdown
+  async selectExteriorColor(exteriorColor) {
+    try {
+      this.log(`🎨 Selecting exterior color: ${exteriorColor}`);
+      
+      const colorSelectors = [
+        'text:Exterior color',
+        '[aria-label*="Exterior color"]',
+        '[aria-label*="Exterior"]',
+        'span:contains("Exterior color")',
+        '[data-testid*="exterior"]'
+      ];
+      
+      const dropdown = await this.waitForElement(colorSelectors, 8000);
+      await this.scrollIntoView(dropdown);
+      await this.delay(this.randomDelay(500, 1000));
+      
+      this.log('🎨 Found exterior color dropdown, clicking...');
+      dropdown.click();
+      await this.delay(this.randomDelay(2000, 3000));
+      
+      // Look for color option
+      const optionSelectors = [
+        `text:${exteriorColor}`,
+        `[role="option"]:contains("${exteriorColor}")`,
+        `[data-value*="${exteriorColor.toLowerCase()}"]`
+      ];
+      
+      const option = await this.waitForElement(optionSelectors, 5000);
+      await this.scrollIntoView(option);
+      await this.delay(this.randomDelay(300, 600));
+      option.click();
+      
+      await this.delay(this.randomDelay(1000, 2000));
+      this.log(`✅ Successfully selected exterior color: ${exteriorColor}`);
+      return true;
+      
+    } catch (error) {
+      this.log(`⚠️ Could not select exterior color: ${exteriorColor}`, error);
+      return false;
+    }
+  }
+
+  // Select Interior Color dropdown
+  async selectInteriorColor(interiorColor) {
+    try {
+      this.log(`🪑 Selecting interior color: ${interiorColor}`);
+      
+      const colorSelectors = [
+        'text:Interior color',
+        '[aria-label*="Interior color"]',
+        '[aria-label*="Interior"]',
+        'span:contains("Interior color")',
+        '[data-testid*="interior"]'
+      ];
+      
+      const dropdown = await this.waitForElement(colorSelectors, 8000);
+      await this.scrollIntoView(dropdown);
+      await this.delay(this.randomDelay(500, 1000));
+      
+      this.log('🪑 Found interior color dropdown, clicking...');
+      dropdown.click();
+      await this.delay(this.randomDelay(2000, 3000));
+      
+      // Look for color option
+      const optionSelectors = [
+        `text:${interiorColor}`,
+        `[role="option"]:contains("${interiorColor}")`,
+        `[data-value*="${interiorColor.toLowerCase()}"]`
+      ];
+      
+      const option = await this.waitForElement(optionSelectors, 5000);
+      await this.scrollIntoView(option);
+      await this.delay(this.randomDelay(300, 600));
+      option.click();
+      
+      await this.delay(this.randomDelay(1000, 2000));
+      this.log(`✅ Successfully selected interior color: ${interiorColor}`);
+      return true;
+      
+    } catch (error) {
+      this.log(`⚠️ Could not select interior color: ${interiorColor}`, error);
+      return false;
+    }
+  }
+
+  // Select Clean Title checkbox (always check it)
+  async selectCleanTitle(shouldCheck = true) {
+    try {
+      this.log(`📋 Setting clean title checkbox: ${shouldCheck}`);
+      
+      const checkboxSelectors = [
+        'text:This vehicle has a clean title',
+        '[aria-label*="clean title"]',
+        '[aria-label*="This vehicle has a clean title"]',
+        'input[type="checkbox"]',
+        '[data-testid*="clean"]',
+        '[data-testid*="title"]'
+      ];
+      
+      const checkbox = await this.waitForElement(checkboxSelectors, 8000);
+      await this.scrollIntoView(checkbox);
+      
+      // Check if it's already checked
+      const isChecked = checkbox.checked || checkbox.getAttribute('aria-checked') === 'true';
+      
+      if (shouldCheck && !isChecked) {
+        this.log('📋 Checking clean title checkbox...');
+        checkbox.click();
+        await this.delay(this.randomDelay(500, 1000));
+      } else if (!shouldCheck && isChecked) {
+        this.log('📋 Unchecking clean title checkbox...');
+        checkbox.click();
+        await this.delay(this.randomDelay(500, 1000));
+      }
+      
+      this.log(`✅ Successfully set clean title: ${shouldCheck}`);
+      return true;
+      
+    } catch (error) {
+      this.log(`⚠️ Could not set clean title checkbox`, error);
+      return false;
+    }
+  }
+
+  // Select Vehicle Condition dropdown (default to "Excellent")
+  async selectVehicleCondition(condition = 'Excellent') {
+    try {
+      this.log(`⭐ Selecting vehicle condition: ${condition}`);
+      
+      const conditionSelectors = [
+        'text:Vehicle condition',
+        '[aria-label*="Vehicle condition"]',
+        '[aria-label*="Condition"]',
+        'span:contains("Vehicle condition")',
+        '[data-testid*="condition"]'
+      ];
+      
+      const dropdown = await this.waitForElement(conditionSelectors, 8000);
+      await this.scrollIntoView(dropdown);
+      await this.delay(this.randomDelay(500, 1000));
+      
+      this.log('⭐ Found vehicle condition dropdown, clicking...');
+      dropdown.click();
+      await this.delay(this.randomDelay(2000, 3000));
+      
+      // Look for condition option
+      const optionSelectors = [
+        `text:${condition}`,
+        `[role="option"]:contains("${condition}")`,
+        `[data-value*="${condition.toLowerCase()}"]`
+      ];
+      
+      const option = await this.waitForElement(optionSelectors, 5000);
+      await this.scrollIntoView(option);
+      await this.delay(this.randomDelay(300, 600));
+      option.click();
+      
+      await this.delay(this.randomDelay(1000, 2000));
+      this.log(`✅ Successfully selected vehicle condition: ${condition}`);
+      return true;
+      
+    } catch (error) {
+      this.log(`⚠️ Could not select vehicle condition: ${condition}`, error);
+      return false;
+    }
+  }
+
+  // Select Fuel Type dropdown
+  async selectFuelType(fuelType) {
+    try {
+      this.log(`⛽ Selecting fuel type: ${fuelType}`);
+      
+      const fuelSelectors = [
+        'text:Fuel type',
+        '[aria-label*="Fuel type"]',
+        '[aria-label*="Fuel"]',
+        'span:contains("Fuel type")',
+        '[data-testid*="fuel"]'
+      ];
+      
+      const dropdown = await this.waitForElement(fuelSelectors, 8000);
+      await this.scrollIntoView(dropdown);
+      await this.delay(this.randomDelay(500, 1000));
+      
+      this.log('⛽ Found fuel type dropdown, clicking...');
+      dropdown.click();
+      await this.delay(this.randomDelay(2000, 3000));
+      
+      // Look for fuel type option
+      const optionSelectors = [
+        `text:${fuelType}`,
+        `[role="option"]:contains("${fuelType}")`,
+        `[data-value*="${fuelType.toLowerCase()}"]`
+      ];
+      
+      const option = await this.waitForElement(optionSelectors, 5000);
+      await this.scrollIntoView(option);
+      await this.delay(this.randomDelay(300, 600));
+      option.click();
+      
+      await this.delay(this.randomDelay(1000, 2000));
+      this.log(`✅ Successfully selected fuel type: ${fuelType}`);
+      return true;
+      
+    } catch (error) {
+      this.log(`⚠️ Could not select fuel type: ${fuelType}`, error);
       return false;
     }
   }
