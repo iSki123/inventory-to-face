@@ -21,6 +21,7 @@ interface VehicleFormProps {
 
 const fuelTypes = ['gasoline', 'diesel', 'hybrid', 'electric', 'plug-in hybrid'];
 const transmissions = ['automatic', 'manual', 'cvt'];
+const drivetrains = ['fwd', 'rwd', 'awd', '4wd'];
 const conditions = ['new', 'used', 'certified'];
 const statuses = ['available', 'pending', 'sold', 'draft'];
 
@@ -60,11 +61,48 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
       }
 
       if (data?.success && data?.vinData) {
-        // Update form with decoded VIN data
+        const vinData = data.vinData;
+        
+        // Map NHTSA decoded data to form fields
+        const updates: Partial<Vehicle> = {
+          ...vinData // Store all NHTSA fields
+        };
+
+        // Map fuel type from NHTSA to our standardized values
+        if (vinData.fuel_type_nhtsa) {
+          const fuelType = vinData.fuel_type_nhtsa.toLowerCase();
+          if (fuelType.includes('electric')) updates.fuel_type = 'electric';
+          else if (fuelType.includes('hybrid')) updates.fuel_type = 'hybrid';
+          else if (fuelType.includes('diesel')) updates.fuel_type = 'diesel';
+          else updates.fuel_type = 'gasoline';
+        }
+
+        // Map transmission from NHTSA
+        if (vinData.transmission_nhtsa) {
+          const transmission = vinData.transmission_nhtsa.toLowerCase();
+          if (transmission.includes('manual')) updates.transmission = 'manual';
+          else if (transmission.includes('cvt')) updates.transmission = 'cvt';
+          else updates.transmission = 'automatic';
+        }
+
+        // Map drivetrain from NHTSA
+        if (vinData.drivetrain_nhtsa) {
+          const drivetrain = vinData.drivetrain_nhtsa.toLowerCase();
+          if (drivetrain.includes('front')) updates.drivetrain = 'fwd';
+          else if (drivetrain.includes('rear')) updates.drivetrain = 'rwd';
+          else if (drivetrain.includes('all') || drivetrain.includes('4wd')) updates.drivetrain = 'awd';
+        }
+
+        // Map engine information
+        if (vinData.engine_nhtsa) {
+          updates.engine = vinData.engine_nhtsa;
+        }
+
         setFormData(prev => ({
           ...prev,
-          ...data.vinData
+          ...updates
         }));
+        
         toast.success('VIN decoded successfully! Vehicle details updated.');
       } else {
         throw new Error(data?.error || 'Failed to decode VIN');
@@ -329,6 +367,33 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="drivetrain">Drivetrain</Label>
+              <Select value={formData.drivetrain} onValueChange={(value) => updateField('drivetrain', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select drivetrain" />
+                </SelectTrigger>
+                <SelectContent>
+                  {drivetrains.map(drive => (
+                    <SelectItem key={drive} value={drive}>
+                      {drive.toUpperCase()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="engine">Engine</Label>
+              <Input
+                id="engine"
+                value={formData.engine || ''}
+                onChange={(e) => updateField('engine', e.target.value)}
+                placeholder="V6, 4-Cylinder, etc."
+              />
             </div>
           </div>
 
