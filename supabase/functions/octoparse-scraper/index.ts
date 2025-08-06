@@ -8,22 +8,11 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log('=== OCTOPARSE FUNCTION STARTED ===');
-  console.log('Method:', req.method);
-  console.log('URL:', req.url);
-  
   if (req.method === "OPTIONS") {
-    console.log('OPTIONS request - returning CORS headers');
     return new Response(null, { headers: corsHeaders });
   }
 
-  let requestBody;
   try {
-    // Parse request body first and store it
-    console.log('About to parse request body...');
-    requestBody = await req.json();
-    console.log('Request received:', JSON.stringify(requestBody, null, 2));
-
     // Initialize Supabase client
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -31,7 +20,7 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    const { action, sourceId, userId, taskId, aiDescriptionPrompt } = requestBody;
+    const { action, sourceId, userId, taskId, aiDescriptionPrompt } = await req.json();
 
     if (!action || !userId) {
       throw new Error('action and userId are required');
@@ -62,53 +51,38 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    console.log('Processing action:', action);
     switch (action) {
       case 'start_scraping':
-        console.log('Calling startScraping...');
         return await startScraping(supabaseClient, sourceId, userId);
       case 'get_scraping_status':
-        console.log('Calling getScrapingStatus...');
         return await getScrapingStatus(supabaseClient, sourceId);
       case 'process_scraped_data':
-        console.log('Calling processScrapedData...');
         return await processScrapedData(supabaseClient, sourceId, userId);
       case 'import_task':
-        console.log('Calling importSpecificTask...');
         return await importSpecificTask(supabaseClient, taskId, userId, aiDescriptionPrompt);
       case 'list_tasks':
-        console.log('Calling listAvailableTasks...');
         return await listAvailableTasks();
       default:
         throw new Error('Invalid action');
     }
 
   } catch (error) {
-    console.error('=== OCTOPARSE SCRAPER ERROR ===');
-    console.error('Error type:', error.constructor.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
-    console.error('Request details:', {
-      method: req.method,
-      url: req.url,
-      headers: Object.fromEntries(req.headers.entries())
+    console.error('Octoparse scraper error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
     });
-    
-    // Log the request body that caused the error
-    if (requestBody) {
-      console.error('Request body:', JSON.stringify(requestBody, null, 2));
-    }
     
     return new Response(
       JSON.stringify({ 
         error: error.message || 'Unknown error occurred',
         success: false,
-        errorType: error.constructor.name,
         details: error.stack
       }),
       { 
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500 
+        status: 400 
       }
     );
   }
@@ -319,31 +293,6 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
 
   for (const vehicle of vehicleData) {
     try {
-      // Decode VIN if provided
-      let vinDecodedData = {};
-      if (vehicle.vin) {
-        try {
-          const { data: vinData, error: vinError } = await supabaseClient.functions.invoke('vin-decoder', {
-            body: { vin: vehicle.vin }
-          });
-
-          if (!vinError && vinData?.success) {
-            vinDecodedData = {
-              body_style_nhtsa: vinData.body_style_nhtsa,
-              fuel_type_nhtsa: vinData.fuel_type_nhtsa,
-              transmission_nhtsa: vinData.transmission_nhtsa,
-              engine_nhtsa: vinData.engine_nhtsa,
-              vehicle_type_nhtsa: vinData.vehicle_type_nhtsa,
-              drivetrain_nhtsa: vinData.drivetrain_nhtsa,
-              vin_decoded_at: vinData.vin_decoded_at
-            };
-            console.log(`VIN decoded for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
-          }
-        } catch (error) {
-          console.warn('VIN decoding failed:', error);
-        }
-      }
-
       // Generate AI description if short description or missing
       let aiDescription = null;
       if (!vehicle.description || vehicle.description.length < 30) {
@@ -382,11 +331,10 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
           vin: vehicle.vin,
           features: vehicle.features,
           images: vehicle.images,
-          trim: vehicle.trim,
-          location: vehicle.location || userProfile?.location || '',
-          contact_phone: vehicle.contact_phone || userProfile?.phone || '',
-          contact_email: vehicle.contact_email,
-          ...vinDecodedData,
+           trim: vehicle.trim,
+           location: vehicle.location || userProfile?.location || '',
+           contact_phone: vehicle.contact_phone || userProfile?.phone || '',
+           contact_email: vehicle.contact_email,
           user_id: userId,
           status: 'available',
           facebook_post_status: 'draft',
@@ -689,12 +637,8 @@ function generateMockVehicleData() {
 }
 
 async function importSpecificTask(supabaseClient: any, taskId: string, userId: string, aiDescriptionPrompt?: string) {
-  console.log('=== IMPORT SPECIFIC TASK STARTED ===');
-  console.log('Task ID:', taskId, 'User ID:', userId);
-  
   const accessToken = Deno.env.get('OCTOPARSE_API_KEY');
   if (!accessToken) {
-    console.error('OCTOPARSE_API_KEY not found');
     throw new Error('Octoparse access token not configured');
   }
 
@@ -754,7 +698,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
 
     for (const vehicle of vehicleData) {
       try {
-        // Generate AI description if needed
+        // Generate AI description with custom prompt if provided, but don't fail if it doesn't work
         let aiDescription = null;
         let finalDescription = vehicle.description || `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
         
@@ -768,16 +712,28 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
               }
             });
 
+            // Accept both success=true responses and fallback descriptions from errors
             if (data?.description) {
               aiDescription = data.description;
-              finalDescription = aiDescription;
+              finalDescription = aiDescription; // Use AI description as the main description
               console.log(`Generated AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+            } else {
+              console.log('AI description generation failed, continuing without it:', error?.message || 'Unknown error');
             }
           } catch (error) {
             console.warn('Failed to generate AI description, continuing without it:', error);
           }
         }
+
         console.log(`Inserting vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+        console.log('Vehicle data to insert:', JSON.stringify({
+          year: vehicle.year,
+          make: vehicle.make,
+          model: vehicle.model,
+          price: vehicle.price,
+          mileage: vehicle.mileage,
+          user_id: userId
+        }, null, 2));
         
         const { data: inserted, error } = await supabaseClient
           .from('vehicles')
@@ -803,17 +759,21 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
             contact_email: vehicle.contact_email,
             user_id: userId,
             status: 'available',
-            facebook_post_status: 'draft'
+            facebook_post_status: 'draft',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           }])
           .select()
           .single();
 
+        console.log('Database insertion result:', { data: inserted, error: error });
+        
         if (!error && inserted) {
           insertedVehicles.push(inserted);
-          console.log(`Successfully inserted vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+          console.log(`Successfully inserted vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} with ID: ${inserted.id}`);
         } else {
-          console.error(`Failed to insert vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, error);
-          errors.push({ vehicle, error: error.message });
+          console.error(`Failed to insert vehicle ${vehicle.year} ${vehicle.make} ${vehicle.model}:`, error);
+          errors.push({ vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`, error: error?.message });
         }
       } catch (error) {
         console.error('Error processing vehicle:', error);
