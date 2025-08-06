@@ -750,21 +750,23 @@ function parseOctoparseData(rawData: any[]): any[] {
   console.log(`Parsed ${parsedVehicles.length} raw vehicles before filtering`);
   
   return parsedVehicles.filter(vehicle => {
-    // Only require make and model; price can be 0 or missing (we'll default to 0)
+    // Include if we already have make+model OR we can enrich via VIN when images exist
     const hasMakeModel = Boolean(vehicle.make && String(vehicle.make).trim()) && Boolean(vehicle.model && String(vehicle.model).trim());
+    const hasVinWithImages = Boolean(vehicle.vin && String(vehicle.vin).length === 17) && (Array.isArray(vehicle.images) && vehicle.images.length > 0);
 
-    if (!hasMakeModel) {
-      console.log(`Skipping vehicle due to missing make/model: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, {
+    if (!(hasMakeModel || hasVinWithImages)) {
+      console.log(`Skipping vehicle due to insufficient data: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, {
         hasMake: Boolean(vehicle.make),
         hasModel: Boolean(vehicle.model),
-        price: vehicle.price,
-        images: vehicle.images.length
+        hasVin: Boolean(vehicle.vin),
+        images: vehicle.images?.length || 0,
+        price: vehicle.price
       });
     } else {
-      console.log(`Including vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} - Price: $${(vehicle.price || 0)/100}, Images: ${vehicle.images.length}`);
+      console.log(`Including vehicle candidate: ${vehicle.year} ${vehicle.make || '(unknown)'} ${vehicle.model || ''} - VIN: ${vehicle.vin || 'none'} Images: ${vehicle.images.length}`);
     }
 
-    return hasMakeModel;
+    return hasMakeModel || hasVinWithImages;
   });
 }
 
@@ -919,6 +921,39 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
           } catch (error) {
             console.warn('Failed to generate AI description, continuing without it:', error);
           }
+        }
+
+        // Enrich missing make/model/year from VIN when images exist
+        if ((!vehicle.make || !vehicle.model || !vehicle.year) && vehicle.vin && String(vehicle.vin).length === 17) {
+          try {
+            const vinResp = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/${vehicle.vin}?format=json`);
+            if (vinResp.ok) {
+              const vinJson = await vinResp.json();
+              const results = vinJson.Results || [];
+              const getVar = (name: string) => {
+                const r = results.find((x: any) => x.Variable === name);
+                return r?.Value || null;
+              };
+              const makeVIN = getVar('Make');
+              const modelVIN = getVar('Model');
+              const yearVIN = parseInt(getVar('Model Year') || getVar('ModelYear'));
+              if (!vehicle.make && makeVIN) vehicle.make = String(makeVIN);
+              if (!vehicle.model && modelVIN) vehicle.model = String(modelVIN);
+              if ((!vehicle.year || isNaN(vehicle.year)) && yearVIN) vehicle.year = yearVIN;
+              console.log('VIN enrichment applied:', { make: vehicle.make, model: vehicle.model, year: vehicle.year });
+            } else {
+              console.warn('VIN enrichment failed with status:', vinResp.status);
+            }
+          } catch (e) {
+            console.warn('VIN enrichment error:', e);
+          }
+        }
+
+        // If still missing required fields (make/model), skip this row to avoid DB errors
+        if (!vehicle.make || !vehicle.model) {
+          console.warn(`Skipping vehicle after VIN enrichment due to missing make/model. VIN: ${vehicle.vin || 'N/A'}`);
+          errors.push({ vehicle: vehicle.vin || 'unknown', error: 'Missing make/model after VIN enrichment' });
+          continue;
         }
 
         console.log(`Inserting vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
