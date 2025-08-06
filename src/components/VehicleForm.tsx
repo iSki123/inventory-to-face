@@ -20,7 +20,7 @@ interface VehicleFormProps {
 }
 
 // Facebook Marketplace standard options
-const bodyStyles = ['Coupe', 'Truck', 'Sedan', 'Hatchback', 'SUV', 'Convertible', 'Wagon', 'Minivan', 'Small Car', 'Other'];
+const bodyStyles = ['Coupe', 'Truck', 'Sedan', 'Hatchback', 'SUV', 'Convertible', 'Wagon', 'Van/Minivan', 'Small Car', 'Other'];
 const exteriorColors = ['Black', 'Blue', 'Brown', 'Gold', 'Green', 'Gray', 'Pink', 'Purple', 'Red', 'Silver', 'Orange', 'White', 'Yellow', 'Charcoal', 'Off white'];
 const interiorColors = ['Black', 'Blue', 'Brown', 'Gold', 'Green', 'Gray', 'Pink', 'Purple', 'Red', 'Silver', 'Orange', 'White', 'Yellow', 'Charcoal', 'Off white'];
 const fuelTypes = ['Diesel', 'Electric', 'Gasoline', 'Flex', 'Hybrid', 'Petrol', 'Plug-in hybrid', 'Other'];
@@ -66,9 +66,18 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
         const vinData = data.vinData;
         const updates: Partial<Vehicle> = {};
 
-        // Store NHTSA data - these fields exist in the Vehicle interface
+        // Map body style from NHTSA to Facebook format
         if (vinData.body_style_nhtsa) {
-          updates.body_style_nhtsa = vinData.body_style_nhtsa;
+          const nhtsaBodyStyle = vinData.body_style_nhtsa.toLowerCase();
+          if (nhtsaBodyStyle.includes('convertible')) updates.body_style_nhtsa = 'Convertible';
+          else if (nhtsaBodyStyle.includes('coupe')) updates.body_style_nhtsa = 'Coupe';
+          else if (nhtsaBodyStyle.includes('hatchback')) updates.body_style_nhtsa = 'Hatchback';
+          else if (nhtsaBodyStyle.includes('sedan')) updates.body_style_nhtsa = 'Sedan';
+          else if (nhtsaBodyStyle.includes('suv') || nhtsaBodyStyle.includes('sport utility')) updates.body_style_nhtsa = 'SUV';
+          else if (nhtsaBodyStyle.includes('pickup') || nhtsaBodyStyle.includes('truck')) updates.body_style_nhtsa = 'Truck';
+          else if (nhtsaBodyStyle.includes('van') || nhtsaBodyStyle.includes('minivan')) updates.body_style_nhtsa = 'Van/Minivan';
+          else if (nhtsaBodyStyle.includes('wagon')) updates.body_style_nhtsa = 'Wagon';
+          else updates.body_style_nhtsa = 'SUV'; // Default fallback
         }
 
         // Map fuel type from NHTSA to Facebook format
@@ -98,7 +107,14 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
         setFormData(prev => ({
           ...prev,
           ...updates,
-          ...vinData // Include all NHTSA fields
+          // Include all NHTSA fields for display
+          body_style_nhtsa: updates.body_style_nhtsa || vinData.body_style_nhtsa,
+          fuel_type_nhtsa: vinData.fuel_type_nhtsa,
+          transmission_nhtsa: vinData.transmission_nhtsa,
+          engine_nhtsa: vinData.engine_nhtsa,
+          vehicle_type_nhtsa: updates.vehicle_type_nhtsa || vinData.vehicle_type_nhtsa,
+          drivetrain_nhtsa: vinData.drivetrain_nhtsa,
+          vin_decoded_at: vinData.vin_decoded_at
         }));
 
         toast.success('VIN decoded successfully');
