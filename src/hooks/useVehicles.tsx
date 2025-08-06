@@ -150,6 +150,31 @@ export const useVehicles = () => {
 
       const newVehicle = data as Vehicle;
       setVehicles(prev => [newVehicle, ...prev]);
+      
+      // Auto-decode VIN if present and not already decoded
+      if (newVehicle.vin && newVehicle.vin.length === 17 && !newVehicle.vin_decoded_at) {
+        try {
+          const { data: vinData, error: vinError } = await supabase.functions.invoke('vin-decoder', {
+            body: { 
+              vin: newVehicle.vin,
+              vehicleId: newVehicle.id 
+            }
+          });
+
+          if (!vinError && vinData?.success) {
+            console.log(`VIN decoded automatically for new vehicle: ${newVehicle.year} ${newVehicle.make} ${newVehicle.model}`);
+            // Update local state with decoded data
+            setVehicles(prev => prev.map(v => 
+              v.id === newVehicle.id 
+                ? { ...v, ...vinData.vinData }
+                : v
+            ));
+          }
+        } catch (error) {
+          console.error(`Error auto-decoding VIN for new vehicle:`, error);
+        }
+      }
+      
       toast({
         title: "Success",
         description: "Vehicle added successfully",

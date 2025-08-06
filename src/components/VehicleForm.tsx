@@ -45,45 +45,30 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDecodingVin, setIsDecodingVin] = useState(false);
 
-  const handleDecodeVin = async () => {
-    if (!formData.vin || formData.vin.length !== 17) {
-      toast.error('Please enter a valid 17-character VIN');
-      return;
-    }
-
+  const decodeVinAutomatically = async (vin: string) => {
+    if (!vin || vin.length !== 17) return;
+    
     setIsDecodingVin(true);
     try {
       const { data, error } = await supabase.functions.invoke('vin-decoder', {
         body: { 
-          vin: formData.vin,
+          vin: vin,
           vehicleId: vehicle?.id // Pass vehicle ID if editing existing vehicle
         }
       });
 
       if (error) {
-        throw error;
+        console.error('VIN decode error:', error);
+        return;
       }
 
       if (data?.success && data?.vinData) {
         const vinData = data.vinData;
-        
-        // Map NHTSA decoded data to Facebook Marketplace format
-        const updates: Partial<Vehicle> = {
-          ...vinData // Store all NHTSA fields
-        };
+        const updates: Partial<Vehicle> = {};
 
-        // Map body style from NHTSA to Facebook format
+        // Store NHTSA data - these fields exist in the Vehicle interface
         if (vinData.body_style_nhtsa) {
-          const bodyStyle = vinData.body_style_nhtsa.toLowerCase();
-          if (bodyStyle.includes('suv') || bodyStyle.includes('sport utility')) updates.body_style_nhtsa = 'SUV';
-          else if (bodyStyle.includes('coupe')) updates.body_style_nhtsa = 'Coupe';
-          else if (bodyStyle.includes('sedan')) updates.body_style_nhtsa = 'Sedan';
-          else if (bodyStyle.includes('truck')) updates.body_style_nhtsa = 'Truck';
-          else if (bodyStyle.includes('hatchback')) updates.body_style_nhtsa = 'Hatchback';
-          else if (bodyStyle.includes('convertible')) updates.body_style_nhtsa = 'Convertible';
-          else if (bodyStyle.includes('wagon')) updates.body_style_nhtsa = 'Wagon';
-          else if (bodyStyle.includes('minivan')) updates.body_style_nhtsa = 'Minivan';
-          else updates.body_style_nhtsa = 'Other';
+          updates.body_style_nhtsa = vinData.body_style_nhtsa;
         }
 
         // Map fuel type from NHTSA to Facebook format
@@ -104,37 +89,45 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
           else updates.transmission = 'Automatic transmission';
         }
 
-        // Map vehicle type from NHTSA
+        // Store NHTSA vehicle type data
         if (vinData.vehicle_type_nhtsa) {
-          const vehicleType = vinData.vehicle_type_nhtsa.toLowerCase();
-          if (vehicleType.includes('motorcycle')) updates.vehicle_type_nhtsa = 'Motorcycle';
-          else if (vehicleType.includes('rv') || vehicleType.includes('camper')) updates.vehicle_type_nhtsa = 'RV/Camper';
-          else if (vehicleType.includes('trailer')) updates.vehicle_type_nhtsa = 'Trailer';
-          else if (vehicleType.includes('boat')) updates.vehicle_type_nhtsa = 'Boat';
-          else if (vehicleType.includes('commercial') || vehicleType.includes('industrial')) updates.vehicle_type_nhtsa = 'Commercial/Industrial';
-          else updates.vehicle_type_nhtsa = 'Car/Truck';
+          updates.vehicle_type_nhtsa = vinData.vehicle_type_nhtsa;
         }
 
-        // Map engine information
-        if (vinData.engine_nhtsa) {
-          updates.engine = vinData.engine_nhtsa;
-        }
-
+        // Update form data with decoded information
         setFormData(prev => ({
           ...prev,
-          ...updates
+          ...updates,
+          ...vinData // Include all NHTSA fields
         }));
-        
-        toast.success('VIN decoded successfully! Vehicle details updated.');
-      } else {
-        throw new Error(data?.error || 'Failed to decode VIN');
+
+        toast.success('VIN decoded successfully');
       }
     } catch (error) {
-      console.error('VIN decoding error:', error);
-      toast.error('Failed to decode VIN. Please try again.');
+      console.error('Error decoding VIN:', error);
     } finally {
       setIsDecodingVin(false);
     }
+  };
+
+  // Auto-decode VIN when it changes and is 17 characters
+  useEffect(() => {
+    if (formData.vin && formData.vin.length === 17 && !formData.vin_decoded_at) {
+      const timeoutId = setTimeout(() => {
+        decodeVinAutomatically(formData.vin!);
+      }, 1000); // Debounce for 1 second
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [formData.vin, formData.vin_decoded_at]);
+
+  const handleDecodeVin = async () => {
+    if (!formData.vin || formData.vin.length !== 17) {
+      toast.error('Please enter a valid 17-character VIN');
+      return;
+    }
+
+    await decodeVinAutomatically(formData.vin);
   };
 
   // Update form data when vehicle prop changes or profile loads
