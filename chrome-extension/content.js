@@ -875,11 +875,14 @@ class SalesonatorAutomator {
       makeOption.click();
       await this.delay(this.randomDelay(1000, 1500)); // Wait for selection to register
       
-      // Verify the dropdown now displays the selected make
+      // Verify the dropdown now displays the selected make (log in Title Case)
       const selectedText = (makeDropdown.textContent || '').toLowerCase();
       const verified = selectedText.includes(cleanMake.toLowerCase());
+      const titleMake = cleanMake
+        .toLowerCase()
+        .replace(/\b\w/g, (c) => c.toUpperCase());
       if (verified) {
-        this.log(`✅ Successfully selected make: ${cleanMake}`);
+        this.log(`✅ Successfully selected make: ${titleMake}`);
       } else {
         this.log(`⚠️ Make selection not verified. Dropdown shows: ${makeDropdown.textContent}`);
       }
