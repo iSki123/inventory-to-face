@@ -1012,12 +1012,12 @@ class SalesonatorAutomator {
     try {
       this.log(`🚗 Selecting body style: ${bodyStyle}`);
 
-      // Find the dropdown by looking for the label text and closest clickable element
+      const label = 'Body style';
       const dropdownSelectors = [
         '[aria-label*="Body style"]',
         'text:Body style'
       ];
-      let dropdown = this.findDropdownByLabel('Body style') || await this.waitForElement(dropdownSelectors, 5000).catch(() => null);
+      let dropdown = this.findDropdownByLabel(label) || await this.waitForElement(dropdownSelectors, 8000).catch(() => null);
 
       if (!dropdown) {
         // Try XPath
@@ -1041,23 +1041,50 @@ class SalesonatorAutomator {
       dropdown.click();
       await this.delay(this.randomDelay(1200, 2000));
 
-      // Try to find option by text (case-insensitive, deep text)
-      const norm = (s) => (s || '').toLowerCase().trim();
+      const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
       const target = norm(bodyStyle);
-      let option = Array.from(document.querySelectorAll('[role="option"], li, div[role="menuitem"]')).find(opt => norm(opt.textContent).includes(target));
+      const getOptions = () => Array.from(document.querySelectorAll('[role="option"], div[role="menuitem"], li'));
 
-      if (!option) {
-        // Fallback: use keyboard-driven selection
-        const success = await this.selectDropdownOption(['[aria-label*="Body style"]','text:Body style'], bodyStyle, true);
-        if (success) { this.log(`✅ Successfully selected body style: ${bodyStyle}`); return true; }
+      let option = getOptions().find(opt => {
+        const txt = norm(opt.textContent || '');
+        const aria = norm(opt.getAttribute?.('aria-label') || '');
+        return txt === target || aria === target || txt.includes(target);
+      });
+
+      if (option) {
+        await this.performFacebookDropdownClick(option);
+        await this.delay(this.randomDelay(800, 1500));
       }
 
-      if (!option) throw new Error(`Body style option "${bodyStyle}" not found`);
+      // Verify selection appeared next to the label
+      const verify = () => {
+        const el = this.findDropdownByLabel(label) || dropdown;
+        const txt = (el?.textContent || '').toLowerCase();
+        return txt.includes(target);
+      };
 
-      await this.scrollIntoView(option);
-      await this.delay(this.randomDelay(300, 600));
-      option.click();
-      await this.delay(this.randomDelay(800, 1500));
+      if (!option || !verify()) {
+        // Fallback: keyboard/typeahead selection like Year dropdown
+        const success = await this.selectDropdownOption(dropdownSelectors, bodyStyle, true);
+        await this.delay(this.randomDelay(800, 1200));
+        if (success && verify()) { this.log(`✅ Successfully selected body style: ${bodyStyle}`); return true; }
+      }
+
+      if (!verify()) {
+        // Retry: reopen and try again with direct option click
+        dropdown.click();
+        await this.delay(this.randomDelay(800, 1200));
+        option = getOptions().find(opt => {
+          const txt = norm(opt.textContent || '');
+          const aria = norm(opt.getAttribute?.('aria-label') || '');
+          return txt === target || aria === target || txt.includes(target);
+        });
+        if (!option) throw new Error(`Body style option "${bodyStyle}" not found`);
+        await this.performFacebookDropdownClick(option);
+        await this.delay(this.randomDelay(800, 1500));
+      }
+
+      if (!verify()) this.log('⚠️ Body style may not have applied visually yet.');
       this.log(`✅ Successfully selected body style: ${bodyStyle}`);
       return true;
     } catch (error) {
