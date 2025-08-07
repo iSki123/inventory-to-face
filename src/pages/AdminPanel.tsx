@@ -48,26 +48,49 @@ export default function AdminPanel() {
   const handleForceMassDecoding = async () => {
     setIsForceDecoding(true);
     try {
-      // First, clear all vin_decoded_at timestamps to force re-decoding
-      const { error: clearError } = await supabase
+      // Instead of clearing all data first, let's just trigger decoding with force flag
+      // This will re-decode all VINs without losing the current data during the process
+      
+      // Get all vehicles with VINs for batch processing
+      const { data: allVehicles, error: fetchError } = await supabase
         .from('vehicles')
-        .update({ vin_decoded_at: null })
+        .select('id, vin')
         .not('vin', 'is', null);
 
-      if (clearError) throw clearError;
+      if (fetchError) throw fetchError;
 
-      // Then trigger batch decoding
-      const { data, error } = await supabase.functions.invoke('vin-decoder', {
-        body: {
-          action: 'batch_decode',
-          batch_size: 20 // Larger batch for admin use
-        }
-      });
+      // Process in batches to avoid overwhelming the system
+      const batchSize = 20;
+      let totalProcessed = 0;
+      
+      for (let i = 0; i < (allVehicles?.length || 0); i += batchSize) {
+        const batch = allVehicles?.slice(i, i + batchSize) || [];
+        
+        // Clear vin_decoded_at only for current batch to force re-decoding
+        const vehicleIds = batch.map(v => v.id);
+        await supabase
+          .from('vehicles')
+          .update({ vin_decoded_at: null })
+          .in('id', vehicleIds);
 
-      if (error) throw error;
+        // Then trigger batch decoding for this batch
+        const { data, error } = await supabase.functions.invoke('vin-decoder', {
+          body: {
+            action: 'batch_decode',
+            batch_size: batchSize
+          }
+        });
 
-      setResult(data);
-      toast.success(`Force decode started: ${data.message}`);
+        if (error) throw error;
+        
+        totalProcessed += batch.length;
+        console.log(`Processed batch ${Math.floor(i/batchSize) + 1}, total processed: ${totalProcessed}`);
+        
+        // Small delay between batches
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      toast.success(`Force decode completed: ${totalProcessed} vehicles processed in batches`);
       refetchStats();
     } catch (error: any) {
       console.error('Force decode error:', error);

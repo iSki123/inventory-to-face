@@ -13,7 +13,39 @@ async function decodeVin(vin: string, vehicleId: string, supabaseClient: any): P
   try {
     console.log(`Decoding VIN: ${vin}`);
     
-    // Call NHTSA VIN decoding API
+    // First check if this VIN has already been decoded by any user
+    const { data: existingVinData, error: vinCheckError } = await supabaseClient
+      .from('vehicles')
+      .select('body_style_nhtsa, drivetrain_nhtsa, engine_nhtsa, fuel_type_nhtsa, transmission_nhtsa, vehicle_type_nhtsa')
+      .eq('vin', vin)
+      .not('vin_decoded_at', 'is', null)
+      .limit(1)
+      .single();
+
+    if (!vinCheckError && existingVinData) {
+      console.log(`Using existing VIN data for ${vin} from previous decode`);
+      
+      const vinData = {
+        ...existingVinData,
+        vin_decoded_at: new Date().toISOString()
+      };
+
+      // Update vehicle with existing decoded VIN data
+      const { error: updateError } = await supabaseClient
+        .from('vehicles')
+        .update(vinData)
+        .eq('id', vehicleId);
+
+      if (updateError) {
+        console.error('Error updating vehicle with existing VIN data:', updateError);
+        return false;
+      }
+
+      console.log(`Successfully updated vehicle ${vehicleId} with existing VIN data`);
+      return true;
+    }
+    
+    // If no existing data found, call NHTSA VIN decoding API
     const response = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/${vin}?format=json`);
     
     if (!response.ok) {
