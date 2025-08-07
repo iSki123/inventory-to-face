@@ -2399,31 +2399,50 @@ class SalesonatorAutomator {
     if (this._navGuardsInstalled) return;
     this._navGuardsInstalled = true;
 
-    // Block anchor navigations inside dropdown/listbox/menu while posting
-    const blocker = (e) => {
+    // Block anchor navigations that would navigate away during posting
+    const anchorBlocker = (e) => {
       if (!this.isPosting) return;
       const a = e.target?.closest && e.target.closest('a[href]');
       if (!a) return;
+      const href = a.getAttribute('href') || '';
+      const abs = a.href || href;
       const inMenu = !!a.closest('[role="listbox"], [role="menu"], [aria-haspopup="listbox"], [data-visualcompletion="ignore-dynamic"]');
-      const onCreatePage = window.location.href.includes('/marketplace/create');
-      if (inMenu || onCreatePage) {
+      const offCreate = abs && !abs.includes('facebook.com/marketplace/create');
+      if (inMenu || offCreate) {
         e.preventDefault();
         e.stopPropagation();
         a.removeAttribute('href');
         a.setAttribute('data-salesonator-blocked', 'true');
-        console.warn('[Salesonator] Blocked anchor navigation during posting:', a.textContent?.trim());
+        console.warn('[Salesonator] Blocked anchor navigation during posting:', abs || a.textContent?.trim());
       }
     };
-    document.addEventListener('click', blocker, true);
-    document.addEventListener('mousedown', blocker, true);
-
-    // Soft-prevent page unload while posting (defense-in-depth)
-    window.addEventListener('beforeunload', (e) => {
-      if (this.isPosting) {
-        e.preventDefault();
-        e.returnValue = '';
+    document.addEventListener('click', anchorBlocker, true);
+    document.addEventListener('auxclick', anchorBlocker, true);
+    document.addEventListener('mousedown', anchorBlocker, true);
+    document.addEventListener('keydown', (e) => {
+      if (!this.isPosting) return;
+      if (e.key === 'Enter') {
+        const a = e.target?.closest && e.target.closest('a[href]');
+        if (a) { e.preventDefault(); e.stopPropagation(); }
       }
-    });
+    }, true);
+
+    // Block programmatic window.open during posting if it would leave the create flow
+    try {
+      this._origOpen = window.open.bind(window);
+      window.open = (...args) => {
+        try {
+          if (this.isPosting) {
+            const url = String(args?.[0] || '');
+            if (url && !url.includes('facebook.com/marketplace/create')) {
+              console.warn('[Salesonator] Blocked window.open during posting:', url);
+              return null;
+            }
+          }
+        } catch {}
+        return this._origOpen(...args);
+      };
+    } catch {}
   }
 
   // Message listener setup
