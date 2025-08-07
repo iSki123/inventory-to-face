@@ -56,6 +56,15 @@ export const useVehicles = () => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
 
+  // Remove undefined keys to avoid nulling existing DB values on update
+  const pruneUndefined = <T extends Record<string, any>>(obj: T): Partial<T> => {
+    const cleaned: Record<string, any> = {};
+    Object.entries(obj || {}).forEach(([k, v]) => {
+      if (v !== undefined) cleaned[k] = v;
+    });
+    return cleaned as Partial<T>;
+  };
+
   const fetchVehicles = async () => {
     try {
       setLoading(true);
@@ -272,7 +281,7 @@ export const useVehicles = () => {
 
       const { data, error } = await supabase
         .from('vehicles')
-        .update(processedUpdates)
+        .update(pruneUndefined(processedUpdates))
         .eq('id', id)
         .select()
         .single();
