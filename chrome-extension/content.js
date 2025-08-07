@@ -522,23 +522,29 @@ class SalesonatorAutomator {
     
     // FIRST: Handle vehicle type dropdown selection
     await this.selectVehicleType();
+    await this.delay(this.randomDelay(2000, 4000)); // Human-like pause
     
     // SECOND: Fill Year dropdown
     await this.selectYear(vehicleData.year);
+    await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
     
     // THIRD: Fill Make dropdown  
     await this.selectMake(vehicleData.make);
+    await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
     
     // FOURTH: Fill Model input
     await this.fillModel(vehicleData.model);
+    await this.delay(this.randomDelay(1000, 2000)); // Human-like pause
     
     // FIFTH: Fill Mileage if available
     if (vehicleData.mileage) {
       await this.fillMileage(vehicleData.mileage);
+      await this.delay(this.randomDelay(1000, 2000)); // Human-like pause
     }
     
     // SIXTH: Fill Price
     await this.fillPrice(vehicleData.price);
+    await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
     // Ensure hidden FB fields are revealed
     await this.ensureAdditionalFieldsVisible();
     
@@ -546,6 +552,7 @@ class SalesonatorAutomator {
     const mappedBodyStyle = vehicleData.bodyStyle || vehicleData.body_style || this.mapBodyStyle(vehicleData.body_style_nhtsa || vehicleData.vehicle_type_nhtsa || '');
     if (mappedBodyStyle) {
       await this.selectBodyStyle(mappedBodyStyle);
+      await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
     }
     
     // EIGHTH: Fill Exterior Color (standardize to FB options)
@@ -553,6 +560,7 @@ class SalesonatorAutomator {
     if (standardizedExterior && standardizedExterior !== 'Unknown') {
       await this.ensureAdditionalFieldsVisible();
       await this.selectExteriorColor(standardizedExterior);
+      await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
     }
     
     // NINTH: Fill Interior Color (default to Black if unknown)
@@ -560,13 +568,16 @@ class SalesonatorAutomator {
     if (standardizedInterior) {
       await this.ensureAdditionalFieldsVisible();
       await this.selectInteriorColor(standardizedInterior);
+      await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
     }
     
     // TENTH: Check Clean Title (always default to checked)
     await this.selectCleanTitle(true);
+    await this.delay(this.randomDelay(1000, 2000)); // Human-like pause
     
     // ELEVENTH: Select Vehicle Condition (force to "Excellent" as requested)
     await this.selectVehicleCondition('Excellent');
+    await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
     
     // TWELFTH: Select Fuel Type (map from NHTSA if present)
     const mappedFuel = this.mapFuelType(
@@ -574,11 +585,13 @@ class SalesonatorAutomator {
     );
     if (mappedFuel) {
       await this.selectFuelType(mappedFuel);
+      await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
     }
 
     // THIRTEENTH: Select Transmission (default to Automatic)
     const mappedTransmission = this.mapTransmission(vehicleData.transmission || vehicleData.transmission_nhtsa || '');
     await this.selectTransmission(mappedTransmission);
+    await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
     
     // FOURTEENTH: Fill Description with AI description from database if available
     const description = vehicleData.ai_description || 
@@ -1302,49 +1315,87 @@ class SalesonatorAutomator {
     try {
       this.log(`📋 Setting clean title checkbox: ${shouldCheck}`);
       
-      // Find checkbox by looking for clean title text and associated input
+      // Enhanced search strategy using the same successful pattern as other fields
       let checkbox = null;
       
-      // Try XPath to find clean title checkbox
-      try {
-        const elements = document.evaluate(
-          `//div[contains(text(), "clean title") or contains(text(), "This vehicle has a clean title")]//input[@type="checkbox"] | //input[@type="checkbox"][following-sibling::*[contains(text(), "clean title")]] | //input[@type="checkbox"][preceding-sibling::*[contains(text(), "clean title")]]`,
-          document,
-          null,
-          XPathResult.FIRST_ORDERED_NODE_TYPE,
-          null
-        );
-        if (elements.singleNodeValue) {
-          checkbox = elements.singleNodeValue;
+      // Strategy 1: Look for known Facebook checkbox patterns from logs
+      const ariaLabelSelectors = [
+        'input[name="title_status"]',
+        'input[value="on"][name="title_status"]',
+        '[aria-label*="clean title" i]',
+        '[aria-label*="This vehicle has a clean title" i]',
+        'input[type="checkbox"][aria-label*="title"]'
+      ];
+      
+      for (let selector of ariaLabelSelectors) {
+        checkbox = await this.waitForElement(selector, 500);
+        if (checkbox) {
+          this.log(`✅ Found clean title checkbox using: ${selector}`);
+          break;
         }
-      } catch (e) {
-        // Fallback to direct search
-        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-        for (let cb of checkboxes) {
-          const parent = cb.closest('div, label');
-          if (parent && (parent.textContent.includes('clean title') || 
-                        parent.textContent.includes('This vehicle has a clean title'))) {
-            checkbox = cb;
-            break;
+      }
+      
+      // Strategy 2: Search by text content like successful dropdowns
+      if (!checkbox) {
+        const textCandidates = [
+          'clean title',
+          'This vehicle has a clean title',
+          'title_status'
+        ];
+        
+        for (let text of textCandidates) {
+          // Look for text and find associated input
+          const textElements = Array.from(document.querySelectorAll('*')).filter(el => 
+            el.textContent && el.textContent.toLowerCase().includes(text.toLowerCase())
+          );
+          
+          for (let textEl of textElements) {
+            // Look for checkbox in siblings or parent
+            const nearby = [
+              ...textEl.querySelectorAll('input[type="checkbox"], [role="checkbox"]'),
+              ...textEl.parentElement?.querySelectorAll('input[type="checkbox"], [role="checkbox"]') || [],
+              textEl.previousElementSibling,
+              textEl.nextElementSibling
+            ].filter(Boolean);
+            
+            for (let el of nearby) {
+              if (el.type === 'checkbox' || el.getAttribute('role') === 'checkbox') {
+                checkbox = el;
+                break;
+              }
+            }
+            if (checkbox) break;
           }
+          if (checkbox) break;
+        }
+      }
+      
+      // Strategy 3: Enhanced XPath with case-insensitive search
+      if (!checkbox) {
+        try {
+          const xpathQueries = [
+            `//input[@type="checkbox" and contains(@aria-label, "clean title")]`,
+            `//input[@type="checkbox" and @name="title_status"]`,
+            `//input[@type="checkbox"][ancestor::*[contains(text(), "clean title")]]`,
+            `//input[@type="checkbox"][following-sibling::*[contains(text(), "clean title")]]`,
+            `//input[@type="checkbox"][preceding-sibling::*[contains(text(), "clean title")]]`,
+            `//*[@role="checkbox"][ancestor::*[contains(text(), "clean title")]]`
+          ];
+          
+          for (let query of xpathQueries) {
+            const result = document.evaluate(query, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+            if (result.singleNodeValue) {
+              checkbox = result.singleNodeValue;
+              break;
+            }
+          }
+        } catch (e) {
+          this.log('XPath search failed, continuing...');
         }
       }
       
       if (!checkbox) {
-        // Try looking for any element with role checkbox
-        const roleCheckboxes = document.querySelectorAll('[role="checkbox"]');
-        for (let cb of roleCheckboxes) {
-          const parent = cb.closest('div, label');
-          if (parent && (parent.textContent.includes('clean title') || 
-                        parent.textContent.includes('This vehicle has a clean title'))) {
-            checkbox = cb;
-            break;
-          }
-        }
-      }
-      
-      if (!checkbox) {
-        throw new Error('Clean title checkbox not found');
+        throw new Error('Clean title checkbox not found after comprehensive search');
       }
       
       await this.scrollIntoView(checkbox);
@@ -1577,64 +1628,85 @@ class SalesonatorAutomator {
     }
   }
 
-  // Transmission dropdown
+  // Transmission dropdown using successful field pattern
   async selectTransmission(transmission) {
     try {
       this.log(`⚙️ Selecting transmission: ${transmission}`);
       await this.closeAnyOpenDropdown();
-      let dropdown = this.findDropdownByLabel('Transmission');
-      try {
-        const elements = document.evaluate(
-          `//div[contains(text(), "Transmission")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
-          document,
-          null,
-          XPathResult.FIRST_ORDERED_NODE_TYPE,
-          null
-        );
-        if (elements.singleNodeValue) dropdown = elements.singleNodeValue;
-      } catch (e) {}
+      
+      // Use the same successful pattern as other dropdowns
+      let dropdown = await this.waitForElement('[aria-label*="Transmission"]', 2000);
+      
       if (!dropdown) {
-        const els = document.querySelectorAll('div[role="button"], span[role="button"]');
-        for (let el of els) {
-          if (el.textContent.includes('Transmission') || el.parentElement?.textContent.includes('Transmission')) {
-            dropdown = el; break;
+        // Try text-based search like successful fields
+        dropdown = await this.waitForElement('text:Transmission', 1000);
+      }
+      
+      if (!dropdown) {
+        // Try expanding fields first
+        await this.ensureAdditionalFieldsVisible();
+        await this.delay(1000);
+        dropdown = await this.waitForElement('[aria-label*="Transmission"]', 2000) || 
+                  await this.waitForElement('text:Transmission', 1000);
+      }
+      
+      if (!dropdown) {
+        throw new Error('Transmission dropdown not found');
+      }
+      
+      await this.scrollIntoView(dropdown);
+      await this.delay(this.randomDelay(500, 1000));
+      
+      // Use the same clicking pattern as successful dropdowns
+      await this.performFacebookDropdownClick(dropdown);
+      await this.delay(this.randomDelay(1500, 2500));
+      
+      // Enhanced option matching using the same pattern as other successful fields
+      const mappedTransmission = this.mapTransmission(transmission);
+      const candidates = [
+        mappedTransmission,
+        transmission,
+        'Automatic transmission',
+        'Automatic',
+        'Manual transmission', 
+        'Manual'
+      ].filter(Boolean);
+      
+      this.log(`🔍 Searching for transmission options: ${candidates.join(', ')}`);
+      
+      // Use enhanced waitForElement like successful fields
+      for (const candidate of candidates) {
+        const optionSelectors = [
+          `text:${candidate}`,
+          `[role="option"]:has-text("${candidate}")`,
+          `div:has-text("${candidate}")`,
+          `span:has-text("${candidate}")`
+        ];
+        
+        for (let selector of optionSelectors) {
+          const option = await this.waitForElement(selector, 1000);
+          if (option) {
+            await this.scrollIntoView(option);
+            await this.delay(this.randomDelay(200, 500));
+            await this.performFacebookDropdownClick(option);
+            await this.delay(this.randomDelay(800, 1200));
+            this.log(`✅ Successfully selected transmission: ${candidate}`);
+            return true;
           }
         }
       }
-      if (!dropdown) { // Try expanding and retry
-        await this.ensureAdditionalFieldsVisible();
-        dropdown = this.findDropdownByLabel('Transmission') || dropdown;
-      }
-      if (!dropdown) throw new Error('Transmission dropdown not found');
-      await this.scrollIntoView(dropdown);
-      await this.delay(this.randomDelay(500, 1000));
-      dropdown.click();
-      await this.delay(this.randomDelay(1500, 2500));
-
-      const candidates = [
-        transmission,
-        this.mapTransmission(transmission),
-        'Automatic transmission',
-        'Automatic',
-        'Manual transmission',
-        'Manual'
-      ].filter(Boolean);
-
-      for (const label of candidates) {
-        const optionXpath = `//div[@role="option" and contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "${label.toLowerCase()}")]`;
-        const res = document.evaluate(optionXpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-        if (res.singleNodeValue) {
-          const opt = res.singleNodeValue; await this.scrollIntoView(opt); await this.delay(200); await this.performFacebookDropdownClick(opt);
-          await this.delay(800);
-          this.log(`✅ Selected transmission: ${label}`);
-          return true;
-        }
-      }
-      // Fallback to Automatic
+      
+      // Final XPath fallback
       const fallbackXpath = `//div[@role="option" and contains(text(), "Automatic")]`;
-      const res = document.evaluate(fallbackXpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-      if (res.singleNodeValue) { res.singleNodeValue.click(); await this.delay(800); this.log('✅ Selected transmission: Automatic'); return true; }
-      throw new Error('No matching transmission option');
+      const result = document.evaluate(fallbackXpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+      if (result.singleNodeValue) {
+        await this.performFacebookDropdownClick(result.singleNodeValue);
+        await this.delay(800);
+        this.log('✅ Selected transmission: Automatic (fallback)');
+        return true;
+      }
+      
+      throw new Error('No matching transmission option found');
     } catch (error) {
       this.log(`⚠️ Could not select transmission: ${transmission}`, error);
       return false;
