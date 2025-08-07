@@ -1423,6 +1423,109 @@ class SalesonatorAutomator {
     }
   }
 
+  // Transmission dropdown
+  async selectTransmission(transmission) {
+    try {
+      this.log(`⚙️ Selecting transmission: ${transmission}`);
+      let dropdown = null;
+      try {
+        const elements = document.evaluate(
+          `//div[contains(text(), "Transmission")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
+          document,
+          null,
+          XPathResult.FIRST_ORDERED_NODE_TYPE,
+          null
+        );
+        if (elements.singleNodeValue) dropdown = elements.singleNodeValue;
+      } catch (e) {}
+      if (!dropdown) {
+        const els = document.querySelectorAll('div[role="button"], span[role="button"]');
+        for (let el of els) {
+          if (el.textContent.includes('Transmission') || el.parentElement?.textContent.includes('Transmission')) {
+            dropdown = el; break;
+          }
+        }
+      }
+      if (!dropdown) throw new Error('Transmission dropdown not found');
+      await this.scrollIntoView(dropdown);
+      await this.delay(this.randomDelay(500, 1000));
+      dropdown.click();
+      await this.delay(this.randomDelay(1500, 2500));
+
+      const candidates = [transmission, this.mapTransmission(transmission)];
+      for (const label of candidates.filter(Boolean)) {
+        const optionXpath = `//div[@role="option" and contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "${label.toLowerCase()}")]`;
+        const res = document.evaluate(optionXpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+        if (res.singleNodeValue) {
+          const opt = res.singleNodeValue; await this.scrollIntoView(opt); await this.delay(200); opt.click();
+          await this.delay(800);
+          this.log(`✅ Selected transmission: ${label}`);
+          return true;
+        }
+      }
+      // Fallback to Automatic
+      const fallbackXpath = `//div[@role="option" and contains(text(), "Automatic")]`;
+      const res = document.evaluate(fallbackXpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+      if (res.singleNodeValue) { res.singleNodeValue.click(); await this.delay(800); this.log('✅ Selected transmission: Automatic'); return true; }
+      throw new Error('No matching transmission option');
+    } catch (error) {
+      this.log(`⚠️ Could not select transmission: ${transmission}`, error);
+      return false;
+    }
+  }
+
+  // Mapping helpers and standardizers
+  mapTransmission(input = '') {
+    const v = (input || '').toString().toLowerCase();
+    if (v.includes('manual')) return 'Manual transmission';
+    if (v.includes('cvt') || v.includes('continuously variable')) return 'Automatic transmission';
+    if (v.includes('auto')) return 'Automatic transmission';
+    return 'Automatic transmission';
+  }
+
+  mapFuelType(input = '') {
+    const v = (input || '').toString().toLowerCase();
+    if (v.includes('diesel')) return 'Diesel';
+    if (v.includes('electric')) return 'Electric';
+    if (v.includes('hybrid') || v.includes('phev') || v.includes('hev')) return 'Hybrid';
+    if (v.includes('flex') || v.includes('e85')) return 'Flex fuel';
+    if (v.includes('gas') || v.includes('petrol')) return 'Gasoline';
+    return null;
+  }
+
+  mapBodyStyle(input = '') {
+    const v = (input || '').toString().toLowerCase();
+    if (v.includes('suv') || v.includes('mpv')) return 'SUV';
+    if (v.includes('sedan') || v.includes('saloon')) return 'Sedan';
+    if (v.includes('hatch')) return 'Hatchback';
+    if (v.includes('coupe')) return 'Coupe';
+    if (v.includes('convert')) return 'Convertible';
+    if (v.includes('wagon')) return 'Wagon';
+    if (v.includes('van') || v.includes('minivan')) return 'Van';
+    if (v.includes('truck') || v.includes('pickup') || v.includes('pick-up')) return 'Truck';
+    return null;
+  }
+
+  standardizeExteriorColor(raw = '') {
+    if (!raw) return 'Unknown';
+    const input = raw.toLowerCase();
+    const map = {
+      silver: 'Silver', gray: 'Gray', grey: 'Gray', blue: 'Blue', black: 'Black', white: 'White', pearl: 'White',
+      red: 'Red', green: 'Green', gold: 'Gold', brown: 'Brown', beige: 'Beige', tan: 'Tan', charcoal: 'Charcoal',
+      burgundy: 'Burgundy', orange: 'Orange', yellow: 'Yellow', pink: 'Pink', purple: 'Purple', cream: 'Off white',
+      ivory: 'Off white', champagne: 'Beige', bronze: 'Brown', copper: 'Brown', maroon: 'Burgundy', wine: 'Burgundy',
+      crimson: 'Red', ruby: 'Red', azure: 'Blue', navy: 'Blue', teal: 'Green', lime: 'Green', olive: 'Green',
+      forest: 'Green', slate: 'Gray', gunmetal: 'Charcoal', graphite: 'Charcoal', platinum: 'Silver', titanium: 'Silver',
+      aluminum: 'Silver', pearlcoat: 'White'
+    };
+    for (const key of Object.keys(map)) if (input.includes(key)) return map[key];
+    const priority = ['black','white','silver','gray','blue','red','green'];
+    for (const key of priority) if (input.includes(key)) return map[key] || key.charAt(0).toUpperCase()+key.slice(1);
+    return 'Unknown';
+  }
+
+  standardizeInteriorColor() { return 'Black'; }
+
   // Fill Description textarea
   async fillDescription(description) {
     try {

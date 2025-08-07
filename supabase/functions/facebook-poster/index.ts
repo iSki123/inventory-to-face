@@ -94,6 +94,8 @@ async function getPendingVehicles(supabaseClient: any, userId: string) {
       mileage: vehicle.mileage,
       exterior_color: vehicle.exterior_color,
       interior_color: vehicle.interior_color,
+      exterior_color_standardized: vehicle.exterior_color_standardized,
+      interior_color_standardized: vehicle.interior_color_standardized,
       condition: vehicle.condition,
       description: vehicle.description,
       images: vehicle.images || [],
@@ -103,7 +105,13 @@ async function getPendingVehicles(supabaseClient: any, userId: string) {
       contact_phone: vehicle.contact_phone,
       contact_email: vehicle.contact_email,
       fuel_type: vehicle.fuel_type,
-      transmission: vehicle.transmission
+      transmission: vehicle.transmission,
+      // Include NHTSA-decoded fields for richer mapping
+      fuel_type_nhtsa: vehicle.fuel_type_nhtsa,
+      transmission_nhtsa: vehicle.transmission_nhtsa,
+      vehicle_type_nhtsa: vehicle.vehicle_type_nhtsa,
+      drivetrain_nhtsa: vehicle.drivetrain_nhtsa,
+      body_style_nhtsa: vehicle.body_style_nhtsa
     }));
 
     console.log(`Found ${transformedVehicles.length} vehicles ready to post for user ${userId}`);
