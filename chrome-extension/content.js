@@ -112,37 +112,34 @@ class SalesonatorAutomator {
         // Text content selector using multiple approaches
         else if (selector.startsWith('text:')) {
           const text = selector.replace('text:', '');
-          
-          // Method 1: XPath approach (most reliable)
+          // Method 1: XPath approach (prefer interactive elements, ignore script/style/meta)
           try {
-            const xpath = `.//*[contains(normalize-space(text()), "${text}")]`;
+            const xpath = 
+              `.//*[not(self::script or self::style or self::meta or self::title)]` +
+              `[contains(normalize-space(text()), "${text}")]`;
             const result = document.evaluate(xpath, parentElement, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
             if (result.singleNodeValue) {
-              // Filter out disabled or hidden elements
               const elem = result.singleNodeValue;
-              if (!elem.hasAttribute('aria-disabled') && !elem.hasAttribute('aria-hidden')) {
-                return elem;
-              }
+              const tag = (elem.tagName || '').toUpperCase();
+              const bad = tag === 'SCRIPT' || tag === 'STYLE' || tag === 'META' || tag === 'TITLE';
+              const isHidden = elem.hasAttribute('aria-hidden') && elem.getAttribute('aria-hidden') === 'true';
+              if (!bad && !isHidden) return elem;
             }
           } catch (e) {}
-          
           // Method 2: Manual text search with element filtering
           const elements = Array.from(parentElement.querySelectorAll('*'));
           const found = elements.find(el => {
             const textContent = el.textContent?.trim() || '';
             const innerText = el.innerText?.trim() || '';
             const isMatch = textContent.includes(text) || innerText.includes(text);
-            
-            // Filter out disabled, hidden, or back buttons
-            if (isMatch) {
-              const ariaLabel = el.getAttribute('aria-label') || '';
-              const isDisabled = el.hasAttribute('aria-disabled') && el.getAttribute('aria-disabled') === 'true';
-              const isHidden = el.hasAttribute('aria-hidden') && el.getAttribute('aria-hidden') === 'true';
-              const isBackButton = ariaLabel.toLowerCase().includes('back');
-              
-              return !isDisabled && !isHidden && !isBackButton;
-            }
-            return false;
+            if (!isMatch) return false;
+            const tag = (el.tagName || '').toUpperCase();
+            if (['SCRIPT','STYLE','META','TITLE'].includes(tag)) return false;
+            const ariaLabel = el.getAttribute('aria-label') || '';
+            const isDisabled = el.hasAttribute('aria-disabled') && el.getAttribute('aria-disabled') === 'true';
+            const isHidden = el.hasAttribute('aria-hidden') && el.getAttribute('aria-hidden') === 'true';
+            const isBackButton = ariaLabel.toLowerCase().includes('back');
+            return !isDisabled && !isHidden && !isBackButton;
           });
           if (found) return found;
         }
@@ -390,16 +387,18 @@ class SalesonatorAutomator {
   // Close any open dropdown menus to avoid overlapping interactions
   async closeAnyOpenDropdown() {
     try {
-      const openMenu =
-        document.querySelector('[role="listbox"]') ||
-        document.querySelector('[role="menu"]') ||
-        document.querySelector('[data-visualcompletion="ignore-dynamic"] [role="option"]');
-      if (openMenu) {
+      for (let i = 0; i < 5; i++) {
+        const openMenu =
+          document.querySelector('[role="listbox"]') ||
+          document.querySelector('[role="menu"]') ||
+          document.querySelector('[data-visualcompletion="ignore-dynamic"] [role="option"]');
+        if (!openMenu) break;
+        // Press Escape and click on the page to dismiss
         document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         document.activeElement?.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', bubbles: true }));
-        await this.delay(150);
+        await this.delay(120);
         document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        await this.delay(150);
+        await this.delay(120);
       }
     } catch {}
   }
@@ -659,124 +658,106 @@ class SalesonatorAutomator {
   async fillVehicleFormUserOrder(vehicleData) {
     this.log('🧭 Filling form in strict user-defined order');
 
-    const safeDelay = async (min=500,max=900)=>{ await this.delay(this.randomDelay(min,max)); };
+    const attempt = async (label, fn, retries = 2) => {
+      for (let i = 0; i <= retries; i++) {
+        await this.closeAnyOpenDropdown();
+        const ok = await fn();
+        await this.delay(this.randomDelay(350, 750));
+        await this.closeAnyOpenDropdown();
+        if (ok) return true;
+        this.log(`⚠️ ${label} failed (try ${i + 1}/${retries + 1})`);
+      }
+      throw new Error(`${label} failed after retries`);
+    };
+
+    const safeDelay = async (min = 500, max = 900) => { await this.delay(this.randomDelay(min, max)); };
 
     // 1) Vehicle type (dropdown)
-    await this.closeAnyOpenDropdown();
-    await safeDelay(700,1200);
-    await this.selectVehicleType();
-    await safeDelay(1500,2200);
+    await attempt('Vehicle type', async () => this.selectVehicleType());
+    await safeDelay(1200, 1800);
 
-    // 2) Images
+    // 2) Images (distinct, max 10)
     if (vehicleData.images && vehicleData.images.length) {
-      await this.handleImageUploads(vehicleData.images);
-      await safeDelay(1200,1800);
+      const imgs = Array.from(new Set(vehicleData.images.filter(Boolean))).slice(0, 10);
+      await attempt('Images', async () => this.handleImageUploads(imgs));
+      await safeDelay(900, 1400);
     }
 
-    // 3) Location (typed)
-    try {
-      await this.setLocationTyped(vehicleData);
-    } catch(e) { this.log('⚠️ Location typing skipped:', e); }
-    await safeDelay();
+    // 3) Location (typed, clear first, choose suggestion)
+    await attempt('Location', async () => { try { await this.setLocationTyped(vehicleData); return true; } catch { return false; } });
 
     // 4) Year (dropdown)
     if (vehicleData.year) {
-      await this.selectYear(vehicleData.year);
-      await safeDelay(1200,1800);
+      await attempt('Year', async () => this.selectYear(vehicleData.year));
     }
 
-    // 5) Make (dropdown)
+    // 5) Make (typeahead dropdown)
     if (vehicleData.make) {
-      await this.selectMake(vehicleData.make);
-      await safeDelay(1200,1800);
+      await attempt('Make', async () => this.selectMake(vehicleData.make));
     }
 
     // 6) Model (typed, Title Case)
-    try {
-      const model = this.toTitleCase(String(vehicleData.model || ''));
-      const modelInput = await this.waitForElement([
-        '[aria-label*="Model"]', 'input[placeholder*="Model"]', 'input[name*="model"]'
-      ], 6000);
-      await this.scrollIntoView(modelInput);
-      if (modelInput.select) modelInput.select();
-      await safeDelay(80,150);
-      await this.typeHumanLike(modelInput, model);
-    } catch(e) { this.log('⚠️ Model typing failed:', e); }
-    await safeDelay(900,1400);
+    await attempt('Model', async () => {
+      try {
+        const model = this.toTitleCase(String(vehicleData.model || ''));
+        const el = await this.waitForElement(['[aria-label*="Model"]','input[placeholder*="Model"]','input[name*="model"]'], 6000);
+        await this.scrollIntoView(el);
+        if (el.select) el.select();
+        this.setNativeValue(el, '');
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        await this.delay(80);
+        await this.typeHumanLike(el, model);
+        return (el.value || '').trim().length > 0;
+      } catch { return false; }
+    });
 
     // 7) Mileage (typed, min 300)
-    try {
+    await attempt('Mileage', async () => {
       let miles = parseInt(String(vehicleData.mileage||vehicleData.odometer||'').replace(/[^\d]/g,''),10);
       if (!miles || miles < 300) miles = 300;
-      const mileageInput = await this.waitForElement([
-        '[aria-label*="Mileage"]','input[placeholder*="Mileage"]','input[name*="mileage"]'
-      ], 6000);
-      await this.scrollIntoView(mileageInput);
-      if (mileageInput.select) mileageInput.select();
-      await safeDelay(80,150);
-      await this.typeHumanLike(mileageInput, miles.toString());
-    } catch(e) { this.log('⚠️ Mileage typing failed:', e); }
-    await safeDelay(900,1400);
+      return this.fillMileage(miles);
+    });
 
     // 8) Price (typed)
-    try {
-      const raw = String(vehicleData.price ?? '').replace(/[^\d]/g,'');
-      let val = raw ? parseInt(raw,10) : '';
-      if (String(val).length >= 6 && String(val).endsWith('00')) {
-        const cents = Math.round(val/100);
-        if (cents>=1000 && cents<=250000) val=cents;
-      }
-      const priceInput = await this.waitForElement([
-        '[aria-label*="Price"]','input[placeholder*="Price"]','input[name*="price"]'
-      ], 6000);
-      await this.scrollIntoView(priceInput);
-      if (priceInput.select) priceInput.select();
-      await safeDelay(80,150);
-      await this.typeHumanLike(priceInput, String(val));
-    } catch(e) { this.log('⚠️ Price typing failed:', e); }
-    await safeDelay(1000,1500);
+    await attempt('Price', async () => this.fillPrice(vehicleData.price));
 
     // 9) Body style (dropdown)
     const mappedBodyStyle = vehicleData.bodyStyle || vehicleData.body_style || this.mapBodyStyle(vehicleData.body_style_nhtsa || vehicleData.vehicle_type_nhtsa || '');
     if (mappedBodyStyle) {
-      await this.selectBodyStyle(mappedBodyStyle);
-      await safeDelay(1200,1800);
+      await attempt('Body style', async () => this.selectBodyStyle(mappedBodyStyle));
     }
 
     // 10) Exterior color (dropdown)
     const ext = this.standardizeExteriorColor(vehicleData.exteriorColor || vehicleData.exterior_color);
-    if (ext && ext !== 'Unknown') { await this.selectExteriorColor(ext); await safeDelay(1200,1800); }
+    if (ext && ext !== 'Unknown') {
+      await attempt('Exterior color', async () => this.selectExteriorColor(ext));
+    }
 
     // 11) Interior color (dropdown)
     const intr = this.standardizeInteriorColor(vehicleData.interiorColor || vehicleData.interior_color);
-    if (intr) { await this.selectInteriorColor(intr); await safeDelay(1200,1800); }
+    if (intr) {
+      await attempt('Interior color', async () => this.selectInteriorColor(intr));
+    }
 
     // 12) Title status (checkbox -> Clean title)
-    await this.selectCleanTitle(true);
-    await safeDelay(800,1200);
+    await attempt('Title status', async () => this.selectCleanTitle(true));
 
     // 13) Vehicle condition (dropdown -> Excellent)
-    await this.selectVehicleCondition('Excellent');
-    await safeDelay(1200,1800);
+    await attempt('Vehicle condition', async () => this.selectVehicleCondition('Excellent'));
 
     // 14) Fuel type (dropdown)
     const fuel = this.mapFuelType(vehicleData.fuelType || vehicleData.fuel_type || vehicleData.fuel_type_nhtsa || '');
-    if (fuel) { await this.selectFuelType(fuel); await safeDelay(1200,1800); }
+    if (fuel) {
+      await attempt('Fuel type', async () => this.selectFuelType(fuel));
+    }
 
     // 15) Transmission type (dropdown)
     const trans = this.mapTransmission(vehicleData.transmission || vehicleData.transmission_nhtsa || 'Automatic');
-    await this.selectTransmission(trans);
-    await safeDelay(1200,1800);
+    await attempt('Transmission', async () => this.selectTransmission(trans));
 
     // 16) Description (typed)
     const description = vehicleData.ai_description || vehicleData.description || `${vehicleData.year||''} ${vehicleData.make||''} ${this.toTitleCase(vehicleData.model||'')}`.trim();
-    try {
-      const descriptionInput = await this.waitForElement(['[aria-label*="Description"]','textarea'], 6000);
-      await this.scrollIntoView(descriptionInput);
-      if (descriptionInput.select) descriptionInput.select();
-      await safeDelay(80,150);
-      await this.typeHumanLike(descriptionInput, description);
-    } catch(e) { this.log('⚠️ Description typing failed:', e); }
+    await attempt('Description', async () => this.fillDescription(description));
 
     this.log('✅ Strict order form fill complete');
   }
@@ -788,7 +769,12 @@ class SalesonatorAutomator {
 
     const input = await this.waitForElement(['[aria-label*="Location"]','input[placeholder*="Location"]','input[name*="location"]'], 6000);
     await this.scrollIntoView(input);
+    input.focus();
     if (input.select) input.select();
+    // Hard clear before typing
+    this.setNativeValue(input, '');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await this.delay(100);
     await this.typeHumanLike(input, value);
     await this.delay(400);
     // pick first suggestion if present
@@ -796,7 +782,11 @@ class SalesonatorAutomator {
       const firstOpt = await this.waitForElement(['[role="listbox"] [role="option"]','[role="listbox"] li','ul[role="listbox"] li'], 3000);
       await this.scrollIntoView(firstOpt);
       await this.performFacebookDropdownClick(firstOpt);
-    } catch {}
+    } catch {
+      // Fallback: press Enter to accept the top suggestion
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
+    }
   }
 
   toTitleCase(str) {
