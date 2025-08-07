@@ -209,33 +209,27 @@ class SalesonatorBackground {
   async fetchImageViaProxy(url, sendResponse) {
     try {
       console.log('Fetching image via Supabase proxy:', url);
-      
-      const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/image-proxy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
-        },
-        body: JSON.stringify({
-          imageUrls: [url]
-        })
-      });
+      const endpoint = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/image-proxy';
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ',
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+      };
+      const body = JSON.stringify({ imageUrls: [url] });
+      const response = await fetch(endpoint, { method: 'POST', headers, body });
 
       if (!response.ok) {
-        throw new Error(`Proxy request failed: ${response.status}`);
+        const text = await response.text().catch(() => '');
+        throw new Error(`Proxy request failed: ${response.status}${text ? ` - ${text}` : ''}`);
       }
 
       const data = await response.json();
-      
       if (data.results && data.results[0] && data.results[0].success) {
         const result = data.results[0];
         console.log('Successfully fetched image via proxy, size:', result.size);
-        sendResponse({ 
-          success: true, 
-          data: result.base64
-        });
+        sendResponse({ success: true, data: result.base64 });
       } else {
-        const error = data.results?.[0]?.error || 'Unknown proxy error';
+        const error = data.results?.[0]?.error || data.error || 'Unknown proxy error';
         console.error('Proxy returned error:', error);
         sendResponse({ success: false, error });
       }
@@ -249,42 +243,52 @@ class SalesonatorBackground {
   async preDownloadImagesViaProxy(imageUrls, sendResponse) {
     try {
       console.log('Pre-downloading images via Supabase proxy...');
+
+      const images = Array.isArray(imageUrls) ? imageUrls : [];
+      if (images.length === 0) {
+        console.warn('No image URLs provided to proxy.');
+        sendResponse({ success: true, results: [], successCount: 0, totalCount: 0 });
+        return;
+      }
       
-      const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/image-proxy', {
+      const endpoint = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/image-proxy';
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ',
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+      };
+
+      const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
-        },
-        body: JSON.stringify({
-          imageUrls: imageUrls
-        })
+        headers,
+        body: JSON.stringify({ imageUrls: images })
       });
 
       if (!response.ok) {
-        throw new Error(`Proxy request failed: ${response.status}`);
+        const text = await response.text().catch(() => '');
+        throw new Error(`Proxy request failed: ${response.status}${text ? ` - ${text}` : ''}`);
       }
 
       const data = await response.json();
       
       // Store successful downloads in chrome storage
-      for (const result of data.results) {
+      for (const result of data.results || []) {
         if (result.success) {
           const storageKey = `img_${this.hashString(result.url)}`;
-          const base64Data = result.base64.split(',')[1] || result.base64; // Handle both formats
-          await chrome.storage.local.set({
-            [storageKey]: base64Data
-          });
-          console.log(`Stored image with key: ${storageKey}`);
+          const base64Data = (result.base64 || '').split(',')[1] || result.base64 || '';
+          if (base64Data) {
+            await chrome.storage.local.set({ [storageKey]: base64Data });
+            console.log(`Stored image with key: ${storageKey}`);
+          }
         }
       }
       
-      console.log(`Pre-download complete: ${data.summary.successful}/${data.summary.total} successful`);
+      console.log(`Pre-download complete: ${data.summary?.successful || 0}/${data.summary?.total || images.length} successful`);
       sendResponse({ 
         success: true, 
-        results: data.results,
-        successCount: data.summary.successful,
-        totalCount: data.summary.total
+        results: data.results || [],
+        successCount: data.summary?.successful || 0,
+        totalCount: data.summary?.total || images.length
       });
     } catch (error) {
       console.error('Error pre-downloading images:', error);

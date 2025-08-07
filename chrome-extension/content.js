@@ -1339,7 +1339,7 @@ class SalesonatorAutomator {
       else if (v.includes('excellent')) condition = 'Excellent';
       else if (v.includes('good')) condition = 'Good';
       else if (v.includes('fair')) condition = 'Fair';
-      else if (v.includes('new')). condition = 'New';
+      else if (v.includes('new')) condition = 'New';
 
       this.log(`⭐ Selecting vehicle condition: ${condition}`);
       
