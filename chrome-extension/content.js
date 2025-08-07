@@ -166,6 +166,79 @@ class SalesonatorAutomator {
     return elements.find(el => el.textContent && el.textContent.trim().includes(text));
   }
 
+  // NEW: Find an input by its visible label text (robust to DOM changes)
+  findInputByLabel(labelText, parentElement = document) {
+    const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const target = norm(labelText);
+
+    // 1) label[for] association
+    const labels = Array.from(parentElement.querySelectorAll('label'));
+    for (const label of labels) {
+      if (norm(label.textContent).includes(target)) {
+        if (label.htmlFor) {
+          const el = parentElement.getElementById ? parentElement.getElementById(label.htmlFor) : document.getElementById(label.htmlFor);
+          if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return el;
+        }
+        const nested = label.querySelector('input, textarea');
+        if (nested) return nested;
+        const containerInput = label.parentElement?.querySelector('input, textarea');
+        if (containerInput) return containerInput;
+      }
+    }
+
+    // 2) XPath: label text followed by input/textarea
+    try {
+      const xpath = `//label[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "${target}")]/following::*[self::input or self::textarea][1]`;
+      const res = document.evaluate(xpath, parentElement, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+      if (res.singleNodeValue) return res.singleNodeValue;
+    } catch {}
+
+    // 3) Container approach
+    const containers = Array.from(parentElement.querySelectorAll('div, section, form, fieldset'));
+    for (const c of containers) {
+      if (norm(c.textContent).includes(target)) {
+        const el = c.querySelector('input, textarea');
+        if (el) return el;
+      }
+    }
+
+    // 4) Attribute fallbacks
+    const attr = parentElement.querySelector(
+      `input[aria-label*="${labelText}"] , input[placeholder*="${labelText}"] , input[name*="${labelText.toLowerCase()}"] , textarea[aria-label*="${labelText}"] , textarea[placeholder*="${labelText}"]`
+    );
+    if (attr) return attr;
+
+    return null;
+  }
+
+  // NEW: Find a combobox/button dropdown by its visible label text
+  findDropdownByLabel(labelText, parentElement = document) {
+    const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const target = norm(labelText);
+
+    // 1) ARIA combobox near label
+    try {
+      const xpath = `//*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "${target}")]/following::*[(@role='combobox' or @role='button' or contains(@class,'dropdown'))][1]`;
+      const res = document.evaluate(xpath, parentElement, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+      if (res.singleNodeValue) return res.singleNodeValue;
+    } catch {}
+
+    // 2) Search within labeled containers
+    const candidates = Array.from(parentElement.querySelectorAll('[role="combobox"], [role*="button"], button, div'));
+    for (const el of candidates) {
+      const text = norm(el.textContent);
+      const parentText = norm(el.parentElement?.textContent || '');
+      const prevText = norm(el.previousElementSibling?.textContent || '');
+      if (parentText.includes(target) || prevText.includes(target)) return el;
+    }
+
+    // 3) Attribute-based
+    const attr = parentElement.querySelector(`[aria-label*="${labelText}"]`);
+    if (attr) return attr;
+
+    return null;
+  }
+
   // Enhanced human-like typing simulation
   async typeHumanLike(element, text, speed = 'normal') {
     await this.scrollIntoView(element);
@@ -705,7 +778,13 @@ class SalesonatorAutomator {
         '[data-testid*="model"]'
       ];
       
-      const modelInput = await this.waitForElement(modelInputSelectors, 8000);
+      let modelInput = null;
+      try {
+        modelInput = await this.waitForElement(modelInputSelectors, 6000);
+      } catch {}
+      if (!modelInput) {
+        modelInput = this.findInputByLabel('Model') || this.findInputByLabel('Model name');
+      }
       if (!modelInput) {
         throw new Error('Model input not found');
       }
@@ -714,7 +793,7 @@ class SalesonatorAutomator {
       
       // Clear existing value and set new one
       modelInput.focus();
-      modelInput.select();
+      if (modelInput.select) modelInput.select();
       await this.delay(100);
       
       // Use React-compatible value setting
@@ -728,14 +807,14 @@ class SalesonatorAutomator {
       await this.delay(500);
       
       // Verify value was set
-      if (modelInput.value === model) {
+      if ((modelInput.value || '').toString().trim() === (model || '').toString().trim()) {
         this.log('✅ Successfully filled model:', model);
         return true;
       } else {
         this.log('⚠️ Model value verification failed. Expected:', model, 'Got:', modelInput.value);
         // Try typing approach as fallback
         modelInput.focus();
-        modelInput.select();
+        if (modelInput.select) modelInput.select();
         await this.typeHumanLike(modelInput, model);
         return true;
       }
@@ -759,7 +838,13 @@ class SalesonatorAutomator {
         '[data-testid*="mileage"]'
       ];
       
-      const mileageInput = await this.waitForElement(mileageInputSelectors, 8000);
+      let mileageInput = null;
+      try {
+        mileageInput = await this.waitForElement(mileageInputSelectors, 6000);
+      } catch {}
+      if (!mileageInput) {
+        mileageInput = this.findInputByLabel('Mileage');
+      }
       if (!mileageInput) {
         throw new Error('Mileage input not found');
       }
@@ -768,7 +853,7 @@ class SalesonatorAutomator {
       
       // Clear existing value and set new one
       mileageInput.focus();
-      mileageInput.select();
+      if (mileageInput.select) mileageInput.select();
       await this.delay(100);
       
       // Use React-compatible value setting
@@ -782,14 +867,14 @@ class SalesonatorAutomator {
       await this.delay(500);
       
       // Verify value was set
-      if (mileageInput.value === mileage.toString()) {
+      if ((mileageInput.value || '').toString() === mileage.toString()) {
         this.log('✅ Successfully filled mileage:', mileage);
         return true;
       } else {
         this.log('⚠️ Mileage value verification failed. Expected:', mileage.toString(), 'Got:', mileageInput.value);
         // Try typing approach as fallback
         mileageInput.focus();
-        mileageInput.select();
+        if (mileageInput.select) mileageInput.select();
         await this.typeHumanLike(mileageInput, mileage.toString());
         return true;
       }
@@ -813,7 +898,13 @@ class SalesonatorAutomator {
         '[data-testid*="price"]'
       ];
       
-      const priceInput = await this.waitForElement(priceInputSelectors, 8000);
+      let priceInput = null;
+      try {
+        priceInput = await this.waitForElement(priceInputSelectors, 6000);
+      } catch {}
+      if (!priceInput) {
+        priceInput = this.findInputByLabel('Price');
+      }
       if (!priceInput) {
         throw new Error('Price input not found');
       }
@@ -822,7 +913,7 @@ class SalesonatorAutomator {
       
       // Clear existing value and set new one
       priceInput.focus();
-      priceInput.select();
+      if (priceInput.select) priceInput.select();
       await this.delay(100);
       
       // Use React-compatible value setting
@@ -836,14 +927,14 @@ class SalesonatorAutomator {
       await this.delay(500);
       
       // Verify value was set
-      if (priceInput.value === price.toString()) {
+      if ((priceInput.value || '').toString() === price.toString()) {
         this.log('✅ Successfully filled price:', price);
         return true;
       } else {
         this.log('⚠️ Price value verification failed. Expected:', price.toString(), 'Got:', priceInput.value);
         // Try typing approach as fallback
         priceInput.focus();
-        priceInput.select();
+        if (priceInput.select) priceInput.select();
         await this.typeHumanLike(priceInput, price.toString());
         return true;
       }
@@ -870,7 +961,7 @@ class SalesonatorAutomator {
       ];
       
       // Look for the actual clickable dropdown element
-      let dropdown = null;
+      let dropdown = this.findDropdownByLabel('Body style');
       for (let selector of bodyStyleSelectors) {
         try {
           const elements = document.evaluate(
@@ -968,7 +1059,7 @@ class SalesonatorAutomator {
       this.log(`🎨 Selecting exterior color: ${exteriorColor}`);
       
       // Find the dropdown by looking for the label text and closest clickable element
-      let dropdown = null;
+       let dropdown = this.findDropdownByLabel('Exterior color');
       
       // Try XPath to find exterior color dropdown
       try {
@@ -1064,7 +1155,7 @@ class SalesonatorAutomator {
       this.log(`🪑 Selecting interior color: ${interiorColor}`);
       
       // Find the dropdown by looking for the label text and closest clickable element
-      let dropdown = null;
+       let dropdown = this.findDropdownByLabel('Interior color');
       
       // Try XPath to find interior color dropdown
       try {
@@ -1237,7 +1328,7 @@ class SalesonatorAutomator {
       this.log(`⭐ Selecting vehicle condition: ${condition}`);
       
       // Find the dropdown by looking for the label text and closest clickable element
-      let dropdown = null;
+       let dropdown = this.findDropdownByLabel('Vehicle condition');
       
       // Try XPath to find vehicle condition dropdown
       try {
@@ -1333,7 +1424,7 @@ class SalesonatorAutomator {
       this.log(`⛽ Selecting fuel type: ${fuelType}`);
       
       // Find the dropdown by looking for the label text and closest clickable element
-      let dropdown = null;
+       let dropdown = this.findDropdownByLabel('Fuel type');
       
       // Try XPath to find fuel type dropdown
       try {
@@ -1427,7 +1518,7 @@ class SalesonatorAutomator {
   async selectTransmission(transmission) {
     try {
       this.log(`⚙️ Selecting transmission: ${transmission}`);
-      let dropdown = null;
+      let dropdown = this.findDropdownByLabel('Transmission');
       try {
         const elements = document.evaluate(
           `//div[contains(text(), "Transmission")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
