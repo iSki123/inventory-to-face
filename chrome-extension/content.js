@@ -1532,7 +1532,7 @@ class SalesonatorAutomator {
         this.log(`❌ STEP 7 FAILED: Body style selection not verified`);
         return false;
       }
-      
+
     } catch (error) {
       this.log(`❌ STEP 7 FAILED: Could not select body style: ${bodyStyle}`, error);
       await this.closeAnyOpenDropdown();
