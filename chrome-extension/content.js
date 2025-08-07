@@ -142,14 +142,26 @@ class SalesonatorAutomator {
           if (found) return found;
         }
         
-        // Regular CSS selector (skip invalid ones)
+        // Regular CSS selector (validate before using)
         else {
-          // Skip invalid CSS selectors with :has-text pseudo-selector
-          if (selector.includes(':has-text(') || selector.includes(':contains(')) {
+          // Skip invalid CSS selectors
+          if (!selector || 
+              selector.trim() === '' || 
+              selector === ':' || 
+              selector === '[' ||
+              selector.includes(':has-text(') || 
+              selector.includes(':contains(')) {
+            console.log(`[SALESONATOR] Skipping invalid selector: "${selector}"`);
             continue;
           }
-          const element = parentElement.querySelector(selector);
-          if (element) return element;
+          
+          try {
+            const element = parentElement.querySelector(selector);
+            if (element) return element;
+          } catch (selectorError) {
+            console.log(`[SALESONATOR] Invalid CSS selector: "${selector}"`, selectorError.message);
+            continue;
+          }
         }
         
       } catch (error) {
@@ -1318,6 +1330,8 @@ class SalesonatorAutomator {
       // Enhanced search strategy using the same successful pattern as other fields
       let checkbox = null;
       
+      console.log(`[CLEAN TITLE DEBUG] Starting search for clean title checkbox`);
+      
       // Strategy 1: Look for known Facebook checkbox patterns from logs
       const ariaLabelSelectors = [
         'input[name="title_status"]',
@@ -1328,8 +1342,10 @@ class SalesonatorAutomator {
       ];
       
       for (let selector of ariaLabelSelectors) {
+        console.log(`[CLEAN TITLE DEBUG] Trying selector: ${selector}`);
         checkbox = await this.waitForElement(selector, 500);
         if (checkbox) {
+          console.log(`[CLEAN TITLE DEBUG] Found checkbox with selector: ${selector}`, checkbox);
           this.log(`✅ Found clean title checkbox using: ${selector}`);
           break;
         }
@@ -1401,6 +1417,9 @@ class SalesonatorAutomator {
       await this.scrollIntoView(checkbox);
       await this.closeAnyOpenDropdown();
       
+      // Force close any overlapping elements before interacting
+      await this.delay(500);
+      
       const getChecked = () => (
         checkbox.checked === true ||
         checkbox.getAttribute('aria-checked') === 'true' ||
@@ -1409,19 +1428,38 @@ class SalesonatorAutomator {
       );
       
       let isChecked = getChecked();
+      this.log(`📋 Current checkbox state: ${isChecked}, should be: ${shouldCheck}`);
       
       if (shouldCheck && !isChecked) {
         this.log('📋 Checking clean title checkbox...');
-        await this.performFacebookDropdownClick(checkbox);
-        await this.delay(this.randomDelay(400, 800));
+        // Try multiple interaction methods for stubborn checkboxes
+        checkbox.click();
+        await this.delay(300);
+        if (!getChecked()) {
+          // Try React-style interaction
+          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked').set;
+          nativeInputValueSetter.call(checkbox, true);
+          checkbox.dispatchEvent(new Event('input', { bubbles: true }));
+          checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+          await this.delay(300);
+        }
+        if (!getChecked()) {
+          // Try focus and space key
+          checkbox.focus();
+          await this.delay(100);
+          checkbox.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }));
+          checkbox.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', code: 'Space', bubbles: true }));
+          await this.delay(300);
+        }
       } else if (!shouldCheck && isChecked) {
         this.log('📋 Unchecking clean title checkbox...');
-        await this.performFacebookDropdownClick(checkbox);
-        await this.delay(this.randomDelay(400, 800));
+        checkbox.click();
+        await this.delay(300);
       }
       
-      // Verify and retry once if needed
-      isChecked = getChecked();
+      // Final verification
+      const finalState = getChecked();
+      this.log(`📋 Final checkbox state: ${finalState} (expected: ${shouldCheck})`);
       if (shouldCheck && !isChecked) {
         await this.performFacebookDropdownClick(checkbox);
         await this.delay(300);
@@ -1676,15 +1714,18 @@ class SalesonatorAutomator {
       
       // Use enhanced waitForElement like successful fields
       for (const candidate of candidates) {
+        this.log(`🔍 Trying transmission option: ${candidate}`);
+        
+        // Fixed selector construction to avoid syntax errors
         const optionSelectors = [
-          `text:${candidate}`,
           `[role="option"]:has-text("${candidate}")`,
-          `div:has-text("${candidate}")`,
-          `span:has-text("${candidate}")`
+          `div[role="option"]:contains("${candidate}")`,
+          `*[role="option"]`
         ];
         
-        for (let selector of optionSelectors) {
-          const option = await this.waitForElement(selector, 1000);
+        // First try text-based search which works reliably
+        try {
+          const option = await this.waitForElement(`text:${candidate}`, 1000);
           if (option) {
             await this.scrollIntoView(option);
             await this.delay(this.randomDelay(200, 500));
@@ -1693,6 +1734,25 @@ class SalesonatorAutomator {
             this.log(`✅ Successfully selected transmission: ${candidate}`);
             return true;
           }
+        } catch (e) {
+          this.log(`⚠️ Text search failed for ${candidate}:`, e.message);
+        }
+        
+        // Fallback to manual option search
+        try {
+          const options = document.querySelectorAll('[role="option"]');
+          for (let opt of options) {
+            if (opt.textContent && opt.textContent.trim().toLowerCase().includes(candidate.toLowerCase())) {
+              await this.scrollIntoView(opt);
+              await this.delay(this.randomDelay(200, 500));
+              await this.performFacebookDropdownClick(opt);
+              await this.delay(this.randomDelay(800, 1200));
+              this.log(`✅ Successfully selected transmission: ${candidate} (manual search)`);
+              return true;
+            }
+          }
+        } catch (e) {
+          this.log(`⚠️ Manual search failed for ${candidate}:`, e.message);
         }
       }
       
