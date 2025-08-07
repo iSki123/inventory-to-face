@@ -694,6 +694,7 @@ class SalesonatorAutomator {
     // 5) Make (typeahead dropdown)
     if (vehicleData.make) {
       await attempt('Make', async () => this.selectMake(vehicleData.make));
+      await safeDelay(800, 1200); // Extra delay after Make to ensure it's fully processed
     }
 
     // 6) Model (typed, Title Case)
@@ -947,38 +948,137 @@ class SalesonatorAutomator {
   }
 
   // Select Make dropdown  
+  // Enhanced dropdown context validation
+  validateDropdownContext(dropdown, expectedFieldType, expectedOptions = []) {
+    try {
+      // Get the dropdown's context by checking nearby labels and container text
+      const container = dropdown.closest('div, section, fieldset') || dropdown.parentElement;
+      const containerText = (container?.textContent || '').toLowerCase();
+      
+      // Check if any expected options are present when dropdown is open
+      if (expectedOptions.length > 0) {
+        const hasExpectedOptions = expectedOptions.some(option => 
+          containerText.includes(option.toLowerCase())
+        );
+        if (!hasExpectedOptions) {
+          this.log(`❌ Dropdown context validation failed: Expected options not found`);
+          return false;
+        }
+      }
+      
+      // Check for field-specific context
+      const fieldIndicators = {
+        'make': ['make', 'manufacturer', 'brand'],
+        'bodystyle': ['body style', 'style', 'type', 'sedan', 'suv', 'coupe'],
+        'exteriorcolor': ['exterior', 'color', 'paint'],
+        'interiorcolor': ['interior', 'cabin', 'upholstery']
+      };
+      
+      const indicators = fieldIndicators[expectedFieldType.toLowerCase()] || [];
+      const hasFieldContext = indicators.some(indicator => 
+        containerText.includes(indicator)
+      );
+      
+      this.log(`🔍 Dropdown context validation: ${hasFieldContext ? '✅ Valid' : '❌ Invalid'} for ${expectedFieldType}`);
+      return hasFieldContext;
+    } catch (error) {
+      this.log(`⚠️ Context validation error:`, error);
+      return false; // Fail safe
+    }
+  }
+
   async selectMake(make) {
     try {
-      this.log(`🏭 Selecting make: ${make}`);
+      this.log(`🏭 STEP 2: Selecting make: ${make}`);
       
       // Clean make string (remove extra spaces)
       const cleanMake = (make || '').toString().trim();
       
-      // Look for make dropdown more specifically 
-      const makeDropdownSelectors = [
-        'text:Make', // Visible label
-        '[aria-label*="Make"]',
-        'div[role="button"]', // Generic fallback
-        'select'
-      ];
+      // Close any open dropdowns first to prevent interference
+      await this.closeAnyOpenDropdown();
+      await this.delay(this.randomDelay(500, 800));
       
-      // Prefer a dropdown resolved relative to the visible "Make" label
-      const makeDropdown = this.findDropdownByLabel('Make') || await this.waitForElement(makeDropdownSelectors, 8000);
+      // Find Make dropdown with better context awareness
+      this.log('🔍 Looking for Make dropdown specifically...');
+      let makeDropdown = this.findDropdownByLabel('Make');
+      
+      if (!makeDropdown) {
+        // Try more specific selectors for Make field
+        const makeSelectors = [
+          '[aria-label*="Make" i]',
+          'div[role="button"]:has(+ * [aria-label*="Make" i])',
+          'div[role="button"]:has(span:contains("Make"))',
+        ];
+        
+        for (const selector of makeSelectors) {
+          try {
+            makeDropdown = document.querySelector(selector);
+            if (makeDropdown) break;
+          } catch {}
+        }
+      }
+      
+      if (!makeDropdown) {
+        throw new Error('Make dropdown not found');
+      }
+      
+      // Validate this is actually the Make dropdown
+      this.log('🔍 Validating dropdown context for Make field...');
+      const isValidMakeDropdown = this.validateDropdownContext(makeDropdown, 'make', ['Toyota', 'Honda', 'Ford', 'Chevrolet', 'BMW']);
+      
+      if (!isValidMakeDropdown) {
+        this.log('❌ Found dropdown is not the Make dropdown, searching more specifically...');
+        // More aggressive search for Make dropdown
+        const allDropdowns = document.querySelectorAll('div[role="button"], [role="combobox"]');
+        for (const dropdown of allDropdowns) {
+          if (this.validateDropdownContext(dropdown, 'make')) {
+            makeDropdown = dropdown;
+            this.log('✅ Found valid Make dropdown after validation');
+            break;
+          }
+        }
+        
+        if (!makeDropdown || !this.validateDropdownContext(makeDropdown, 'make')) {
+          throw new Error('Could not find valid Make dropdown');
+        }
+      }
+      
       await this.scrollIntoView(makeDropdown);
       await this.delay(this.randomDelay(500, 1000));
       
-      this.log('🏭 Found make dropdown, opening...');
-      // Open sequence for React-controlled dropdowns
+      this.log('🏭 Opening validated Make dropdown...');
+      makeDropdown.focus();
       makeDropdown.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
       makeDropdown.click();
-      await this.delay(this.randomDelay(1200, 1800)); // Wait for dropdown to open
+      await this.delay(this.randomDelay(1500, 2000)); // Extra time for dropdown to fully open
       
-      // Prefer searching within the options container only
+      // Wait for and validate options container
       let optionsContainer = null;
       try {
-        optionsContainer = await this.waitForElement(['[role="listbox"]', '[role="menu"]'], 4000);
-      } catch {}
+        optionsContainer = await this.waitForElement(['[role="listbox"]', '[role="menu"]'], 5000);
+        this.log('✅ Options container found');
+        
+        // Double-check this is the right options container by looking for vehicle makes
+        const optionTexts = Array.from(optionsContainer.querySelectorAll('[role="option"]'))
+          .map(opt => (opt.textContent || '').trim().toLowerCase())
+          .slice(0, 5); // Check first 5 options
+        
+        const hasVehicleMakes = optionTexts.some(text => 
+          ['acura', 'audi', 'bmw', 'buick', 'cadillac', 'chevrolet', 'chrysler', 'dodge', 'ford', 'gmc', 'honda', 'hyundai', 'infiniti', 'jeep', 'kia', 'lexus', 'lincoln', 'mazda', 'mercedes', 'mitsubishi', 'nissan', 'ram', 'subaru', 'toyota', 'volkswagen', 'volvo'].includes(text)
+        );
+        
+        if (!hasVehicleMakes) {
+          this.log('❌ Options container does not contain vehicle makes! This might be wrong dropdown.');
+          throw new Error('Wrong dropdown opened - does not contain vehicle makes');
+        }
+        
+        this.log('✅ Confirmed options container has vehicle makes');
+      } catch (error) {
+        this.log('❌ Could not find or validate options container:', error);
+        throw error;
+      }
       
+      // Find the correct Make option
       const getExactOption = () => {
         const scope = optionsContainer || document;
         const opts = Array.from(scope.querySelectorAll('[role="option"]'));
@@ -995,6 +1095,7 @@ class SalesonatorAutomator {
       
       // If not found, try typeahead (Facebook supports it)
       if (!makeOption && cleanMake) {
+        this.log('🎯 Trying typeahead for make selection...');
         for (const ch of cleanMake.toLowerCase()) {
           makeDropdown.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
           await this.delay(this.randomDelay(40, 100));
@@ -1008,52 +1109,55 @@ class SalesonatorAutomator {
         makeOption = getFuzzyOption();
       }
       
-      // Ultimate fallback: any element with the text inside the container
       if (!makeOption) {
-        const elem = this.findElementByText(cleanMake, ['div','span','li'], optionsContainer || document);
-        if (elem) makeOption = elem.closest('[role="option"]') || elem;
+        const availableOptions = Array.from((optionsContainer || document).querySelectorAll('[role="option"]'))
+          .map(opt => opt.textContent?.trim())
+          .filter(text => text)
+          .slice(0, 10);
+        throw new Error(`Make option "${cleanMake}" not found. Available options: ${availableOptions.join(', ')}`);
       }
       
-      if (!makeOption) {
-        throw new Error(`Make option not found for "${cleanMake}"`);
-      }
-      
+      this.log(`🎯 Found make option: "${makeOption.textContent?.trim()}", clicking...`);
       await this.scrollIntoView(makeOption);
       await this.delay(this.randomDelay(300, 600));
       await this.performFacebookDropdownClick(makeOption);
       await this.delay(this.randomDelay(1000, 1500)); // Wait for selection to register
       
-      // Robust verification: check multiple signals
-      const selectedText = (makeDropdown.textContent || '').toLowerCase();
-      const verifiedDirect = selectedText.includes(cleanMake.toLowerCase());
+      // Enhanced verification with step completion check
+      const verifyMakeSelection = () => {
+        const selectedText = (makeDropdown.textContent || '').toLowerCase();
+        const directMatch = selectedText.includes(cleanMake.toLowerCase());
+        
+        // Check for input value
+        const makeContainer = makeDropdown.closest('div, section, form') || document;
+        const comboboxInput = makeContainer.querySelector('input[aria-label*="Make"], [role="combobox"] input');
+        const inputValue = (comboboxInput && (comboboxInput.value || comboboxInput.getAttribute('value') || '')).toLowerCase();
+        const inputMatch = !!inputValue && inputValue.includes(cleanMake.toLowerCase());
+        
+        // Check selected option state
+        const selectedOption = (optionsContainer || document).querySelector('[role="option"][aria-selected="true"]');
+        const selectedMatch = !!selectedOption && ((selectedOption.textContent || '').toLowerCase().includes(cleanMake.toLowerCase()));
+        
+        return directMatch || inputMatch || selectedMatch;
+      };
       
-      // Look for an input/combobox value near the Make label
-      const makeContainer = makeDropdown.closest('div, section, form') || document;
-      const comboboxInput = makeContainer.querySelector('input[aria-label*="Make"], [role="combobox"] input');
-      const inputValue = (comboboxInput && (comboboxInput.value || comboboxInput.getAttribute('value') || '')).toLowerCase();
-      const verifiedInput = !!inputValue && inputValue.includes(cleanMake.toLowerCase());
-      
-      // Check selected option state
-      const selectedOption = (optionsContainer || document).querySelector('[role="option"][aria-selected="true"]');
-      const verifiedSelected = !!selectedOption && ((selectedOption.textContent || '').toLowerCase().includes(cleanMake.toLowerCase()));
-      
-      // As a last resort, detect the value rendered next to the label
-      const labelArea = this.findElementByText('Make', ['div','span','label'])?.parentElement;
-      const labelText = (labelArea?.textContent || '').toLowerCase();
-      const verifiedLabel = labelText.includes(cleanMake.toLowerCase());
-      
-      const verified = verifiedDirect || verifiedInput || verifiedSelected || verifiedLabel;
+      const verified = verifyMakeSelection();
       const titleMake = cleanMake.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+      
       if (verified) {
-        this.log(`✅ Successfully selected make: ${titleMake}`);
+        this.log(`✅ STEP 2 COMPLETE: Successfully selected make: ${titleMake}`);
+        // Ensure dropdown is closed before proceeding
+        await this.closeAnyOpenDropdown();
+        await this.delay(this.randomDelay(500, 800));
+        return true;
       } else {
-        this.log(`⚠️ Make selection not fully verified; proceeding. Dropdown shows: ${makeDropdown.textContent}`);
+        this.log(`❌ STEP 2 FAILED: Make selection not verified. Current dropdown text: ${makeDropdown.textContent}`);
+        return false;
       }
-      // Return true if we at least clicked an option to avoid retry loops when UI updates but textContent doesn't reflect it
-      return verified || true;
       
     } catch (error) {
-      this.log(`⚠️ Could not select make: ${make}`, error);
+      this.log(`❌ STEP 2 FAILED: Could not select make: ${make}`, error);
+      await this.closeAnyOpenDropdown(); // Clean up on error
       return false;
     }
   }
@@ -1293,48 +1397,89 @@ class SalesonatorAutomator {
     }
   }
 
-  // Select Body Style dropdown
+  // Select Body Style dropdown (position 7)
   async selectBodyStyle(bodyStyle) {
     try {
-      this.log(`🚗 Selecting body style: ${bodyStyle}`);
+      this.log(`🚙 STEP 7: Selecting body style: ${bodyStyle}`);
 
-      const label = 'Body style';
-      const dropdownSelectors = [
-        '[aria-label*="Body style"]',
-        'text:Body style'
-      ];
-      let dropdown = this.findDropdownByLabel(label) || await this.waitForElement(dropdownSelectors, 8000).catch(() => null);
-
-      if (!dropdown) {
-        // Try XPath
-        try {
-          const res = document.evaluate(
-            `//*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "body style")]/following::*[(@role='combobox' or @role='button')][1]`,
-            document,
-            null,
-            XPathResult.FIRST_ORDERED_NODE_TYPE,
-            null
-          );
-          if (res.singleNodeValue) dropdown = res.singleNodeValue;
-        } catch {}
-      }
-
-      if (!dropdown) throw new Error('Body style dropdown not found');
-
-      await this.scrollIntoView(dropdown);
-      await this.delay(this.randomDelay(500, 1000));
-      this.log('🚗 Found body style dropdown, clicking...');
-      dropdown.click();
-      await this.delay(this.randomDelay(1200, 2000));
-
-      // Scope options to the freshly opened listbox/menu to avoid clicking nav links
-      let optionsContainer = null;
-      try {
-        optionsContainer = await this.waitForElement(['[role="listbox"]','[role="menu"]'], 4000);
-      } catch {}
+      // Close any open dropdowns first
+      await this.closeAnyOpenDropdown();
+      await this.delay(this.randomDelay(500, 800));
 
       const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
       const target = norm(bodyStyle);
+      const label = 'Body style';
+
+      this.log('🔍 Looking for Body Style dropdown specifically...');
+      let dropdown = this.findDropdownByLabel(label);
+      
+      if (!dropdown) {
+        await this.ensureAdditionalFieldsVisible();
+        dropdown = this.findDropdownByLabel(label);
+      }
+      
+      if (!dropdown) {
+        // More targeted search for body style dropdown
+        const allDropdowns = document.querySelectorAll('div[role="button"], [role="combobox"]');
+        for (const candidate of allDropdowns) {
+          const container = candidate.closest('div, section, fieldset') || candidate.parentElement;
+          const containerText = (container?.textContent || '').toLowerCase();
+          if (containerText.includes('body style') || containerText.includes('body type')) {
+            dropdown = candidate;
+            this.log('✅ Found Body Style dropdown via container text search');
+            break;
+          }
+        }
+      }
+
+      if (!dropdown) {
+        throw new Error('Body style dropdown not found');
+      }
+
+      // Validate this is actually the Body Style dropdown
+      this.log('🔍 Validating dropdown context for Body Style field...');
+      const expectedBodyStyles = ['sedan', 'suv', 'coupe', 'hatchback', 'convertible', 'wagon', 'truck', 'van'];
+      const isValidBodyStyleDropdown = this.validateDropdownContext(dropdown, 'bodystyle', expectedBodyStyles);
+      
+      if (!isValidBodyStyleDropdown) {
+        this.log('❌ Found dropdown is not the Body Style dropdown');
+        throw new Error('Could not find valid Body Style dropdown');
+      }
+
+      await this.scrollIntoView(dropdown);
+      await this.delay(this.randomDelay(500, 1000));
+
+      this.log('🚙 Opening validated Body Style dropdown...');
+      dropdown.focus();
+      dropdown.click();
+      await this.delay(this.randomDelay(1500, 2000));
+
+      // Wait for and validate options container
+      let optionsContainer = null;
+      try {
+        optionsContainer = await this.waitForElement(['[role="listbox"]', '[role="menu"]'], 5000);
+        
+        // Validate this contains body style options
+        const optionTexts = Array.from(optionsContainer.querySelectorAll('[role="option"]'))
+          .map(opt => (opt.textContent || '').trim().toLowerCase())
+          .slice(0, 8);
+        
+        const hasBodyStyles = optionTexts.some(text => 
+          expectedBodyStyles.some(style => text.includes(style))
+        );
+        
+        if (!hasBodyStyles) {
+          this.log('❌ Options container does not contain body styles! Wrong dropdown.');
+          throw new Error('Wrong dropdown - does not contain body style options');
+        }
+        
+        this.log('✅ Confirmed options container has body style options');
+      } catch (error) {
+        this.log('❌ Could not find or validate body style options:', error);
+        throw error;
+      }
+
+      // Find the correct body style option
       const getOptions = () => Array.from((optionsContainer || document).querySelectorAll('[role="option"]'));
 
       let option = getOptions().find(opt => {
@@ -1343,44 +1488,52 @@ class SalesonatorAutomator {
         return txt === target || aria === target || txt.includes(target);
       });
 
-      if (option) {
-        await this.performFacebookDropdownClick(option);
-        await this.delay(this.randomDelay(800, 1500));
+      if (!option) {
+        this.log(`🎯 Trying typeahead for body style: ${bodyStyle}`);
+        for (const ch of bodyStyle.toLowerCase()) {
+          dropdown.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
+          await this.delay(this.randomDelay(40, 100));
+        }
+        await this.delay(this.randomDelay(300, 600));
+        option = getOptions().find(opt => {
+          const txt = norm(opt.textContent || '');
+          return txt === target || txt.includes(target);
+        });
       }
 
-      // Verify selection appeared next to the label
+      if (!option) {
+        const availableOptions = getOptions()
+          .map(opt => opt.textContent?.trim())
+          .filter(text => text)
+          .slice(0, 10);
+        throw new Error(`Body style option "${bodyStyle}" not found. Available: ${availableOptions.join(', ')}`);
+      }
+
+      this.log(`🎯 Found body style option: "${option.textContent?.trim()}", clicking...`);
+      await this.scrollIntoView(option);
+      await this.delay(this.randomDelay(300, 600));
+      await this.performFacebookDropdownClick(option);
+      await this.delay(this.randomDelay(800, 1500));
+
+      // Verify selection
       const verify = () => {
         const el = this.findDropdownByLabel(label) || dropdown;
         const txt = (el?.textContent || '').toLowerCase();
         return txt.includes(target);
       };
 
-      if (!option || !verify()) {
-        // Fallback: keyboard/typeahead selection like Year dropdown
-        const success = await this.selectDropdownOption(dropdownSelectors, bodyStyle, true);
-        await this.delay(this.randomDelay(800, 1200));
-        if (success && verify()) { this.log(`✅ Successfully selected body style: ${bodyStyle}`); return true; }
-      }
-
-      if (!verify()) {
-        // Retry: reopen and try again with direct option click
-        dropdown.click();
-        await this.delay(this.randomDelay(800, 1200));
-        option = getOptions().find(opt => {
-          const txt = norm(opt.textContent || '');
-          const aria = norm(opt.getAttribute?.('aria-label') || '');
-          return txt === target || aria === target || txt.includes(target);
-        });
-        if (!option) throw new Error(`Body style option "${bodyStyle}" not found`);
-        await this.performFacebookDropdownClick(option);
-        await this.delay(this.randomDelay(800, 1500));
-      }
-
-      if (!verify()) this.log('⚠️ Body style may not have applied visually yet.');
-      this.log(`✅ Successfully selected body style: ${bodyStyle}`);
-      return true;
+      const verified = verify();
+      if (verified) {
+        this.log(`✅ STEP 7 COMPLETE: Successfully selected body style: ${bodyStyle}`);
+        await this.closeAnyOpenDropdown();
+        await this.delay(this.randomDelay(500, 800));
+        return true;
+      } else {
+        this.log(`❌ STEP 7 FAILED: Body style selection not verified`);
+        return false;
     } catch (error) {
-      this.log(`⚠️ Could not select body style: ${bodyStyle}`, error);
+      this.log(`❌ STEP 7 FAILED: Could not select body style: ${bodyStyle}`, error);
+      await this.closeAnyOpenDropdown();
       return false;
     }
   }
