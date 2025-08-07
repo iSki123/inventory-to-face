@@ -1253,7 +1253,7 @@ class SalesonatorAutomator {
       // Strategy 4: Search near Make field
       if (!modelInput) {
         const makeElements = Array.from(document.querySelectorAll('*')).filter(el => 
-          el.textContent && el.textContent.toLowerCase().includes('mitsubishi')
+          el.textContent && el.textContent.toLowerCase().includes('make')
         );
         
         for (const makeEl of makeElements) {
@@ -1270,6 +1270,51 @@ class SalesonatorAutomator {
             }
           }
           if (modelInput) break;
+        }
+      }
+      
+      // Strategy 5: XPath queries around label text "Model"
+      if (!modelInput) {
+        const xpaths = [
+          // Input inside an element that mentions "Model"
+          "//*[self::label or self::div or self::span][contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), 'model')]//following::input[@type='text' or @role='textbox'][1]",
+          // An input whose ancestor contains the word "Model"
+          "//input[( @type='text' or @role='textbox') and ancestor::*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'model')]]",
+          // An input immediately following an element that contains "Model"
+          "//*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'model')]/following-sibling::*/descendant-or-self::input[@type='text' or @role='textbox'][1]"
+        ];
+        for (const xp of xpaths) {
+          try {
+            const node = document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            if (node && node.tagName === 'INPUT') {
+              modelInput = node;
+              this.log('✅ Found model input via XPath');
+              break;
+            }
+          } catch {}
+        }
+      }
+      
+      // Strategy 6: Heuristic scan of visible text inputs between Make and Mileage labels
+      if (!modelInput) {
+        const labelEls = Array.from(document.querySelectorAll('*')).filter(el => el.textContent);
+        const makeLabel = labelEls.find(el => el.textContent.trim().toLowerCase() === 'make');
+        const mileageLabel = labelEls.find(el => el.textContent.trim().toLowerCase() === 'mileage');
+        const candidates = Array.from(document.querySelectorAll('input[type="text"], input:not([type])'));
+        for (const input of candidates) {
+          const rect = input.getBoundingClientRect();
+          if (rect.width < 50 || rect.height < 20) continue; // skip tiny inputs
+          // Prefer inputs vertically between make and mileage if we can detect them
+          const y = rect.top;
+          const inRange = (!makeLabel || y >= makeLabel.getBoundingClientRect().top - 200) &&
+                          (!mileageLabel || y <= mileageLabel.getBoundingClientRect().top + 200);
+          if (!inRange) continue;
+          const containerText = (input.closest('div, section, fieldset')?.textContent || '').toLowerCase();
+          if (!containerText.includes('year') && !containerText.includes('price')) {
+            modelInput = input;
+            this.log('✅ Found model input via heuristic range scan');
+            break;
+          }
         }
       }
       
