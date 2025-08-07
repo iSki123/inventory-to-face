@@ -180,12 +180,70 @@ class SalesonatorAutomator {
     return elements.find(el => el.textContent && el.textContent.trim().includes(text));
   }
 
-  // NEW: Find an input by its visible label text (robust to DOM changes)
+  // NEW: Find an input by its visible label text (robust to DOM changes) - ENHANCED with reverseeng
   findInputByLabel(labelText, parentElement = document) {
     const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
     const target = norm(labelText);
+    
+    this.log(`[findInputByLabel] Searching for: "${labelText}"`);
+    
+    // 1) REVERSEENG METHOD: Find span with exact text and get associated input (Facebook's pattern)
+    try {
+      const spanElements = Array.from(parentElement.querySelectorAll('span'));
+      for (const span of spanElements) {
+        const spanText = norm(span.textContent || span.innerText);
+        if (spanText === target || spanText.includes(target)) {
+          this.log(`Found matching span for "${labelText}":`, span);
+          
+          // Method A: Check aria-labelledby relationship
+          const spanId = span.id;
+          if (spanId) {
+            const input = parentElement.querySelector(`input[aria-labelledby="${spanId}"]`);
+            if (input) {
+              this.log(`Found input via aria-labelledby:`, input);
+              return input;
+            }
+          }
+          
+          // Method B: Look in the label container (Facebook's main pattern)
+          const label = span.closest('label');
+          if (label) {
+            const input = label.querySelector('input[type="text"], textarea');
+            if (input) {
+              this.log(`Found input in label container:`, input);
+              return input;
+            }
+          }
+          
+          // Method C: Look in immediate parent container  
+          const container = span.closest('div');
+          if (container) {
+            const input = container.querySelector('input[type="text"], textarea');
+            if (input) {
+              this.log(`Found input in div container:`, input);
+              return input;
+            }
+          }
+          
+          // Method D: Traverse up the DOM tree to find input
+          let current = span.parentElement;
+          let depth = 0;
+          while (current && current !== parentElement && depth < 5) {
+            const input = current.querySelector('input[type="text"], textarea');
+            if (input) {
+              this.log(`Found input in parent hierarchy at depth ${depth}:`, input);
+              return input;
+            }
+            current = current.parentElement;
+            depth++;
+          }
+        }
+      }
+    } catch (e) {
+      this.log('Error in span search:', e);
+    }
 
-    // 1) label[for] association
+    // 2) Traditional label[for] association
     const labels = Array.from(parentElement.querySelectorAll('label'));
     for (const label of labels) {
       if (norm(label.textContent).includes(target)) {
@@ -200,28 +258,55 @@ class SalesonatorAutomator {
       }
     }
 
-    // 2) XPath: label text followed by input/textarea
+    // 3) Enhanced XPath approach for span + input relationships
     try {
-      const xpath = `//label[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "${target}")]/following::*[self::input or self::textarea][1]`;
+      const xpath = `//span[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "${target}")]/ancestor::label//input | //span[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "${target}")]/following::input[1]`;
       const res = document.evaluate(xpath, parentElement, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-      if (res.singleNodeValue) return res.singleNodeValue;
-    } catch {}
+      if (res.singleNodeValue) {
+        this.log(`Found via enhanced XPath:`, res.singleNodeValue);
+        return res.singleNodeValue;
+      }
+    } catch (e) {
+      this.log('XPath error:', e);
+    }
 
-    // 3) Container approach
+    // 4) Container approach with more precision
     const containers = Array.from(parentElement.querySelectorAll('div, section, form, fieldset'));
     for (const c of containers) {
-      if (norm(c.textContent).includes(target)) {
-        const el = c.querySelector('input, textarea');
-        if (el) return el;
+      const containerText = norm(c.textContent);
+      if (containerText.includes(target)) {
+        // Prioritize inputs that are direct children or close descendants
+        const inputs = c.querySelectorAll('input[type="text"], textarea');
+        for (const input of inputs) {
+          const inputContainer = input.closest('div');
+          if (inputContainer && norm(inputContainer.textContent).includes(target)) {
+            this.log(`Found input in targeted container:`, input);
+            return input;
+          }
+        }
       }
     }
 
-    // 4) Attribute fallbacks
+    // 5) Attribute fallbacks
     const attr = parentElement.querySelector(
-      `input[aria-label*="${labelText}"] , input[placeholder*="${labelText}"] , input[name*="${labelText.toLowerCase()}"] , textarea[aria-label*="${labelText}"] , textarea[placeholder*="${labelText}"]`
+      `input[aria-label*="${labelText}"], input[placeholder*="${labelText}"], input[name*="${labelText.toLowerCase()}"], textarea[aria-label*="${labelText}"], textarea[placeholder*="${labelText}"]`
     );
-    if (attr) return attr;
+    if (attr) {
+      this.log(`Found via attributes:`, attr);
+      return attr;
+    }
 
+    // 6) Facebook-specific patterns (contenteditable, role=textbox)
+    const contentEditables = Array.from(parentElement.querySelectorAll('[contenteditable="true"], [role="textbox"]'));
+    for (const el of contentEditables) {
+      const container = el.closest('div');
+      if (container && norm(container.textContent).includes(target)) {
+        this.log(`Found contenteditable element:`, el);
+        return el;
+      }
+    }
+
+    this.log(`No input found for: "${labelText}"`);
     return null;
   }
 
