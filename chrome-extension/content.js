@@ -2442,6 +2442,33 @@ class SalesonatorAutomator {
         } catch {}
         return this._origOpen(...args);
       };
+
+      // Guard History API navigations during posting
+      const allowUrl = (u) => typeof u === 'string' ? u.includes('/marketplace/create') : true;
+      const origPush = history.pushState.bind(history);
+      const origReplace = history.replaceState.bind(history);
+      history.pushState = (state, title, url) => {
+        if (this.isPosting && url && !allowUrl(url)) {
+          console.warn('[Salesonator] Blocked history.pushState during posting:', url);
+          return;
+        }
+        return origPush(state, title, url);
+      };
+      history.replaceState = (state, title, url) => {
+        if (this.isPosting && url && !allowUrl(url)) {
+          console.warn('[Salesonator] Blocked history.replaceState during posting:', url);
+          return;
+        }
+        return origReplace(state, title, url);
+      };
+
+      window.addEventListener('popstate', () => {
+        if (this.isPosting && !location.pathname.includes('/marketplace/create')) {
+          console.warn('[Salesonator] Detected popstate away from create; preventing');
+          // Attempt to return to create page context softly
+          // Do not navigate; just stop further actions
+        }
+      }, true);
     } catch {}
   }
 
