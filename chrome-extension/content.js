@@ -805,11 +805,11 @@ class SalesonatorAutomator {
       this.log(`🏭 Selecting make: ${make}`);
       
       // Clean make string (remove extra spaces)
-      const cleanMake = make.trim();
+      const cleanMake = (make || '').toString().trim();
       
       // Look for make dropdown more specifically 
       const makeDropdownSelectors = [
-        'text:Make', // Use XPath
+        'text:Make', // Visible label
         '[aria-label*="Make"]',
         'div[role="button"]', // Generic fallback after year
         'select'
@@ -820,25 +820,70 @@ class SalesonatorAutomator {
       await this.delay(this.randomDelay(500, 1000));
       
       this.log('🏭 Found make dropdown, clicking to open...');
+      // Use a more reliable open sequence for React-controlled dropdowns
+      makeDropdown.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
       makeDropdown.click();
-      await this.delay(this.randomDelay(2000, 3000)); // Wait for dropdown to open
+      await this.delay(this.randomDelay(1200, 1800)); // Wait for dropdown to open
       
-      // Look for make option more specifically using XPath - EXACT same as vehicle type
-      const makeOptionSelectors = [
-        `text:${cleanMake}`, // Use XPath for text content
-        `text:${cleanMake.trim()}`,
-        `[data-value*="${cleanMake.toLowerCase()}"]`,
-        `[role="option"]`
-      ];
+      // Prefer searching within the options container only
+      let optionsContainer = null;
+      try {
+        optionsContainer = await this.waitForElement(['[role="listbox"]', '[role="menu"]'], 4000);
+      } catch {}
       
-      const makeOption = await this.waitForElement(makeOptionSelectors, 5000);
+      const getExactOption = () => {
+        const scope = optionsContainer || document;
+        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
+        return opts.find(o => ((o.textContent || '').trim().toLowerCase() === cleanMake.toLowerCase()));
+      };
+      
+      const getFuzzyOption = () => {
+        const scope = optionsContainer || document;
+        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
+        return opts.find(o => (o.textContent || '').toLowerCase().includes(cleanMake.toLowerCase()));
+      };
+      
+      let makeOption = getExactOption();
+      
+      // If not found, try typeahead (Facebook supports it)
+      if (!makeOption && cleanMake) {
+        for (const ch of cleanMake.toLowerCase()) {
+          makeDropdown.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
+          await this.delay(this.randomDelay(40, 100));
+        }
+        await this.delay(this.randomDelay(300, 600));
+        makeOption = getExactOption();
+      }
+      
+      // Fallback to fuzzy match
+      if (!makeOption) {
+        makeOption = getFuzzyOption();
+      }
+      
+      // Ultimate fallback: any element with the text inside the container
+      if (!makeOption) {
+        const elem = this.findElementByText(cleanMake, ['div','span','li'], optionsContainer || document);
+        if (elem) makeOption = elem.closest('[role="option"]') || elem;
+      }
+      
+      if (!makeOption) {
+        throw new Error(`Make option not found for "${cleanMake}"`);
+      }
+      
       await this.scrollIntoView(makeOption);
       await this.delay(this.randomDelay(300, 600));
       makeOption.click();
+      await this.delay(this.randomDelay(1000, 1500)); // Wait for selection to register
       
-      await this.delay(this.randomDelay(2000, 3000)); // Wait for selection to register
-      this.log(`✅ Successfully selected make: ${cleanMake}`);
-      return true;
+      // Verify the dropdown now displays the selected make
+      const selectedText = (makeDropdown.textContent || '').toLowerCase();
+      const verified = selectedText.includes(cleanMake.toLowerCase());
+      if (verified) {
+        this.log(`✅ Successfully selected make: ${cleanMake}`);
+      } else {
+        this.log(`⚠️ Make selection not verified. Dropdown shows: ${makeDropdown.textContent}`);
+      }
+      return verified;
       
     } catch (error) {
       this.log(`⚠️ Could not select make: ${make}`, error);
