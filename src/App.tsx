@@ -12,6 +12,7 @@ import Leads from "./pages/Leads";
 import Billing from "./pages/Billing";
 import UserManagement from "./pages/UserManagement";
 import Analytics from "./pages/Analytics";
+import AdminPanel from "./pages/AdminPanel";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -38,6 +39,7 @@ function AppRoutes() {
           <Route path="/billing" element={<DashboardLayout><Billing /></DashboardLayout>} />
           <Route path="/users" element={<DashboardLayout><UserManagement /></DashboardLayout>} />
           <Route path="/analytics" element={<DashboardLayout><Analytics /></DashboardLayout>} />
+          <Route path="/admin" element={<DashboardLayout><AdminPanel /></DashboardLayout>} />
           <Route path="/settings" element={<DashboardLayout><Settings /></DashboardLayout>} />
         </>
       ) : (

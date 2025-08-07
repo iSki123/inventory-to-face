@@ -8,7 +8,8 @@ import {
   Users,
   BarChart3,
   HelpCircle,
-  LogOut
+  LogOut,
+  Shield
 } from "lucide-react";
 import {
   Sidebar,
@@ -32,6 +33,7 @@ const mainItems = [
 const adminItems = [
   { title: "User Management", url: "/users", icon: Users },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
+  { title: "Admin Panel", url: "/admin", icon: Shield },
 ];
 
 const secondaryItems = [

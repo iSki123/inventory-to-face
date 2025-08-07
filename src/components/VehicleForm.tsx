@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { Vehicle } from "@/hooks/useVehicles";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -515,46 +516,60 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
             </div>
           </div>
 
-          {/* VIN Decoded Information (NHTSA) */}
+          {/* VIN Decoded Information (NHTSA) - Enhanced Display */}
           {(formData.body_style_nhtsa || formData.vehicle_type_nhtsa || formData.fuel_type_nhtsa || formData.transmission_nhtsa || formData.drivetrain_nhtsa || formData.engine_nhtsa) && (
             <div className="space-y-3 p-4 bg-muted/30 rounded-md border">
-              <h3 className="text-sm font-semibold text-muted-foreground">VIN Decoded Information (NHTSA)</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-muted-foreground">VIN Decoded Information (NHTSA)</h3>
+                <Badge variant="secondary" className="text-xs">
+                  ✓ Decoded
+                </Badge>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 {formData.vehicle_type_nhtsa && (
-                  <div>
-                    <span className="font-medium">Vehicle Type:</span> {formData.vehicle_type_nhtsa}
+                  <div className="flex flex-col space-y-1">
+                    <span className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Vehicle Type</span>
+                    <span className="text-sm">{formData.vehicle_type_nhtsa}</span>
                   </div>
                 )}
                 {formData.body_style_nhtsa && (
-                  <div>
-                    <span className="font-medium">Body Style:</span> {formData.body_style_nhtsa}
+                  <div className="flex flex-col space-y-1">
+                    <span className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Body Style</span>
+                    <span className="text-sm">{formData.body_style_nhtsa}</span>
                   </div>
                 )}
                 {formData.fuel_type_nhtsa && (
-                  <div>
-                    <span className="font-medium">Fuel Type:</span> {formData.fuel_type_nhtsa}
+                  <div className="flex flex-col space-y-1">
+                    <span className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Fuel Type</span>
+                    <span className="text-sm">{formData.fuel_type_nhtsa}</span>
                   </div>
                 )}
                 {formData.transmission_nhtsa && (
-                  <div>
-                    <span className="font-medium">Transmission:</span> {formData.transmission_nhtsa}
+                  <div className="flex flex-col space-y-1">
+                    <span className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Transmission</span>
+                    <span className="text-sm">{formData.transmission_nhtsa}</span>
                   </div>
                 )}
                 {formData.drivetrain_nhtsa && (
-                  <div>
-                    <span className="font-medium">Drivetrain:</span> {formData.drivetrain_nhtsa}
+                  <div className="flex flex-col space-y-1">
+                    <span className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Drivetrain</span>
+                    <span className="text-sm">{formData.drivetrain_nhtsa}</span>
                   </div>
                 )}
                 {formData.engine_nhtsa && (
-                  <div>
-                    <span className="font-medium">Engine:</span> {formData.engine_nhtsa}
+                  <div className="flex flex-col space-y-1">
+                    <span className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Engine</span>
+                    <span className="text-sm">{formData.engine_nhtsa}</span>
                   </div>
                 )}
               </div>
               {formData.vin_decoded_at && (
-                <p className="text-xs text-muted-foreground">
-                  Decoded on: {new Date(formData.vin_decoded_at).toLocaleDateString()}
-                </p>
+                <div className="pt-2 border-t border-muted">
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <span>📅</span>
+                    Decoded on: {new Date(formData.vin_decoded_at).toLocaleDateString()} at {new Date(formData.vin_decoded_at).toLocaleTimeString()}
+                  </p>
+                </div>
               )}
             </div>
           )}
