@@ -129,51 +129,64 @@ export const useVehicles = () => {
                   console.log(`VIN decoded for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
                   
                   // Update vehicle in state with the new VIN data
+                  const decoded = vinData.vinData || {};
+                  // Pre-compute UI-mapped fields so we can also persist them to DB
+                  let mappedFuelType: string | undefined;
+                  let mappedTransmission: string | undefined;
+                  let mappedBodyStyle: string | undefined;
+                  if (decoded.body_style_nhtsa) {
+                    const bs = (decoded.body_style_nhtsa as string).toLowerCase();
+                    if (bs.includes('convertible')) mappedBodyStyle = 'Convertible';
+                    else if (bs.includes('coupe')) mappedBodyStyle = 'Coupe';
+                    else if (bs.includes('hatchback')) mappedBodyStyle = 'Hatchback';
+                    else if (bs.includes('sedan')) mappedBodyStyle = 'Sedan';
+                    else if (bs.includes('suv') || bs.includes('sport utility')) mappedBodyStyle = 'SUV';
+                    else if (bs.includes('pickup') || bs.includes('truck')) mappedBodyStyle = 'Truck';
+                    else if (bs.includes('van') || bs.includes('minivan')) mappedBodyStyle = 'Van/Minivan';
+                    else if (bs.includes('wagon')) mappedBodyStyle = 'Wagon';
+                  }
+                  if (decoded.fuel_type_nhtsa) {
+                    const ft = (decoded.fuel_type_nhtsa as string).toLowerCase();
+                    if (ft.includes('electric')) mappedFuelType = 'Electric';
+                    else if (ft.includes('hybrid') && ft.includes('plug')) mappedFuelType = 'Plug-in hybrid';
+                    else if (ft.includes('hybrid')) mappedFuelType = 'Hybrid';
+                    else if (ft.includes('diesel')) mappedFuelType = 'Diesel';
+                    else if (ft.includes('flex')) mappedFuelType = 'Flex';
+                    else mappedFuelType = 'Gasoline';
+                  }
+                  if (decoded.transmission_nhtsa) {
+                    const tr = (decoded.transmission_nhtsa as string).toLowerCase();
+                    mappedTransmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+                  }
+
+                  // Update local state immediately for responsiveness
                   setVehicles(prevVehicles => {
                     return prevVehicles.map(v => {
                       if (v.id === vehicle.id) {
-                        const decoded = vinData.vinData || {};
-                        const updatedVehicle = { ...v, ...decoded };
-                        
-                        // Map fields for UI display
-                        if (decoded.body_style_nhtsa) {
-                          const bs = (decoded.body_style_nhtsa as string).toLowerCase();
-                          if (bs.includes('convertible')) updatedVehicle.body_style_nhtsa = 'Convertible';
-                          else if (bs.includes('coupe')) updatedVehicle.body_style_nhtsa = 'Coupe';
-                          else if (bs.includes('hatchback')) updatedVehicle.body_style_nhtsa = 'Hatchback';
-                          else if (bs.includes('sedan')) updatedVehicle.body_style_nhtsa = 'Sedan';
-                          else if (bs.includes('suv') || bs.includes('sport utility')) updatedVehicle.body_style_nhtsa = 'SUV';
-                          else if (bs.includes('pickup') || bs.includes('truck')) updatedVehicle.body_style_nhtsa = 'Truck';
-                          else if (bs.includes('van') || bs.includes('minivan')) updatedVehicle.body_style_nhtsa = 'Van/Minivan';
-                          else if (bs.includes('wagon')) updatedVehicle.body_style_nhtsa = 'Wagon';
-                        }
-
-                        // Map fuel type to UI field - preserve NHTSA field too
-                        if (decoded.fuel_type_nhtsa) {
-                          const ft = (decoded.fuel_type_nhtsa as string).toLowerCase();
-                          // Keep the original NHTSA field AND set the UI field
-                          updatedVehicle.fuel_type_nhtsa = decoded.fuel_type_nhtsa;
-                          if (ft.includes('electric')) updatedVehicle.fuel_type = 'Electric';
-                          else if (ft.includes('hybrid') && ft.includes('plug')) updatedVehicle.fuel_type = 'Plug-in hybrid';
-                          else if (ft.includes('hybrid')) updatedVehicle.fuel_type = 'Hybrid';
-                          else if (ft.includes('diesel')) updatedVehicle.fuel_type = 'Diesel';
-                          else if (ft.includes('flex')) updatedVehicle.fuel_type = 'Flex';
-                          else updatedVehicle.fuel_type = 'Gasoline';
-                        }
-
-                        // Map transmission to UI field - preserve NHTSA field too
-                        if (decoded.transmission_nhtsa) {
-                          const tr = (decoded.transmission_nhtsa as string).toLowerCase();
-                          // Keep the original NHTSA field AND set the UI field
-                          updatedVehicle.transmission_nhtsa = decoded.transmission_nhtsa;
-                          updatedVehicle.transmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
-                        }
-                        
+                        const updatedVehicle = { ...v, ...decoded } as Vehicle;
+                        if (mappedBodyStyle) updatedVehicle.body_style_nhtsa = mappedBodyStyle;
+                        if (decoded.fuel_type_nhtsa) updatedVehicle.fuel_type_nhtsa = decoded.fuel_type_nhtsa as string;
+                        if (typeof mappedFuelType !== 'undefined') updatedVehicle.fuel_type = mappedFuelType;
+                        if (decoded.transmission_nhtsa) updatedVehicle.transmission_nhtsa = decoded.transmission_nhtsa as string;
+                        if (typeof mappedTransmission !== 'undefined') updatedVehicle.transmission = mappedTransmission;
                         return updatedVehicle;
                       }
                       return v;
                     });
                   });
+
+                  // Persist mapped UI fields so future refreshes keep them
+                  try {
+                    await supabase
+                      .from('vehicles')
+                      .update(pruneUndefined({
+                        fuel_type: mappedFuelType,
+                        transmission: mappedTransmission,
+                      }))
+                      .eq('id', vehicle.id);
+                  } catch (e) {
+                    console.error('Failed to persist VIN-mapped UI fields', e);
+                  }
                 } else {
                   console.error(`VIN decode failed for ${vehicle.vin}:`, vinError);
                 }
@@ -288,6 +301,19 @@ export const useVehicles = () => {
                 ? { ...v, ...mapped }
                 : v
             ));
+
+            // Persist mapped UI fields so they survive future refreshes
+            try {
+              await supabase
+                .from('vehicles')
+                .update(pruneUndefined({
+                  fuel_type: mapped.fuel_type,
+                  transmission: mapped.transmission,
+                }))
+                .eq('id', newVehicle.id);
+            } catch (e) {
+              console.error('Failed to persist VIN-mapped fields for new vehicle', e);
+            }
           }
         } catch (error) {
           console.error(`Error auto-decoding VIN for new vehicle:`, error);
