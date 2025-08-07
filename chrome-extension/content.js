@@ -1123,22 +1123,60 @@ class SalesonatorAutomator {
       await this.performFacebookDropdownClick(makeOption);
       await this.delay(this.randomDelay(1000, 1500)); // Wait for selection to register
       
-      // Enhanced verification with step completion check
+      // Enhanced verification with multiple methods
       const verifyMakeSelection = () => {
-        const selectedText = (makeDropdown.textContent || '').toLowerCase();
+        // Method 1: Check dropdown text content
+        const selectedText = (makeDropdown?.textContent || '').toLowerCase();
         const directMatch = selectedText.includes(cleanMake.toLowerCase());
         
-        // Check for input value
-        const makeContainer = makeDropdown.closest('div, section, form') || document;
+        // Method 2: Check for input value
+        const makeContainer = makeDropdown?.closest('div, section, form') || document;
         const comboboxInput = makeContainer.querySelector('input[aria-label*="Make"], [role="combobox"] input');
-        const inputValue = (comboboxInput && (comboboxInput.value || comboboxInput.getAttribute('value') || '')).toLowerCase();
-        const inputMatch = !!inputValue && inputValue.includes(cleanMake.toLowerCase());
+        const inputValue = comboboxInput ? (comboboxInput.value || comboboxInput.getAttribute('value') || '') : '';
+        const inputMatch = inputValue && inputValue.toLowerCase().includes(cleanMake.toLowerCase());
         
-        // Check selected option state
+        // Method 3: Check selected option state
         const selectedOption = (optionsContainer || document).querySelector('[role="option"][aria-selected="true"]');
-        const selectedMatch = !!selectedOption && ((selectedOption.textContent || '').toLowerCase().includes(cleanMake.toLowerCase()));
+        const selectedMatch = selectedOption && ((selectedOption.textContent || '').toLowerCase().includes(cleanMake.toLowerCase()));
         
-        return directMatch || inputMatch || selectedMatch;
+        // Method 4: Check for hidden inputs or form data
+        const hiddenInputs = document.querySelectorAll('input[type="hidden"][name*="make"], input[name*="make"]');
+        const hiddenMatch = Array.from(hiddenInputs).some(input => {
+          const value = input.value || input.getAttribute('value') || '';
+          return value.toLowerCase().includes(cleanMake.toLowerCase());
+        });
+        
+        // Method 5: Check for data attributes on the dropdown
+        const dataAttributes = ['data-value', 'data-selected', 'aria-valuenow'];
+        const attributeMatch = dataAttributes.some(attr => {
+          const value = makeDropdown?.getAttribute(attr) || '';
+          return value.toLowerCase().includes(cleanMake.toLowerCase());
+        });
+        
+        // Method 6: Check if dropdown button shows selected value
+        const buttonText = makeDropdown?.querySelector('span, div')?.textContent || makeDropdown?.textContent || '';
+        const buttonMatch = buttonText.toLowerCase().includes(cleanMake.toLowerCase());
+        
+        // Method 7: Look for visual indicators of selection (like checkmarks)
+        const checkedOption = (optionsContainer || document).querySelector('[role="option"] [aria-label*="checked"], [role="option"] svg[data-icon="check"]');
+        const visualMatch = checkedOption && checkedOption.closest('[role="option"]')?.textContent?.toLowerCase().includes(cleanMake.toLowerCase());
+        
+        // Log all verification methods for debugging
+        this.log(`🔍 Make verification methods:`, {
+          directMatch,
+          inputMatch,
+          selectedMatch,
+          hiddenMatch,
+          attributeMatch,
+          buttonMatch,
+          visualMatch,
+          dropdownText: selectedText,
+          inputValue: inputValue || 'none',
+          selectedOptionText: selectedOption?.textContent || 'none',
+          buttonText: buttonText || 'none'
+        });
+        
+        return directMatch || inputMatch || selectedMatch || hiddenMatch || attributeMatch || buttonMatch || visualMatch;
       };
       
       const verified = verifyMakeSelection();
@@ -1151,7 +1189,7 @@ class SalesonatorAutomator {
         await this.delay(this.randomDelay(500, 800));
         return true;
       } else {
-        this.log(`❌ STEP 2 FAILED: Make selection not verified. Current dropdown text: ${makeDropdown.textContent}`);
+        this.log(`❌ STEP 2 FAILED: Make selection not verified through any method. Current dropdown text: ${makeDropdown?.textContent || 'undefined'}`);
         return false;
       }
       
