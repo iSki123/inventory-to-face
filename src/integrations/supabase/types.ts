@@ -367,6 +367,9 @@ export type Database = {
       vehicles: {
         Row: {
           ai_description: string | null
+          ai_image_generation_completed_at: string | null
+          ai_image_generation_requested_at: string | null
+          ai_images_generated: boolean | null
           body_style_nhtsa: string | null
           condition: string | null
           contact_email: string | null
@@ -411,6 +414,9 @@ export type Database = {
         }
         Insert: {
           ai_description?: string | null
+          ai_image_generation_completed_at?: string | null
+          ai_image_generation_requested_at?: string | null
+          ai_images_generated?: boolean | null
           body_style_nhtsa?: string | null
           condition?: string | null
           contact_email?: string | null
@@ -455,6 +461,9 @@ export type Database = {
         }
         Update: {
           ai_description?: string | null
+          ai_image_generation_completed_at?: string | null
+          ai_image_generation_requested_at?: string | null
+          ai_images_generated?: boolean | null
           body_style_nhtsa?: string | null
           condition?: string | null
           contact_email?: string | null

@@ -858,12 +858,15 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
     const insertedVehicles = [];
     const errors = [];
 
-    // Fetch user profile for default contact info
+    // Fetch user profile for default contact info and dealership name
     const { data: userProfile } = await supabaseClient
       .from('profiles')
-      .select('phone, location, email')
+      .select('phone, location, email, dealership_name')
       .eq('user_id', userId)
       .maybeSingle();
+    
+    const vehiclesNeedingImages: any[] = [];
+    
     for (const vehicle of vehicleData) {
       try {
         // Generate AI description with custom prompt if provided, but don't fail if it doesn't work
@@ -937,6 +940,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
             user_id: userId,
             status: 'available',
             facebook_post_status: 'draft',
+            ai_images_generated: vehicle.images && vehicle.images.length > 0,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           }])
@@ -948,6 +952,23 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
         if (!error && inserted) {
           insertedVehicles.push(inserted);
           console.log(`Successfully inserted vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} with ID: ${inserted.id}`);
+          
+          // Check if vehicle needs AI-generated images (no images or empty images array)
+          if (!vehicle.images || vehicle.images.length === 0) {
+            console.log(`Vehicle ${inserted.id} needs AI-generated images`);
+            vehiclesNeedingImages.push({
+              vehicleId: inserted.id,
+              vehicleData: {
+                year: vehicle.year,
+                make: vehicle.make,
+                model: vehicle.model,
+                exterior_color: vehicle.exterior_color,
+                interior_color: vehicle.interior_color,
+                vin: vehicle.vin
+              },
+              dealershipName: userProfile?.dealership_name || 'DEALER'
+            });
+          }
         } else {
           console.error(`Failed to insert vehicle ${vehicle.year} ${vehicle.make} ${vehicle.model}:`, error);
           errors.push({ vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`, error: error?.message });
@@ -957,6 +978,77 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
         errors.push({ vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`, error: error.message });
       }
     }
+    
+    // Process vehicles that need AI-generated images
+    console.log(`Processing ${vehiclesNeedingImages.length} vehicles that need AI-generated images`);
+    const imageGenerationResults: any[] = [];
+    
+    for (const vehicleNeedingImages of vehiclesNeedingImages) {
+      try {
+        console.log(`Generating AI images for vehicle ${vehicleNeedingImages.vehicleId}`);
+        
+        // Trigger VIN decoding first to get better vehicle data for AI generation
+        if (vehicleNeedingImages.vehicleData.vin) {
+          console.log(`Decoding VIN for vehicle ${vehicleNeedingImages.vehicleId} before AI image generation`);
+          try {
+            await supabaseClient.functions.invoke('vin-decoder', {
+              body: { 
+                vin: vehicleNeedingImages.vehicleData.vin,
+                vehicleId: vehicleNeedingImages.vehicleId
+              }
+            });
+            
+            // Fetch updated vehicle data after VIN decoding
+            const { data: updatedVehicle } = await supabaseClient
+              .from('vehicles')
+              .select('fuel_type_nhtsa, transmission_nhtsa, engine_nhtsa, body_style_nhtsa')
+              .eq('id', vehicleNeedingImages.vehicleId)
+              .maybeSingle();
+            
+            if (updatedVehicle) {
+              // Enhance vehicle data with decoded information
+              vehicleNeedingImages.vehicleData = {
+                ...vehicleNeedingImages.vehicleData,
+                fuel_type: updatedVehicle.fuel_type_nhtsa || vehicleNeedingImages.vehicleData.fuel_type,
+                transmission: updatedVehicle.transmission_nhtsa || vehicleNeedingImages.vehicleData.transmission,
+                engine: updatedVehicle.engine_nhtsa,
+                body_style: updatedVehicle.body_style_nhtsa
+              };
+            }
+          } catch (vinError) {
+            console.warn(`VIN decoding failed for vehicle ${vehicleNeedingImages.vehicleId}, proceeding with AI generation:`, vinError);
+          }
+        }
+        
+        // Generate AI images
+        const { data: imageResult, error: imageError } = await supabaseClient.functions.invoke('generate-vehicle-images', {
+          body: vehicleNeedingImages
+        });
+        
+        if (imageError) {
+          console.error(`AI image generation failed for vehicle ${vehicleNeedingImages.vehicleId}:`, imageError);
+          imageGenerationResults.push({
+            vehicleId: vehicleNeedingImages.vehicleId,
+            success: false,
+            error: imageError.message
+          });
+        } else {
+          console.log(`AI image generation completed for vehicle ${vehicleNeedingImages.vehicleId}`);
+          imageGenerationResults.push({
+            vehicleId: vehicleNeedingImages.vehicleId,
+            success: true,
+            generatedImages: imageResult?.generatedImages || 0
+          });
+        }
+      } catch (error) {
+        console.error(`Error processing AI images for vehicle ${vehicleNeedingImages.vehicleId}:`, error);
+        imageGenerationResults.push({
+          vehicleId: vehicleNeedingImages.vehicleId,
+          success: false,
+          error: error.message
+        });
+      }
+    }
 
     return new Response(
       JSON.stringify({ 
@@ -964,8 +1056,10 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
         insertedCount: insertedVehicles.length,
         totalFound: vehicleData.length,
         vehicles: insertedVehicles,
+        vehiclesNeedingImages: vehiclesNeedingImages.length,
+        imageGenerationResults,
         errors: errors,
-        message: `Successfully imported ${insertedVehicles.length} of ${vehicleData.length} vehicles from task ${taskId}`,
+        message: `Successfully imported ${insertedVehicles.length} of ${vehicleData.length} vehicles from task ${taskId}. ${vehiclesNeedingImages.length} vehicles queued for AI image generation.`,
         taskId
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
