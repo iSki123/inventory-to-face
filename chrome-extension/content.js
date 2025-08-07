@@ -450,33 +450,41 @@ class SalesonatorAutomator {
     // SIXTH: Fill Price
     await this.fillPrice(vehicleData.price);
     
-    // SEVENTH: Fill Body Style
-    if (vehicleData.bodyStyle || vehicleData.body_style) {
-      await this.selectBodyStyle(vehicleData.bodyStyle || vehicleData.body_style);
+    // SEVENTH: Fill Body Style (map from NHTSA if needed)
+    const mappedBodyStyle = vehicleData.bodyStyle || vehicleData.body_style || this.mapBodyStyle(vehicleData.body_style_nhtsa || vehicleData.vehicle_type_nhtsa || '');
+    if (mappedBodyStyle) {
+      await this.selectBodyStyle(mappedBodyStyle);
     }
     
-    // EIGHTH: Fill Exterior Color
-    if (vehicleData.exteriorColor || vehicleData.exterior_color) {
-      await this.selectExteriorColor(vehicleData.exteriorColor || vehicleData.exterior_color);
+    // EIGHTH: Fill Exterior Color (standardize to FB options)
+    const standardizedExterior = this.standardizeExteriorColor(vehicleData.exteriorColor || vehicleData.exterior_color);
+    if (standardizedExterior && standardizedExterior !== 'Unknown') {
+      await this.selectExteriorColor(standardizedExterior);
     }
     
-    // NINTH: Fill Interior Color
-    if (vehicleData.interiorColor || vehicleData.interior_color) {
-      await this.selectInteriorColor(vehicleData.interiorColor || vehicleData.interior_color);
+    // NINTH: Fill Interior Color (default to Black if unknown)
+    const standardizedInterior = this.standardizeInteriorColor(vehicleData.interiorColor || vehicleData.interior_color);
+    if (standardizedInterior) {
+      await this.selectInteriorColor(standardizedInterior);
     }
     
     // TENTH: Check Clean Title (always default to checked)
     await this.selectCleanTitle(true);
     
-    // ELEVENTH: Select Vehicle Condition (always default to "Excellent")
+    // ELEVENTH: Select Vehicle Condition (default to "Excellent")
     await this.selectVehicleCondition(vehicleData.condition || 'Excellent');
     
-    // TWELFTH: Select Fuel Type
-    if (vehicleData.fuelType || vehicleData.fuel_type) {
-      await this.selectFuelType(vehicleData.fuelType || vehicleData.fuel_type);
+    // TWELFTH: Select Fuel Type (map from NHTSA if present)
+    const mappedFuel = vehicleData.fuelType || vehicleData.fuel_type || (vehicleData.fuel_type_nhtsa ? this.mapFuelType(vehicleData.fuel_type_nhtsa) : null);
+    if (mappedFuel) {
+      await this.selectFuelType(mappedFuel);
     }
+
+    // THIRTEENTH: Select Transmission (default to Automatic)
+    const mappedTransmission = this.mapTransmission(vehicleData.transmission || vehicleData.transmission_nhtsa || '');
+    await this.selectTransmission(mappedTransmission);
     
-    // THIRTEENTH: Fill Description with AI description from database if available
+    // FOURTEENTH: Fill Description with AI description from database if available
     const description = vehicleData.ai_description || 
                        vehicleData.description || 
                        `${vehicleData.year} ${vehicleData.make} ${vehicleData.model} for sale. Contact for more details.`;
