@@ -534,12 +534,14 @@ class SalesonatorAutomator {
     // EIGHTH: Fill Exterior Color (standardize to FB options)
     const standardizedExterior = this.standardizeExteriorColor(vehicleData.exteriorColor || vehicleData.exterior_color);
     if (standardizedExterior && standardizedExterior !== 'Unknown') {
+      await this.ensureAdditionalFieldsVisible();
       await this.selectExteriorColor(standardizedExterior);
     }
     
     // NINTH: Fill Interior Color (default to Black if unknown)
     const standardizedInterior = this.standardizeInteriorColor(vehicleData.interiorColor || vehicleData.interior_color);
     if (standardizedInterior) {
+      await this.ensureAdditionalFieldsVisible();
       await this.selectInteriorColor(standardizedInterior);
     }
     
@@ -891,7 +893,16 @@ class SalesonatorAutomator {
   async fillPrice(price) {
     try {
       this.log(`💰 Filling price: ${price}`);
-      
+
+      // Normalize to integer dollars (strip non-digits)
+      const toNumber = (val) => {
+        if (val === null || val === undefined) return null;
+        const digits = String(val).replace(/[^\d]/g, '');
+        return digits ? parseInt(digits, 10) : null;
+      };
+      const expectedNum = toNumber(price);
+      if (!expectedNum || expectedNum <= 0) throw new Error('Invalid price value provided');
+
       const priceInputSelectors = [
         '[aria-label*="Price"]',
         'input[placeholder*="Price"]',
@@ -899,7 +910,7 @@ class SalesonatorAutomator {
         'input[name*="price"]',
         '[data-testid*="price"]'
       ];
-      
+
       let priceInput = null;
       try {
         priceInput = await this.waitForElement(priceInputSelectors, 6000);
@@ -910,37 +921,52 @@ class SalesonatorAutomator {
       if (!priceInput) {
         throw new Error('Price input not found');
       }
-      
+
       await this.scrollIntoView(priceInput);
-      
-      // Clear existing value and set new one
+
+      // Hard clear existing value
       priceInput.focus();
       if (priceInput.select) priceInput.select();
       await this.delay(100);
-      
-      // Use React-compatible value setting
-      this.setNativeValue(priceInput, price.toString());
-      
-      // Trigger React events
+      this.setNativeValue(priceInput, '');
+      priceInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await this.delay(50);
+
+      // Set target value without formatting
+      this.setNativeValue(priceInput, expectedNum.toString());
       priceInput.dispatchEvent(new Event('input', { bubbles: true }));
       priceInput.dispatchEvent(new Event('change', { bubbles: true }));
       priceInput.dispatchEvent(new Event('blur', { bubbles: true }));
-      
-      await this.delay(500);
-      
-      // Verify value was set
-      if ((priceInput.value || '').toString() === price.toString()) {
-        this.log('✅ Successfully filled price:', price);
-        return true;
-      } else {
-        this.log('⚠️ Price value verification failed. Expected:', price.toString(), 'Got:', priceInput.value);
-        // Try typing approach as fallback
-        priceInput.focus();
-        if (priceInput.select) priceInput.select();
-        await this.typeHumanLike(priceInput, price.toString());
+
+      await this.delay(600);
+
+      // Verify numerically (ignore $ and commas that FB adds)
+      const currentNum = toNumber(priceInput.value);
+      if (currentNum === expectedNum) {
+        this.log('✅ Successfully filled price:', expectedNum);
         return true;
       }
-      
+
+      this.log('⚠️ Price verification mismatch. Expected:', expectedNum, 'Got raw:', priceInput.value, 'Parsed:', currentNum);
+
+      // Fallback: clear then type human-like
+      priceInput.focus();
+      if (priceInput.select) priceInput.select();
+      await this.delay(50);
+      this.setNativeValue(priceInput, '');
+      priceInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await this.delay(50);
+      await this.typeHumanLike(priceInput, expectedNum.toString());
+      await this.delay(600);
+
+      const finalNum = toNumber(priceInput.value);
+      if (finalNum === expectedNum) {
+        this.log('✅ Price set after typing:', expectedNum);
+      } else {
+        this.log('⚠️ Final price mismatch. Expected:', expectedNum, 'Got raw:', priceInput.value, 'Parsed:', finalNum);
+      }
+      return true;
+
     } catch (error) {
       this.log('⚠️ Could not fill price:', price, error);
       return false;
@@ -1078,92 +1104,75 @@ class SalesonatorAutomator {
   async selectExteriorColor(exteriorColor) {
     try {
       this.log(`🎨 Selecting exterior color: ${exteriorColor}`);
-      
+
+      const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      const normalizeKey = (s) => norm(s).replace(/[\s-]/g, '');
+      const target = normalizeKey(exteriorColor);
+
       // Find the dropdown by looking for the label text and closest clickable element
-       let dropdown = this.findDropdownByLabel('Exterior color');
-      
-      // Try XPath to find exterior color dropdown
-      try {
-        const elements = document.evaluate(
-          `//div[contains(text(), "Exterior color") or contains(text(), "Exterior")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
-          document,
-          null,
-          XPathResult.FIRST_ORDERED_NODE_TYPE,
-          null
-        );
-        if (elements.singleNodeValue) {
-          dropdown = elements.singleNodeValue;
-        }
-      } catch (e) {
-        // Fallback to direct search
-        const els = document.querySelectorAll('div[role="button"], span[role="button"]');
-        for (let el of els) {
-          if (el.textContent.includes('Exterior color') || el.textContent.includes('Exterior') || 
-              el.parentElement?.textContent.includes('Exterior color') ||
-              el.previousElementSibling?.textContent.includes('Exterior color')) {
-            dropdown = el;
-            break;
-          }
-        }
-      }
-      
+      let dropdown = this.findDropdownByLabel('Exterior color');
       if (!dropdown) {
-        throw new Error('Exterior color dropdown not found');
+        await this.ensureAdditionalFieldsVisible();
+        dropdown = this.findDropdownByLabel('Exterior color');
       }
-      
-      await this.scrollIntoView(dropdown);
-      await this.delay(this.randomDelay(500, 1000));
-      
-      this.log('🎨 Found exterior color dropdown, clicking...');
-      dropdown.click();
-      await this.delay(this.randomDelay(2000, 3000));
-      
-      // Look for color option in dropdown menu
-      let option = null;
-      const optionSelectors = [
-        `//div[@role="option" and contains(text(), "${exteriorColor}")]`,
-        `//div[contains(text(), "${exteriorColor}") and contains(@class, "option")]`,
-        `//li[contains(text(), "${exteriorColor}")]`
-      ];
-      
-      for (let selector of optionSelectors) {
+
+      // Try XPath to find exterior color dropdown
+      if (!dropdown) {
         try {
-          const result = document.evaluate(
-            selector,
+          const elements = document.evaluate(
+            `//div[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "exterior color") or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "exterior")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
             document,
             null,
             XPathResult.FIRST_ORDERED_NODE_TYPE,
             null
           );
-          if (result.singleNodeValue) {
-            option = result.singleNodeValue;
-            break;
+          if (elements.singleNodeValue) {
+            dropdown = elements.singleNodeValue;
           }
-        } catch (e) {
-          // Fallback search
-          const options = document.querySelectorAll('[role="option"], li, div');
-          for (let opt of options) {
-            if (opt.textContent.trim() === exteriorColor || opt.textContent.includes(exteriorColor)) {
-              option = opt;
-              break;
-            }
-          }
+        } catch {}
+      }
+
+      if (!dropdown) {
+        // Fallback to direct search
+        const els = document.querySelectorAll('div[role="button"], span[role="button"], [role="combobox"]');
+        for (let el of els) {
+          const pt = norm(el.parentElement?.textContent || '');
+          const prev = norm(el.previousElementSibling?.textContent || '');
+          if (pt.includes('exterior color') || prev.includes('exterior color')) { dropdown = el; break; }
         }
-        if (option) break;
       }
-      
-      if (!option) {
-        throw new Error(`Exterior color option "${exteriorColor}" not found`);
+
+      if (!dropdown) throw new Error('Exterior color dropdown not found');
+
+      await this.scrollIntoView(dropdown);
+      await this.delay(this.randomDelay(500, 1000));
+
+      this.log('🎨 Found exterior color dropdown, clicking...');
+      dropdown.click();
+      await this.delay(this.randomDelay(1200, 2000));
+
+      // Search options case-insensitively and via aria-label
+      const options = Array.from(document.querySelectorAll('[role="option"], li, div[role="menuitem"]'));
+      let option = options.find((opt) => {
+        const txt = (opt.textContent || '').trim();
+        const label = opt.getAttribute?.('aria-label') || '';
+        return normalizeKey(txt) === target || normalizeKey(label) === target || normalizeKey(txt).includes(target);
+      });
+
+      if (!option && target.includes('offwhite')) {
+        option = options.find((opt) => normalizeKey(opt.textContent || '').includes('offwhite'));
       }
-      
+
+      if (!option) throw new Error(`Exterior color option "${exteriorColor}" not found`);
+
       await this.scrollIntoView(option);
       await this.delay(this.randomDelay(300, 600));
       option.click();
-      
-      await this.delay(this.randomDelay(1000, 2000));
+
+      await this.delay(this.randomDelay(800, 1500));
       this.log(`✅ Successfully selected exterior color: ${exteriorColor}`);
       return true;
-      
+
     } catch (error) {
       this.log(`⚠️ Could not select exterior color: ${exteriorColor}`, error);
       return false;
@@ -1174,92 +1183,76 @@ class SalesonatorAutomator {
   async selectInteriorColor(interiorColor) {
     try {
       this.log(`🪑 Selecting interior color: ${interiorColor}`);
-      
+
+      const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      const normalizeKey = (s) => norm(s).replace(/[\s-]/g, '');
+      const target = normalizeKey(interiorColor);
+
       // Find the dropdown by looking for the label text and closest clickable element
-       let dropdown = this.findDropdownByLabel('Interior color');
-      
-      // Try XPath to find interior color dropdown
-      try {
-        const elements = document.evaluate(
-          `//div[contains(text(), "Interior color") or contains(text(), "Interior")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
-          document,
-          null,
-          XPathResult.FIRST_ORDERED_NODE_TYPE,
-          null
-        );
-        if (elements.singleNodeValue) {
-          dropdown = elements.singleNodeValue;
-        }
-      } catch (e) {
-        // Fallback to direct search
-        const els = document.querySelectorAll('div[role="button"], span[role="button"]');
-        for (let el of els) {
-          if (el.textContent.includes('Interior color') || el.textContent.includes('Interior') || 
-              el.parentElement?.textContent.includes('Interior color') ||
-              el.previousElementSibling?.textContent.includes('Interior color')) {
-            dropdown = el;
-            break;
-          }
-        }
-      }
-      
+      let dropdown = this.findDropdownByLabel('Interior color');
+
       if (!dropdown) {
-        throw new Error('Interior color dropdown not found');
+        await this.ensureAdditionalFieldsVisible();
+        dropdown = this.findDropdownByLabel('Interior color');
       }
-      
-      await this.scrollIntoView(dropdown);
-      await this.delay(this.randomDelay(500, 1000));
-      
-      this.log('🪑 Found interior color dropdown, clicking...');
-      dropdown.click();
-      await this.delay(this.randomDelay(2000, 3000));
-      
-      // Look for color option in dropdown menu
-      let option = null;
-      const optionSelectors = [
-        `//div[@role="option" and contains(text(), "${interiorColor}")]`,
-        `//div[contains(text(), "${interiorColor}") and contains(@class, "option")]`,
-        `//li[contains(text(), "${interiorColor}")]`
-      ];
-      
-      for (let selector of optionSelectors) {
+
+      // Try XPath to find interior color dropdown
+      if (!dropdown) {
         try {
-          const result = document.evaluate(
-            selector,
+          const elements = document.evaluate(
+            `//div[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "interior color") or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "interior")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
             document,
             null,
             XPathResult.FIRST_ORDERED_NODE_TYPE,
             null
           );
-          if (result.singleNodeValue) {
-            option = result.singleNodeValue;
-            break;
+          if (elements.singleNodeValue) {
+            dropdown = elements.singleNodeValue;
           }
-        } catch (e) {
-          // Fallback search
-          const options = document.querySelectorAll('[role="option"], li, div');
-          for (let opt of options) {
-            if (opt.textContent.trim() === interiorColor || opt.textContent.includes(interiorColor)) {
-              option = opt;
-              break;
-            }
-          }
+        } catch {}
+      }
+
+      if (!dropdown) {
+        // Fallback to direct search
+        const els = document.querySelectorAll('div[role="button"], span[role="button"], [role="combobox"]');
+        for (let el of els) {
+          const pt = norm(el.parentElement?.textContent || '');
+          const prev = norm(el.previousElementSibling?.textContent || '');
+          if (pt.includes('interior color') || prev.includes('interior color')) { dropdown = el; break; }
         }
-        if (option) break;
       }
-      
-      if (!option) {
-        throw new Error(`Interior color option "${interiorColor}" not found`);
+
+      if (!dropdown) throw new Error('Interior color dropdown not found');
+
+      await this.scrollIntoView(dropdown);
+      await this.delay(this.randomDelay(500, 1000));
+
+      this.log('🪑 Found interior color dropdown, clicking...');
+      dropdown.click();
+      await this.delay(this.randomDelay(1200, 2000));
+
+      // Search options case-insensitively and via aria-label
+      const options = Array.from(document.querySelectorAll('[role="option"], li, div[role="menuitem"]'));
+      let option = options.find((opt) => {
+        const txt = (opt.textContent || '').trim();
+        const label = opt.getAttribute?.('aria-label') || '';
+        return normalizeKey(txt) === target || normalizeKey(label) === target || normalizeKey(txt).includes(target);
+      });
+
+      if (!option && target.includes('offwhite')) {
+        option = options.find((opt) => normalizeKey(opt.textContent || '').includes('offwhite'));
       }
-      
+
+      if (!option) throw new Error(`Interior color option "${interiorColor}" not found`);
+
       await this.scrollIntoView(option);
       await this.delay(this.randomDelay(300, 600));
       option.click();
-      
-      await this.delay(this.randomDelay(1000, 2000));
+
+      await this.delay(this.randomDelay(800, 1500));
       this.log(`✅ Successfully selected interior color: ${interiorColor}`);
       return true;
-      
+
     } catch (error) {
       this.log(`⚠️ Could not select interior color: ${interiorColor}`, error);
       return false;
