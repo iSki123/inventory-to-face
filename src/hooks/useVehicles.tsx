@@ -70,7 +70,16 @@ export const useVehicles = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('vehicles')
-        .select('*')
+        .select(`
+          *,
+          body_style_nhtsa,
+          drivetrain_nhtsa,
+          engine_nhtsa,
+          fuel_type_nhtsa,
+          transmission_nhtsa,
+          vehicle_type_nhtsa,
+          vin_decoded_at
+        `)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -84,72 +93,97 @@ export const useVehicles = () => {
       }
 
       const vehicles = (data as Vehicle[]) || [];
+      console.log('Fetched vehicles with NHTSA data:', vehicles.length);
+      
+      // Log VIN decoded status for debugging
+      const decodedCount = vehicles.filter(v => v.vin_decoded_at).length;
+      console.log(`${decodedCount} vehicles have VIN decoded data`);
+      
       setVehicles(vehicles);
 
-      // Auto-decode VINs for vehicles that have VINs but no decoded data
+      // Auto-decode VINs for vehicles that have VINs but no decoded data (non-blocking)
       const vehiclesToDecode = vehicles.filter(v => 
         v.vin && v.vin.length === 17 && !v.vin_decoded_at
       );
 
       if (vehiclesToDecode.length > 0) {
-        console.log(`Auto-decoding ${vehiclesToDecode.length} VINs...`);
-        // Decode VINs in background without blocking UI
-        vehiclesToDecode.forEach(async (vehicle) => {
-          try {
-            const { data: vinData, error: vinError } = await supabase.functions.invoke('vin-decoder', {
-              body: { 
-                vin: vehicle.vin,
-                vehicleId: vehicle.id 
+        console.log(`Found ${vehiclesToDecode.length} vehicles needing VIN decode...`);
+        
+        // Decode in batches to prevent overwhelming the system
+        const batchSize = 5;
+        for (let i = 0; i < vehiclesToDecode.length; i += batchSize) {
+          const batch = vehiclesToDecode.slice(i, i + batchSize);
+          
+          // Process batch concurrently but wait for completion before next batch
+          await Promise.allSettled(
+            batch.map(async (vehicle) => {
+              try {
+                const { data: vinData, error: vinError } = await supabase.functions.invoke('vin-decoder', {
+                  body: { 
+                    vin: vehicle.vin,
+                    vehicleId: vehicle.id 
+                  }
+                });
+
+                if (!vinError && vinData?.success) {
+                  console.log(`VIN decoded for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+                  
+                  // Update vehicle in state with the new VIN data
+                  setVehicles(prevVehicles => {
+                    return prevVehicles.map(v => {
+                      if (v.id === vehicle.id) {
+                        const decoded = vinData.vinData || {};
+                        const updatedVehicle = { ...v, ...decoded };
+                        
+                        // Map fields for UI display
+                        if (decoded.body_style_nhtsa) {
+                          const bs = (decoded.body_style_nhtsa as string).toLowerCase();
+                          if (bs.includes('convertible')) updatedVehicle.body_style_nhtsa = 'Convertible';
+                          else if (bs.includes('coupe')) updatedVehicle.body_style_nhtsa = 'Coupe';
+                          else if (bs.includes('hatchback')) updatedVehicle.body_style_nhtsa = 'Hatchback';
+                          else if (bs.includes('sedan')) updatedVehicle.body_style_nhtsa = 'Sedan';
+                          else if (bs.includes('suv') || bs.includes('sport utility')) updatedVehicle.body_style_nhtsa = 'SUV';
+                          else if (bs.includes('pickup') || bs.includes('truck')) updatedVehicle.body_style_nhtsa = 'Truck';
+                          else if (bs.includes('van') || bs.includes('minivan')) updatedVehicle.body_style_nhtsa = 'Van/Minivan';
+                          else if (bs.includes('wagon')) updatedVehicle.body_style_nhtsa = 'Wagon';
+                        }
+
+                        // Map fuel type to UI field
+                        if (decoded.fuel_type_nhtsa) {
+                          const ft = (decoded.fuel_type_nhtsa as string).toLowerCase();
+                          if (ft.includes('electric')) updatedVehicle.fuel_type = 'Electric';
+                          else if (ft.includes('hybrid') && ft.includes('plug')) updatedVehicle.fuel_type = 'Plug-in hybrid';
+                          else if (ft.includes('hybrid')) updatedVehicle.fuel_type = 'Hybrid';
+                          else if (ft.includes('diesel')) updatedVehicle.fuel_type = 'Diesel';
+                          else if (ft.includes('flex')) updatedVehicle.fuel_type = 'Flex';
+                          else updatedVehicle.fuel_type = 'Gasoline';
+                        }
+
+                        // Map transmission to UI field
+                        if (decoded.transmission_nhtsa) {
+                          const tr = (decoded.transmission_nhtsa as string).toLowerCase();
+                          updatedVehicle.transmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+                        }
+                        
+                        return updatedVehicle;
+                      }
+                      return v;
+                    });
+                  });
+                } else {
+                  console.error(`VIN decode failed for ${vehicle.vin}:`, vinError);
+                }
+              } catch (error) {
+                console.error(`Error decoding VIN ${vehicle.vin}:`, error);
               }
-            });
-
-            if (!vinError && vinData?.success) {
-              console.log(`VIN decoded for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
-              const decoded = vinData.vinData || {};
-              const mapped: Partial<Vehicle> = { ...decoded };
-
-              // Map body style to Facebook-friendly categories
-              if (decoded.body_style_nhtsa) {
-                const bs = (decoded.body_style_nhtsa as string).toLowerCase();
-                if (bs.includes('convertible')) mapped.body_style_nhtsa = 'Convertible';
-                else if (bs.includes('coupe')) mapped.body_style_nhtsa = 'Coupe';
-                else if (bs.includes('hatchback')) mapped.body_style_nhtsa = 'Hatchback';
-                else if (bs.includes('sedan')) mapped.body_style_nhtsa = 'Sedan';
-                else if (bs.includes('suv') || bs.includes('sport utility')) mapped.body_style_nhtsa = 'SUV';
-                else if (bs.includes('pickup') || bs.includes('truck')) mapped.body_style_nhtsa = 'Truck';
-                else if (bs.includes('van') || bs.includes('minivan')) mapped.body_style_nhtsa = 'Van/Minivan';
-                else if (bs.includes('wagon')) mapped.body_style_nhtsa = 'Wagon';
-              }
-
-              // Map fuel type to UI field
-              if (decoded.fuel_type_nhtsa) {
-                const ft = (decoded.fuel_type_nhtsa as string).toLowerCase();
-                if (ft.includes('electric')) mapped.fuel_type = 'Electric';
-                else if (ft.includes('hybrid') && ft.includes('plug')) mapped.fuel_type = 'Plug-in hybrid';
-                else if (ft.includes('hybrid')) mapped.fuel_type = 'Hybrid';
-                else if (ft.includes('diesel')) mapped.fuel_type = 'Diesel';
-                else if (ft.includes('flex')) mapped.fuel_type = 'Flex';
-                else mapped.fuel_type = 'Gasoline';
-              }
-
-              // Map transmission to UI field
-              if (decoded.transmission_nhtsa) {
-                const tr = (decoded.transmission_nhtsa as string).toLowerCase();
-                mapped.transmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
-              }
-
-              setVehicles(prev => prev.map(v =>
-                v.id === vehicle.id
-                  ? { ...v, ...mapped }
-                  : v
-              ));
-            } else {
-              console.error(`VIN decode failed for ${vehicle.vin}:`, vinError);
-            }
-          } catch (error) {
-            console.error(`Error decoding VIN ${vehicle.vin}:`, error);
+            })
+          );
+          
+          // Small delay between batches
+          if (i + batchSize < vehiclesToDecode.length) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
-        });
+        }
       }
     } catch (error) {
       console.error('Error fetching vehicles:', error);
