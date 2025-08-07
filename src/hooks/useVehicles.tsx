@@ -148,9 +148,11 @@ export const useVehicles = () => {
                           else if (bs.includes('wagon')) updatedVehicle.body_style_nhtsa = 'Wagon';
                         }
 
-                        // Map fuel type to UI field
+                        // Map fuel type to UI field - preserve NHTSA field too
                         if (decoded.fuel_type_nhtsa) {
                           const ft = (decoded.fuel_type_nhtsa as string).toLowerCase();
+                          // Keep the original NHTSA field AND set the UI field
+                          updatedVehicle.fuel_type_nhtsa = decoded.fuel_type_nhtsa;
                           if (ft.includes('electric')) updatedVehicle.fuel_type = 'Electric';
                           else if (ft.includes('hybrid') && ft.includes('plug')) updatedVehicle.fuel_type = 'Plug-in hybrid';
                           else if (ft.includes('hybrid')) updatedVehicle.fuel_type = 'Hybrid';
@@ -159,9 +161,11 @@ export const useVehicles = () => {
                           else updatedVehicle.fuel_type = 'Gasoline';
                         }
 
-                        // Map transmission to UI field
+                        // Map transmission to UI field - preserve NHTSA field too
                         if (decoded.transmission_nhtsa) {
                           const tr = (decoded.transmission_nhtsa as string).toLowerCase();
+                          // Keep the original NHTSA field AND set the UI field
+                          updatedVehicle.transmission_nhtsa = decoded.transmission_nhtsa;
                           updatedVehicle.transmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
                         }
                         
