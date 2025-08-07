@@ -82,12 +82,12 @@ serve(async (req) => {
     if (action === 'batch_decode') {
       console.log('Starting batch VIN decode process...');
       
-      // Get vehicles with VINs that haven't been decoded yet or need refresh
+      // Get vehicles with VINs that haven't been decoded yet
       const { data: vehicles, error: fetchError } = await supabaseClient
         .from('vehicles')
         .select('id, vin')
         .not('vin', 'is', null)
-        .or('vin_decoded_at.is.null,vin_decoded_at.lt.2025-01-01')
+        .is('vin_decoded_at', null)
         .limit(batch_size || 10);
 
       if (fetchError) {
