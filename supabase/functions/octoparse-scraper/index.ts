@@ -161,7 +161,7 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    const { action, sourceId, userId, taskId, aiDescriptionPrompt } = await req.json();
+    const { action, sourceId, userId, taskId, aiDescriptionPrompt, diagnostics } = await req.json();
 
     if (!action || !userId) {
       throw new Error('action and userId are required');
@@ -200,7 +200,7 @@ serve(async (req) => {
       case 'process_scraped_data':
         return await processScrapedData(supabaseClient, sourceId, userId);
       case 'import_task':
-        return await importSpecificTask(supabaseClient, taskId, userId, aiDescriptionPrompt);
+        return await importSpecificTask(supabaseClient, taskId, userId, aiDescriptionPrompt, diagnostics);
       case 'list_tasks':
         return await listAvailableTasks();
       default:
@@ -740,6 +740,104 @@ function parseOctoparseData(rawData: any[]): any[] {
   });
 }
 
+// Diagnostics helpers
+function _extractFieldFlexible(item: any, fieldNames: string[], defaultValue: any = null) {
+  for (const field of fieldNames) {
+    const lowerField = field.toLowerCase();
+    for (const key of Object.keys(item || {})) {
+      if (key.toLowerCase() === lowerField || key.toLowerCase().includes(lowerField)) {
+        const value = (item as any)[key];
+        if (value !== null && value !== undefined && value !== '' && value !== 'N/A' && value !== 'n/a') {
+          return value;
+        }
+      }
+    }
+  }
+  return defaultValue;
+}
+
+function _extractTitle(item: any): string | null {
+  return (
+    _extractFieldFlexible(item, ['title','Title','listing_title','name','Name','vehicle','Vehicle']) || null
+  );
+}
+
+function _parseFromTitle(title: string): { year?: number; make?: string; model?: string } | null {
+  if (!title || typeof title !== 'string') return null;
+  const t = title.replace(/\s+/g,' ').trim();
+  // Simple pattern: YEAR MAKE MODEL ...
+  const m = t.match(/\b(20\d{2}|19\d{2})\b\s+([A-Za-z]{2,})\s+([^|,\-\n]{2,})/);
+  if (m) {
+    const year = parseInt(m[1]);
+    const make = m[2].toUpperCase();
+    const model = m[3].trim().split(/\s{2,}|\s-\s|\|/)[0];
+    return { year, make, model };
+  }
+  return null;
+}
+
+function buildDiagnostics(rawData: any[], parsedVehicles: any[], opts?: { fallbackFromTitle?: boolean }) {
+  const totalRaw = Array.isArray(rawData) ? rawData.length : 0;
+  const parsedCount = Array.isArray(parsedVehicles) ? parsedVehicles.length : 0;
+  const skippedCount = Math.max(0, totalRaw - parsedCount);
+
+  const reasons = { missingMake: 0, missingModel: 0, missingBoth: 0 } as Record<string, number>;
+  const samples = { missingMake: [] as number[], missingModel: [] as number[], missingBoth: [] as number[] };
+  const salvageExamples: Array<{ index: number; title: string; parsed: any }> = [];
+  let salvageableFromTitle = 0;
+
+  const vinMap = new Map<string, number>();
+
+  for (let i = 0; i < totalRaw; i++) {
+    const item = rawData[i];
+    const make = _extractFieldFlexible(item, ['make','brand','manufacturer']);
+    const model = _extractFieldFlexible(item, ['model','model_name']);
+    const vin = _extractFieldFlexible(item, ['vin','vehicle_id','serial']);
+    if (vin && typeof vin === 'string') {
+      vinMap.set(vin, (vinMap.get(vin) || 0) + 1);
+    }
+
+    const hasMake = Boolean(make && String(make).trim());
+    const hasModel = Boolean(model && String(model).trim());
+
+    if (!hasMake || !hasModel) {
+      if (!hasMake && !hasModel) {
+        reasons.missingBoth++; samples.missingBoth.push(i);
+      } else if (!hasMake) {
+        reasons.missingMake++; samples.missingMake.push(i);
+      } else {
+        reasons.missingModel++; samples.missingModel.push(i);
+      }
+
+      if (opts?.fallbackFromTitle) {
+        const title = _extractTitle(item);
+        const parsed = title ? _parseFromTitle(title) : null;
+        if (parsed?.make && parsed?.model) {
+          salvageableFromTitle++;
+          if (salvageExamples.length < 5) salvageExamples.push({ index: i, title: title!, parsed });
+        }
+      }
+    }
+  }
+
+  const duplicateVINs = Array.from(vinMap.entries()).filter(([_, c]) => c > 1).length;
+
+  return {
+    totalRaw,
+    parsedCount,
+    skippedCount,
+    reasons,
+    samples: {
+      missingMake: samples.missingMake.slice(0, 10),
+      missingModel: samples.missingModel.slice(0, 10),
+      missingBoth: samples.missingBoth.slice(0, 10)
+    },
+    duplicateVINs,
+    salvageableFromTitle,
+    salvageExamples
+  };
+}
+
 function generateMockVehicleData() {
   const makes = ['Toyota', 'Honda', 'Ford', 'Chevrolet', 'BMW', 'Mercedes-Benz', 'Audi'];
   const models = {
@@ -792,7 +890,7 @@ function generateMockVehicleData() {
   return vehicles;
 }
 
-async function importSpecificTask(supabaseClient: any, taskId: string, userId: string, aiDescriptionPrompt?: string) {
+async function importSpecificTask(supabaseClient: any, taskId: string, userId: string, aiDescriptionPrompt?: string, diagnostics?: { enabled?: boolean; fallbackFromTitle?: boolean; dryRun?: boolean }) {
   console.log('=== IMPORT SPECIFIC TASK STARTED ===');
   console.log('Task ID:', taskId, 'User ID:', userId);
   
@@ -840,6 +938,10 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
 
     let vehicleData = parseOctoparseData(allRawData);
     console.log(`Parsed ${vehicleData.length} vehicles from task ${taskId} (raw rows: ${allRawData.length})`);
+
+    // Build diagnostics if requested
+    const diagEnabled = Boolean(diagnostics && (diagnostics === true || diagnostics.enabled));
+    const diagReport = diagEnabled ? buildDiagnostics(allRawData, vehicleData, { fallbackFromTitle: Boolean(diagnostics?.fallbackFromTitle) }) : undefined;
     
     if (vehicleData.length === 0) {
       return new Response(
@@ -1059,6 +1161,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
         vehiclesNeedingImages: vehiclesNeedingImages.length,
         imageGenerationResults,
         errors: errors,
+        diagnostics: diagReport,
         message: `Successfully imported ${insertedVehicles.length} of ${vehicleData.length} vehicles from task ${taskId}. ${vehiclesNeedingImages.length} vehicles queued for AI image generation.`,
         taskId
       }),
