@@ -1163,9 +1163,15 @@ class SalesonatorAutomator {
       dropdown.click();
       await this.delay(this.randomDelay(1200, 2000));
 
+      // Scope options to the freshly opened listbox/menu to avoid clicking nav links
+      let optionsContainer = null;
+      try {
+        optionsContainer = await this.waitForElement(['[role="listbox"]','[role="menu"]'], 4000);
+      } catch {}
+
       const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
       const target = norm(bodyStyle);
-      const getOptions = () => Array.from(document.querySelectorAll('[role="option"], div[role="menuitem"], li'));
+      const getOptions = () => Array.from((optionsContainer || document).querySelectorAll('[role="option"]'));
 
       let option = getOptions().find(opt => {
         const txt = norm(opt.textContent || '');
@@ -1266,8 +1272,12 @@ class SalesonatorAutomator {
       dropdown.click();
       await this.delay(this.randomDelay(1200, 2000));
 
-      // Search options case-insensitively and via aria-label
-      const options = Array.from(document.querySelectorAll('[role="option"], li, div[role="menuitem"]'));
+      // Search options only within the visible options container
+      let optionsContainer = null;
+      try {
+        optionsContainer = await this.waitForElement(['[role="listbox"]','[role="menu"]'], 4000);
+      } catch {}
+      const options = Array.from((optionsContainer || document).querySelectorAll('[role="option"]'));
       let option = options.find((opt) => {
         const txt = (opt.textContent || '').trim();
         const label = opt.getAttribute?.('aria-label') || '';
@@ -1293,7 +1303,7 @@ class SalesonatorAutomator {
 
       await this.scrollIntoView(option);
       await this.delay(this.randomDelay(300, 600));
-      option.click();
+      await this.performFacebookDropdownClick(option);
 
       await this.delay(this.randomDelay(800, 1500));
       // Verify the displayed value updated
@@ -1361,8 +1371,12 @@ class SalesonatorAutomator {
       dropdown.click();
       await this.delay(this.randomDelay(1200, 2000));
 
-      // Search options case-insensitively and via aria-label
-      const options = Array.from(document.querySelectorAll('[role="option"], li, div[role="menuitem"]'));
+      // Search options only within the visible options container
+      let optionsContainer = null;
+      try {
+        optionsContainer = await this.waitForElement(['[role="listbox"]','[role="menu"]'], 4000);
+      } catch {}
+      const options = Array.from((optionsContainer || document).querySelectorAll('[role="option"]'));
       let option = options.find((opt) => {
         const txt = (opt.textContent || '').trim();
         const label = opt.getAttribute?.('aria-label') || '';
@@ -1387,7 +1401,7 @@ class SalesonatorAutomator {
 
       await this.scrollIntoView(option);
       await this.delay(this.randomDelay(300, 600));
-      option.click();
+      await this.performFacebookDropdownClick(option);
 
       await this.delay(this.randomDelay(800, 1500));
       const verify = this.findDropdownByLabel('Interior color') || dropdown;
@@ -2416,12 +2430,25 @@ class SalesonatorAutomator {
     try {
       console.log(`[FACEBOOK CLICK] Starting enhanced React-compatible click sequence...`);
       
+      // Never click anchors (prevent accidental navigation); prefer closest option container
+      let el = element;
+      if (el && el.tagName === 'A') {
+        const candidate = el.closest('[role="option"]');
+        if (candidate) {
+          console.warn('[FACEBOOK CLICK] Element is an <a>; switching to closest role=option to prevent navigation');
+          el = candidate;
+        } else {
+          console.warn('[FACEBOOK CLICK] Element is an <a> without role=option parent; aborting click to avoid navigation');
+          return;
+        }
+      }
+      
       // Ensure element is in view and focused
-      await this.scrollIntoView(element);
+      await this.scrollIntoView(el);
       await this.delay(this.randomDelay(200, 400));
 
       // Pre-click preparation - mimic human behavior
-      element.focus();
+      el.focus();
       await this.delay(this.randomDelay(100, 300));
 
       // Enhanced event sequence based on reverse engineering findings
@@ -2441,7 +2468,7 @@ class SalesonatorAutomator {
       // Dispatch events with realistic delays
       for (const event of eventSequence) {
         try {
-          element.dispatchEvent(event);
+          el.dispatchEvent(event);
           await this.delay(this.randomDelay(20, 80));
         } catch (e) {
           console.warn(`[FACEBOOK CLICK] Event ${event.type} failed:`, e);
@@ -2451,8 +2478,8 @@ class SalesonatorAutomator {
       // Additional React synthetic event triggers
       try {
         // Trigger React's onChange and other synthetic events
-        if (element.tagName === 'INPUT' || element.tagName === 'SELECT') {
-          this.setNativeValue(element, element.value);
+        if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
+          this.setNativeValue(el, el.value);
         }
       } catch (e) {
         console.warn(`[FACEBOOK CLICK] Synthetic event trigger failed:`, e);
