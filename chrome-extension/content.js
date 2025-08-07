@@ -1365,22 +1365,90 @@ class SalesonatorAutomator {
         }
       }
       
+      // Strategy 8: Geometry-based search relative to the visible "Model" label
+      if (!modelInput) {
+        const label = document.querySelector('span#_r_2f_, span[dir="auto"]:not([role])'); // user-provided example id and common FB label spans
+        if (label && (label.textContent || '').trim().toLowerCase().startsWith('model')) {
+          const lr = label.getBoundingClientRect();
+          const candidates = Array.from(document.querySelectorAll('input[type="text"], input:not([type]), [role="textbox"], [contenteditable="true"]'))
+            .filter(el => {
+              const r = el.getBoundingClientRect();
+              const sameRow = Math.abs(r.top - lr.top) < 80 || (r.top > lr.top && r.top < lr.bottom + 140);
+              const rightOf = r.left >= lr.left - 20; // usually to the right or aligned
+              const visible = r.width >= 40 && r.height >= 18;
+              return visible && rightOf && sameRow;
+            })
+            .sort((a,b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+          if (candidates.length) {
+            modelInput = candidates[0];
+            this.log('✅ Found model input via geometry-based search');
+          }
+        }
+      }
+
+      // Strategy 9: Last-resort activeElement after clicking label
+      if (!modelInput) {
+        const label = Array.from(document.querySelectorAll('span,label,div')).find(el => (el.textContent||'').trim().toLowerCase() === 'model');
+        if (label) {
+          try {
+            label.click();
+            await this.delay(120);
+            if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.getAttribute('role') === 'textbox' || document.activeElement.getAttribute('contenteditable') === 'true')) {
+              modelInput = document.activeElement;
+              this.log('✅ Found model input via activeElement after label click');
+            }
+          } catch {}
+        }
+      }
+
       if (!modelInput) {
         throw new Error('Model input not found with any strategy');
       }
+      
+      this.log('[MODEL DETECT] Element chosen for Model input', {
+        tag: modelInput.tagName,
+        id: modelInput.id || null,
+        role: modelInput.getAttribute('role') || null,
+        contenteditable: modelInput.getAttribute('contenteditable') || null
+      });
       
       await this.scrollIntoView(modelInput);
       await this.delay(this.randomDelay(300, 600));
       
       // Enhanced clearing and setting with multiple attempts
       this.log('🚗 Clearing and setting model value...');
+
+      const isInput = modelInput && modelInput.tagName === 'INPUT';
+      const isCE = !!modelInput && (modelInput.getAttribute('contenteditable') === 'true' || modelInput.getAttribute('role') === 'textbox');
+
+      // Special path for Facebook contenteditable/textbox fields (inspired by reverseeng enterText)
+      if (!isInput && isCE) {
+        this.log('🧠 Using contenteditable/textbox path for Model');
+        modelInput.focus();
+        try { document.execCommand('selectAll', false, null); } catch {}
+        try { document.execCommand('insertText', false, model); } catch {}
+        // Fire React-friendly events
+        modelInput.dispatchEvent(new InputEvent('input', { bubbles: true, data: model, inputType: 'insertText' }));
+        modelInput.dispatchEvent(new Event('change', { bubbles: true }));
+        await this.delay(300);
+        const txt = (modelInput.textContent || modelInput.innerText || '').trim();
+        if (txt && (txt === model.trim() || txt.toLowerCase().includes(model.toLowerCase()))) {
+          this.log('✅ STEP 3 COMPLETE: Model set via contenteditable/textbox path');
+          modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
+          await this.delay(300);
+          return true;
+        }
+        this.log('⚠️ Contenteditable path did not verify, falling back to input strategies if possible');
+      }
       
-      // Attempt 1: Standard React-compatible approach
+      // Attempt 1: Standard React-compatible approach (for real inputs)
       modelInput.focus();
       await this.delay(100);
       
       // Clear thoroughly
-      modelInput.value = '';
+      if (isInput) {
+        modelInput.value = '';
+      }
       if (modelInput.select) modelInput.select();
       this.setNativeValue(modelInput, '');
       modelInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1393,7 +1461,7 @@ class SalesonatorAutomator {
       await this.delay(300);
       
       // Verify first attempt
-      let currentValue = modelInput.value || '';
+      let currentValue = isInput ? (modelInput.value || '') : ((modelInput.textContent || modelInput.innerText || ''));
       if (currentValue.trim() === model.trim()) {
         this.log('✅ Model set successfully on first attempt');
         modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
@@ -1408,7 +1476,7 @@ class SalesonatorAutomator {
       await this.delay(100);
       
       // Clear again
-      modelInput.value = '';
+      if (isInput) modelInput.value = '';
       this.setNativeValue(modelInput, '');
       modelInput.dispatchEvent(new Event('input', { bubbles: true }));
       await this.delay(100);
@@ -1418,7 +1486,7 @@ class SalesonatorAutomator {
       await this.delay(500);
       
       // Final verification
-      currentValue = modelInput.value || '';
+      currentValue = isInput ? (modelInput.value || '') : ((modelInput.textContent || modelInput.innerText || ''));
       if (currentValue.trim() === model.trim()) {
         this.log('✅ STEP 3 COMPLETE: Successfully filled model with typing approach');
         modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
@@ -1428,13 +1496,18 @@ class SalesonatorAutomator {
       
       // Attempt 3: Direct property setting
       this.log('🚗 Typing failed, trying direct property setting...');
-      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(modelInput, model);
+      if (isInput) {
+        Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(modelInput, model);
+      } else if (isCE) {
+        try { document.execCommand('selectAll', false, null); } catch {}
+        try { document.execCommand('insertText', false, model); } catch {}
+      }
       modelInput.dispatchEvent(new Event('input', { bubbles: true }));
       modelInput.dispatchEvent(new Event('change', { bubbles: true }));
       modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
       await this.delay(500);
       
-      currentValue = modelInput.value || '';
+      currentValue = isInput ? (modelInput.value || '') : ((modelInput.textContent || modelInput.innerText || ''));
       if (currentValue.trim() === model.trim()) {
         this.log('✅ STEP 3 COMPLETE: Successfully filled model with direct property setting');
         return true;
