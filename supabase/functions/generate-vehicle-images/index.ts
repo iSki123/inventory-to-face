@@ -49,23 +49,41 @@ serve(async (req) => {
       })
       .eq('id', vehicleId);
 
-    // Define the 4 image prompts with dealership license plate
+    // Build comprehensive vehicle description for prompts
+    const vehicleDetails = [
+      `${vehicleData.year} ${vehicleData.make} ${vehicleData.model}`,
+      vehicleData.trim ? `${vehicleData.trim} trim` : null,
+      vehicleData.exterior_color ? `${vehicleData.exterior_color} exterior` : null,
+      vehicleData.interior_color ? `${vehicleData.interior_color} interior` : null,
+      vehicleData.condition ? `${vehicleData.condition} condition` : null,
+      vehicleData.fuel_type || vehicleData.fuel_type_nhtsa ? `${vehicleData.fuel_type || vehicleData.fuel_type_nhtsa} engine` : null,
+      vehicleData.transmission || vehicleData.transmission_nhtsa ? `${vehicleData.transmission || vehicleData.transmission_nhtsa} transmission` : null,
+      vehicleData.engine || vehicleData.engine_nhtsa ? `${vehicleData.engine || vehicleData.engine_nhtsa} engine` : null,
+      vehicleData.body_style_nhtsa ? `${vehicleData.body_style_nhtsa} body style` : null,
+      vehicleData.drivetrain || vehicleData.drivetrain_nhtsa ? `${vehicleData.drivetrain || vehicleData.drivetrain_nhtsa} drivetrain` : null,
+      vehicleData.mileage ? `${vehicleData.mileage.toLocaleString()} miles` : null,
+      vehicleData.features && vehicleData.features.length > 0 ? `with features: ${vehicleData.features.slice(0, 5).join(', ')}` : null
+    ].filter(Boolean).join(', ');
+
+    const basePromptSuffix = `Professional automotive dealership photography with ample space around the vehicle. The vehicle should be centered in the frame with significant flood area/buffer space on all sides to ensure no parts are cut off. Clean, bright dealership lot background with professional lighting. The vehicle has a visible license plate reading "${dealershipName}". Ultra high resolution, realistic automotive photography style. The vehicle should appear pristine and ready for sale.`;
+
+    // Define the 4 image prompts with comprehensive vehicle information
     const imagePrompts = [
       {
         angle: 'front_angled',
-        prompt: `Professional automotive photography of a ${vehicleData.year} ${vehicleData.make} ${vehicleData.model} in ${vehicleData.exterior_color || 'standard'} color. Front 3/4 angle view showing the front and driver's side of the vehicle. The vehicle has a license plate that reads "${dealershipName}" on it. Clean dealership lot background, bright natural lighting, high resolution, realistic automotive photography style. The vehicle should look pristine and ready for sale.`
+        prompt: `${vehicleDetails}. Front 3/4 angle view showing the front grille, headlights, and driver's side of the vehicle. ${basePromptSuffix}`
       },
       {
         angle: 'side_profile',
-        prompt: `Professional automotive photography of a ${vehicleData.year} ${vehicleData.make} ${vehicleData.model} in ${vehicleData.exterior_color || 'standard'} color. Pure side profile view showing the complete side of the vehicle. The vehicle has a license plate that reads "${dealershipName}" on it. Clean dealership lot background, bright natural lighting, high resolution, realistic automotive photography style. The vehicle should look pristine and ready for sale.`
+        prompt: `${vehicleDetails}. Pure side profile view showing the complete side silhouette, wheels, and body lines of the vehicle. ${basePromptSuffix}`
       },
       {
         angle: 'rear_view',
-        prompt: `Professional automotive photography of a ${vehicleData.year} ${vehicleData.make} ${vehicleData.model} in ${vehicleData.exterior_color || 'standard'} color. Rear view showing the back of the vehicle. The vehicle has a license plate that reads "${dealershipName}" on it. Clean dealership lot background, bright natural lighting, high resolution, realistic automotive photography style. The vehicle should look pristine and ready for sale.`
+        prompt: `${vehicleDetails}. Rear view showing the back of the vehicle, taillights, and rear bumper. ${basePromptSuffix}`
       },
       {
         angle: 'interior_door_open',
-        prompt: `Professional automotive photography showing the interior of a ${vehicleData.year} ${vehicleData.make} ${vehicleData.model} with ${vehicleData.interior_color || 'standard'} interior. Driver's side door is open, photographed from outside the vehicle showing the interior cabin, seats, dashboard, and steering wheel. Clean, well-lit interior, high resolution, realistic automotive photography style. The interior should look clean and inviting.`
+        prompt: `${vehicleDetails}. Interior view with driver's side door open, photographed from outside showing the cabin, seats, dashboard, steering wheel, and controls. Clean, well-lit interior with professional automotive photography lighting. Ample framing space around the vehicle opening. High resolution, realistic automotive photography style.`
       }
     ];
 
