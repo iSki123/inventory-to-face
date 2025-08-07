@@ -468,9 +468,9 @@ class SalesonatorAutomator {
             this.log(`🔄 Retrying in ${2 ** attempt} seconds...`);
             await this.delay(2000 * (2 ** attempt));
             
-            // Try to recover by refreshing the page
+            // Try to recover without refreshing the page
             if (attempt > 0) {
-              window.location.reload();
+              this.log('⚠️ Retrying without page reload to stay on Facebook');
               await this.delay(5000);
             }
           }
@@ -485,10 +485,16 @@ class SalesonatorAutomator {
     }
   }
 
-  // Enhanced navigation with better error handling
+  // Enhanced navigation with better error handling - PREVENTS ANY NAVIGATION AWAY FROM FACEBOOK
   async navigateToMarketplace() {
     const currentUrl = window.location.href;
     this.log('📍 Current URL:', currentUrl);
+    
+    // CRITICAL: Never navigate away from Facebook - stay on current page
+    if (!currentUrl.includes('facebook.com')) {
+      this.log('❌ ERROR: Not on Facebook - stopping to prevent navigation away');
+      throw new Error('Must be on Facebook first - please navigate manually');
+    }
     
     if (currentUrl.includes('facebook.com/marketplace/create/vehicle')) {
       this.log('✅ Already on vehicle creation page');
@@ -498,7 +504,7 @@ class SalesonatorAutomator {
     if (currentUrl.includes('facebook.com/marketplace/create')) {
       this.log('📝 On marketplace create page, checking for vehicle category...');
       
-      // Look for vehicle category button/option
+      // Look for vehicle category button/option WITHOUT any navigation
       const vehicleCategorySelectors = [
         'aria:Vehicle',
         'text:Vehicle',
@@ -518,12 +524,13 @@ class SalesonatorAutomator {
       } catch (error) {
         this.log('⚠️ Could not find vehicle category, proceeding anyway');
       }
+      return;
     }
     
-    // Check if we need to navigate - avoid navigation if already on marketplace
-    if (!currentUrl.includes('facebook.com/marketplace')) {
-      this.log('⚠️ Not on Facebook Marketplace - please navigate manually to avoid page reload');
-      throw new Error('Please navigate to Facebook Marketplace manually first');
+    // If on Facebook but not marketplace, require manual navigation to prevent redirects
+    if (currentUrl.includes('facebook.com') && !currentUrl.includes('marketplace')) {
+      this.log('⚠️ On Facebook but not Marketplace - manual navigation required to prevent redirects');
+      throw new Error('Please navigate to Facebook Marketplace manually - extension will NOT auto-navigate to prevent redirects');
     }
   }
 
