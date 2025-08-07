@@ -83,7 +83,7 @@ class SalesonatorAutomator {
     });
   }
 
-  // Robust selector strategy with multiple fallbacks
+  // Robust selector strategy with multiple fallbacks - IMPROVED
   findElementWithFallbacks(selectors, parentElement = document) {
     // Priority order: ARIA labels, placeholders, roles, text content, CSS selectors
     for (const selector of selectors) {
@@ -92,57 +92,52 @@ class SalesonatorAutomator {
         if (selector.startsWith('aria:')) {
           const ariaLabel = selector.replace('aria:', '');
           const element = parentElement.querySelector(`[aria-label*="${ariaLabel}"]`);
-          if (element) return element;
+          if (element && this.isInteractiveElement(element)) return element;
         }
         
         // Placeholder selector
         else if (selector.startsWith('placeholder:')) {
           const placeholder = selector.replace('placeholder:', '');
           const element = parentElement.querySelector(`[placeholder*="${placeholder}"]`);
-          if (element) return element;
+          if (element && this.isInteractiveElement(element)) return element;
         }
         
         // Role selector
         else if (selector.startsWith('role:')) {
           const role = selector.replace('role:', '');
           const element = parentElement.querySelector(`[role="${role}"]`);
-          if (element) return element;
+          if (element && this.isInteractiveElement(element)) return element;
         }
         
-        // Text content selector using multiple approaches
+        // Text content selector with strict interactive element filtering
         else if (selector.startsWith('text:')) {
           const text = selector.replace('text:', '');
           
-          // Method 1: XPath approach (most reliable)
+          // Method 1: XPath with interactive element validation
           try {
             const xpath = `.//*[contains(normalize-space(text()), "${text}")]`;
-            const result = document.evaluate(xpath, parentElement, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-            if (result.singleNodeValue) {
-              // Filter out disabled or hidden elements
-              const elem = result.singleNodeValue;
-              if (!elem.hasAttribute('aria-disabled') && !elem.hasAttribute('aria-hidden')) {
+            const result = document.evaluate(xpath, parentElement, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+            let elem;
+            while (elem = result.iterateNext()) {
+              if (this.isInteractiveElement(elem) && this.isElementVisible(elem)) {
                 return elem;
               }
             }
           } catch (e) {}
           
-          // Method 2: Manual text search with element filtering
-          const elements = Array.from(parentElement.querySelectorAll('*'));
+          // Method 2: Manual search with strict filtering for interactive elements
+          const interactiveTags = ['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'A', 'DIV', 'SPAN'];
+          const elements = Array.from(parentElement.querySelectorAll(
+            interactiveTags.map(tag => `${tag}[role], ${tag}[aria-label], ${tag}[tabindex], ${tag}[onclick]`).join(', ') + 
+            ', [role="button"], [role="option"], [role="combobox"], [role="listbox"]'
+          ));
+          
           const found = elements.find(el => {
             const textContent = el.textContent?.trim() || '';
             const innerText = el.innerText?.trim() || '';
-            const isMatch = textContent.includes(text) || innerText.includes(text);
+            const isMatch = textContent === text || innerText === text || textContent.includes(text) || innerText.includes(text);
             
-            // Filter out disabled, hidden, or back buttons
-            if (isMatch) {
-              const ariaLabel = el.getAttribute('aria-label') || '';
-              const isDisabled = el.hasAttribute('aria-disabled') && el.getAttribute('aria-disabled') === 'true';
-              const isHidden = el.hasAttribute('aria-hidden') && el.getAttribute('aria-hidden') === 'true';
-              const isBackButton = ariaLabel.toLowerCase().includes('back');
-              
-              return !isDisabled && !isHidden && !isBackButton;
-            }
-            return false;
+            return isMatch && this.isInteractiveElement(el) && this.isElementVisible(el);
           });
           if (found) return found;
         }
@@ -175,6 +170,49 @@ class SalesonatorAutomator {
       }
     }
     return null;
+  }
+
+  // NEW: Check if element is interactive and suitable for automation
+  isInteractiveElement(element) {
+    if (!element) return false;
+    
+    // Exclude script, style, meta tags completely
+    const excludedTags = ['SCRIPT', 'STYLE', 'META', 'LINK', 'HEAD', 'TITLE'];
+    if (excludedTags.includes(element.tagName)) return false;
+    
+    // Check for interactive roles
+    const role = element.getAttribute('role');
+    const interactiveRoles = ['button', 'option', 'combobox', 'textbox', 'listbox', 'menu', 'menuitem'];
+    if (role && interactiveRoles.includes(role)) return true;
+    
+    // Check for interactive elements
+    const interactiveTags = ['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'A'];
+    if (interactiveTags.includes(element.tagName)) return true;
+    
+    // Check for clickable attributes
+    if (element.hasAttribute('onclick') || element.hasAttribute('tabindex')) return true;
+    
+    // Check for ARIA labels (usually interactive)
+    if (element.hasAttribute('aria-label')) return true;
+    
+    return false;
+  }
+
+  // NEW: Check if element is visible and not disabled
+  isElementVisible(element) {
+    if (!element) return false;
+    
+    // Check disabled state
+    if (element.hasAttribute('disabled') || element.hasAttribute('aria-disabled')) return false;
+    
+    // Check hidden state
+    if (element.hasAttribute('hidden') || element.getAttribute('aria-hidden') === 'true') return false;
+    
+    // Check computed style visibility
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+    
+    return true;
   }
 
   // Helper function to find elements containing specific text
@@ -803,155 +841,102 @@ class SalesonatorAutomator {
     const s = (str||'').toString().toLowerCase();
     return s.replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1));
   }
-  // Select Year dropdown with improved detection
+  // FIXED: Select Year dropdown with enhanced element filtering
   async selectYear(year) {
     try {
       this.log(`🗓️ Selecting year: ${year}`);
       console.log(`[YEAR DEBUG] Starting year selection for: ${year}`);
       
-      // Find year dropdown more reliably
+      // Close any open dropdown first
+      await this.closeAnyOpenDropdown();
+      await this.delay(500);
+      
+      // Enhanced selectors for year dropdown - prioritize interactive elements
       const yearDropdownSelectors = [
+        '[aria-label*="Year"][role="combobox"]',
+        '[aria-label*="Year"][role="button"]', 
         'text:Year',
-        '[aria-label*="Year"]',
-        'div[role="button"]:has-text("Year")',
-        'span:has-text("Year")',
-        '[data-testid*="year"]'
+        '[aria-label*="Year"]'
       ];
       
       console.log(`[YEAR DEBUG] Searching for year dropdown with selectors:`, yearDropdownSelectors);
+      const yearDropdown = await this.waitForElement(yearDropdownSelectors, 10000);
       
-      const yearDropdown = await this.waitForElement(yearDropdownSelectors, 8000);
-      if (!yearDropdown) {
-        throw new Error('Year dropdown not found');
+      // Validate we found an interactive element
+      if (!this.isInteractiveElement(yearDropdown)) {
+        throw new Error('Found year element is not interactive: ' + yearDropdown.tagName);
       }
       
-      console.log(`[YEAR DEBUG] Found year dropdown:`, yearDropdown);
-      console.log(`[YEAR DEBUG] Dropdown tagName:`, yearDropdown.tagName);
-      console.log(`[YEAR DEBUG] Dropdown innerHTML:`, yearDropdown.innerHTML);
-      console.log(`[YEAR DEBUG] Dropdown attributes:`, Array.from(yearDropdown.attributes).map(a => `${a.name}="${a.value}"`));
+      console.log(`[YEAR DEBUG] Found interactive year dropdown:`, yearDropdown.tagName, yearDropdown.getAttribute('role'));
       
       await this.scrollIntoView(yearDropdown);
-      this.log('📅 Found year dropdown, clicking to open...');
+      await this.delay(500);
       
       console.log(`[YEAR DEBUG] Clicking year dropdown...`);
-      yearDropdown.click();
-      await this.delay(2000);
+      await this.performFacebookDropdownClick(yearDropdown);
+      await this.delay(1000);
       
+      // Wait for options with strict filtering
       console.log(`[YEAR DEBUG] Checking if dropdown opened...`);
-      const optionsAfterClick = document.querySelectorAll('[role="option"]');
-      console.log(`[YEAR DEBUG] Found options after click:`, optionsAfterClick.length);
+      await this.waitForElement(['[role="listbox"]', '[role="menu"]'], 3000);
       
-      // Log first 20 options to debug
-      Array.from(optionsAfterClick).slice(0, 20).forEach((opt, idx) => {
-        console.log(`[YEAR DEBUG] Option ${idx}: ${opt.textContent?.trim()}`, opt);
-      });
+      // Find year option with exact matching and visibility check
+      const yearOptions = Array.from(document.querySelectorAll('[role="option"]'))
+        .filter(opt => {
+          const text = opt.textContent?.trim() || '';
+          return text === year.toString() && this.isElementVisible(opt);
+        });
       
-      console.log(`[YEAR DEBUG] 🎯 Using enhanced option selection...`);
+      console.log(`[YEAR DEBUG] Found ${yearOptions.length} matching year options`);
       
-      // Use multiple approaches to find the year option
-      let yearOption = null;
-      
-      // Method 1: Find by exact text match using waitForElement
-      try {
-        const yearSelectors = [
-          `text:${year}`,
-          `[role="option"]:has-text("${year}")`,
-          `div:has-text("${year}")`,
-          `span:has-text("${year}")`,
-          `li:has-text("${year}")`,
-          `[data-value="${year}"]`,
-          `[aria-label*="${year}"]`,
-          `*[title="${year}"]`
-        ];
-        
-        console.log(`[YEAR DEBUG] Searching for year option with selectors:`, yearSelectors);
-        yearOption = await this.waitForElement(yearSelectors, 3000);
-        console.log(`[YEAR DEBUG] ✅ Found year option using waitForElement:`, yearOption);
-        console.log(`[YEAR DEBUG] Option text:`, yearOption?.textContent || yearOption?.innerHTML);
-        console.log(`[YEAR DEBUG] Option tagName:`, yearOption?.tagName);
-        console.log(`[YEAR DEBUG] Option role:`, yearOption?.getAttribute('role'));
-        console.log(`[YEAR DEBUG] Option ID:`, yearOption?.id);
-        console.log(`[YEAR DEBUG] Option classes:`, yearOption?.className);
-        
-        // Verify this is actually the year option we want
-        const optionText = yearOption?.textContent?.trim();
-        const manualYearOption = Array.from(optionsAfterClick).find(opt => 
-          opt.textContent?.trim() === year.toString()
+      if (yearOptions.length === 0) {
+        console.log(`[YEAR DEBUG] Available options:`, 
+          Array.from(document.querySelectorAll('[role="option"]'))
+            .slice(0, 10)
+            .map(opt => opt.textContent?.trim())
         );
-        console.log(`[YEAR DEBUG] 🔍 Manual search would find:`, manualYearOption);
-        console.log(`[YEAR DEBUG] 🔍 Are they the same element?`, yearOption === manualYearOption);
-        
-        if (yearOption !== manualYearOption) {
-          console.log(`[YEAR DEBUG] ⚠️ DIFFERENT ELEMENTS! Switching to manual match...`);
-          yearOption = manualYearOption;
-        }
-        
-      } catch (waitError) {
-        console.log(`[YEAR DEBUG] ⚠️ waitForElement failed, falling back to manual search:`, waitError.message);
-        
-        // Method 2: Manual search through options
-        yearOption = Array.from(optionsAfterClick).find(opt => 
-          opt.textContent?.trim() === year.toString()
-        );
+        throw new Error(`Year option ${year} not found`);
       }
       
-      if (!yearOption) {
-        throw new Error(`Year option ${year} not found among ${optionsAfterClick.length} options`);
-      }
+      const yearOption = yearOptions[0];
+      console.log(`[YEAR DEBUG] Using year option:`, yearOption.textContent?.trim());
       
-      console.log(`[YEAR DEBUG] 📅 Found year option, clicking: ${year}`);
+      await this.scrollIntoView(yearOption);
+      await this.delay(300);
       await this.performFacebookDropdownClick(yearOption);
-      await this.delay(2000);
+      await this.delay(1000);
       
-      // Enhanced verification
-      console.log(`[YEAR DEBUG] Verifying year selection...`);
-      await this.delay(500);
-      console.log(`[YEAR DEBUG] Dropdown selected value:`, yearDropdown.textContent?.trim());
+      // Verify selection
+      const verificationSuccess = this.verifyYearSelection(year, yearDropdown);
+      console.log(`[YEAR DEBUG] Verification result:`, verificationSuccess);
       
-      // Check if year appears in any input fields
-      const allInputs = document.querySelectorAll('input');
-      console.log(`[YEAR DEBUG] Checking year inputs:`, allInputs.length);
-      allInputs.forEach((input, idx) => {
-        console.log(`[YEAR DEBUG] Input ${idx} value: ${input.value} name: ${input.name} aria-label: ${input.getAttribute('aria-label')}`);
-      });
-      
-      // Check dropdown text content
-      const dropdownText = yearDropdown.textContent?.trim();
-      const dropdownDataValue = yearDropdown.getAttribute('data-value');
-      console.log(`[YEAR DEBUG] Final dropdown text:`, dropdownText);
-      console.log(`[YEAR DEBUG] Final dropdown data-value:`, dropdownDataValue);
-      
-      // Check if year appears anywhere in the form
-      const formContent = document.querySelector('form')?.textContent || document.body.textContent;
-      const yearAppearsInForm = formContent.includes(year.toString()) && 
-                               (formContent.includes(`${year} `) || formContent.includes(` ${year}`));
-      console.log(`[YEAR DEBUG] Year appears in form:`, yearAppearsInForm);
-      
-      // Multiple verification methods
-      const verifications = {
-        dropdownContainsYear: dropdownText?.includes(year.toString()),
-        dataValueMatches: dropdownDataValue === year.toString(),
-        yearInForm: yearAppearsInForm,
-        yearInInput: Array.from(allInputs).some(input => input.value === year.toString())
-      };
-      
-      console.log(`[YEAR DEBUG] Year in dropdown:`, verifications.dropdownContainsYear);
-      console.log(`[YEAR DEBUG] Year in input:`, verifications.yearInInput);
-      console.log(`[YEAR DEBUG] Overall success:`, Object.values(verifications).some(v => v));
-      
-      const success = Object.values(verifications).some(v => v);
-      
-      if (success) {
+      if (verificationSuccess) {
         this.log('✅ Successfully selected year:', year);
-        return true;
       } else {
-        console.log(`[YEAR DEBUG] Year selection may have failed - no evidence of selection found`);
         this.log('⚠️ Year selection verification failed for:', year);
-        return false;
       }
       
+      return verificationSuccess;
     } catch (error) {
+      console.log(`[YEAR DEBUG] Year selection failed:`, error.message);
       this.log('⚠️ Could not select year:', year, error);
+      return false;
+    }
+  }
+
+  // Helper method to verify year selection
+  verifyYearSelection(year, dropdown) {
+    try {
+      const dropdownText = dropdown.textContent?.trim() || '';
+      const yearInDropdown = dropdownText.includes(year.toString());
+      
+      const yearInputs = Array.from(document.querySelectorAll('input'))
+        .filter(input => input.value.includes(year.toString()));
+      
+      const formContainsYear = document.body.textContent.includes(year.toString());
+      
+      return yearInDropdown || yearInputs.length > 0 || formContainsYear;
+    } catch {
       return false;
     }
   }
@@ -1051,22 +1036,25 @@ class SalesonatorAutomator {
     }
   }
 
-  // Fill Model input
+  // FIXED: Fill Model input with improved selectors and waiting
   async fillModel(model) {
     try {
       this.log(`🚗 Filling model: ${model}`);
       
+      // Wait for model field to be available (depends on make selection)
+      await this.delay(1000);
+      
       const modelInputSelectors = [
-        '[aria-label*="Model"]',
-        'input[placeholder*="Model"]',
+        'input[aria-label*="Model"]',
+        'input[placeholder*="Model"]', 
         'input[name*="model"]',
-        '[data-testid*="model"]'
+        'textarea[aria-label*="Model"]',
+        '[role="textbox"][aria-label*="Model"]',
+        'input[aria-label*="model" i]'
       ];
       
-      let modelInput = null;
-      try {
-        modelInput = await this.waitForElement(modelInputSelectors, 6000);
-      } catch {}
+      let modelInput = await this.waitForElement(modelInputSelectors, 15000);
+      
       if (!modelInput) {
         modelInput = this.findInputByLabel('Model') || this.findInputByLabel('Model name');
       }
@@ -1076,57 +1064,60 @@ class SalesonatorAutomator {
       
       await this.scrollIntoView(modelInput);
       
-      // Clear existing value and set new one
+      // Clear existing content and type the model
       modelInput.focus();
-      if (modelInput.select) modelInput.select();
-      await this.delay(100);
+      await this.delay(300);
       
-      // Use React-compatible value setting
-      this.setNativeValue(modelInput, model);
-      
-      // Trigger React events
-      modelInput.dispatchEvent(new Event('input', { bubbles: true }));
-      modelInput.dispatchEvent(new Event('change', { bubbles: true }));
-      modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
-      
-      await this.delay(500);
-      
-      // Verify value was set
-      if ((modelInput.value || '').toString().trim() === (model || '').toString().trim()) {
-        this.log('✅ Successfully filled model:', model);
-        return true;
+      // Select all existing content
+      if (modelInput.select && typeof modelInput.select === 'function') {
+        modelInput.select();
       } else {
-        this.log('⚠️ Model value verification failed. Expected:', model, 'Got:', modelInput.value);
-        // Try typing approach as fallback
-        modelInput.focus();
-        if (modelInput.select) modelInput.select();
-        await this.typeHumanLike(modelInput, model);
-        return true;
+        modelInput.setSelectionRange(0, modelInput.value.length);
+      }
+      await this.delay(200);
+      
+      // Type the model with title case formatting
+      const formattedModel = this.toTitleCase(model);
+      await this.typeHumanLike(modelInput, formattedModel);
+      
+      // Verify the input contains our value
+      await this.delay(500);
+      const finalValue = modelInput.value;
+      if (!finalValue.includes(formattedModel)) {
+        this.log('⚠️ Model verification failed. Expected:', formattedModel, 'Got:', finalValue);
+        // Try again with React value setting
+        this.setNativeValue(modelInput, formattedModel);
+        modelInput.dispatchEvent(new Event('input', { bubbles: true }));
+        modelInput.dispatchEvent(new Event('change', { bubbles: true }));
       }
       
+      this.log('✅ Successfully filled model:', formattedModel);
+      return true;
     } catch (error) {
       this.log('⚠️ Could not fill model:', model, error);
       return false;
     }
   }
 
-  // Fill Mileage input
+  // FIXED: Fill Mileage input with minimum 300 miles enforcement
   async fillMileage(mileage) {
     try {
       this.log(`📏 Filling mileage: ${mileage}`);
       
+      await this.delay(1000);
+      
       const mileageInputSelectors = [
-        '[aria-label*="Mileage"]',
+        'input[aria-label*="Mileage"]',
         'input[placeholder*="Mileage"]',
-        'input[placeholder*="mileage"]',
         'input[name*="mileage"]',
-        '[data-testid*="mileage"]'
+        'input[aria-label*="mileage" i]',
+        'input[placeholder*="mileage" i]',
+        'textarea[aria-label*="Mileage"]',
+        '[role="textbox"][aria-label*="Mileage"]'
       ];
       
-      let mileageInput = null;
-      try {
-        mileageInput = await this.waitForElement(mileageInputSelectors, 6000);
-      } catch {}
+      let mileageInput = await this.waitForElement(mileageInputSelectors, 15000);
+      
       if (!mileageInput) {
         mileageInput = this.findInputByLabel('Mileage');
       }
@@ -1136,34 +1127,35 @@ class SalesonatorAutomator {
       
       await this.scrollIntoView(mileageInput);
       
-      // Clear existing value and set new one
+      // Enforce minimum mileage of 300
+      const finalMileage = Math.max(parseInt(mileage) || 300, 300);
+      
       mileageInput.focus();
-      if (mileageInput.select) mileageInput.select();
-      await this.delay(100);
+      await this.delay(300);
       
-      // Use React-compatible value setting
-      this.setNativeValue(mileageInput, mileage.toString());
-      
-      // Trigger React events
-      mileageInput.dispatchEvent(new Event('input', { bubbles: true }));
-      mileageInput.dispatchEvent(new Event('change', { bubbles: true }));
-      mileageInput.dispatchEvent(new Event('blur', { bubbles: true }));
-      
-      await this.delay(500);
-      
-      // Verify value was set
-      if ((mileageInput.value || '').toString() === mileage.toString()) {
-        this.log('✅ Successfully filled mileage:', mileage);
-        return true;
+      // Select all existing content
+      if (mileageInput.select && typeof mileageInput.select === 'function') {
+        mileageInput.select();
       } else {
-        this.log('⚠️ Mileage value verification failed. Expected:', mileage.toString(), 'Got:', mileageInput.value);
-        // Try typing approach as fallback
-        mileageInput.focus();
-        if (mileageInput.select) mileageInput.select();
-        await this.typeHumanLike(mileageInput, mileage.toString());
-        return true;
+        mileageInput.setSelectionRange(0, mileageInput.value.length);
+      }
+      await this.delay(200);
+      
+      await this.typeHumanLike(mileageInput, finalMileage.toString());
+      
+      // Verify the input contains our value
+      await this.delay(500);
+      const finalValue = mileageInput.value;
+      if (!finalValue.includes(finalMileage.toString())) {
+        this.log('⚠️ Mileage verification failed. Expected:', finalMileage, 'Got:', finalValue);
+        // Try again with React value setting
+        this.setNativeValue(mileageInput, finalMileage.toString());
+        mileageInput.dispatchEvent(new Event('input', { bubbles: true }));
+        mileageInput.dispatchEvent(new Event('change', { bubbles: true }));
       }
       
+      this.log('✅ Successfully filled mileage:', finalMileage);
+      return true;
     } catch (error) {
       this.log('⚠️ Could not fill mileage:', mileage, error);
       return false;
