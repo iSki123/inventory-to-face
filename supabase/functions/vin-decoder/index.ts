@@ -8,6 +8,60 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// Helper function to decode a single VIN and update the vehicle
+async function decodeVin(vin: string, vehicleId: string, supabaseClient: any): Promise<boolean> {
+  try {
+    console.log(`Decoding VIN: ${vin}`);
+    
+    // Call NHTSA VIN decoding API
+    const response = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/${vin}?format=json`);
+    
+    if (!response.ok) {
+      console.error(`NHTSA API error for VIN ${vin}: ${response.status}`);
+      return false;
+    }
+
+    const data = await response.json();
+    const results = data.Results || [];
+
+    // Extract relevant fields from NHTSA response
+    const getVariableValue = (variableName: string) => {
+      const result = results.find((r: any) => r.Variable === variableName);
+      return result?.Value || null;
+    };
+
+    const vinData = {
+      body_style_nhtsa: getVariableValue('Body Class'),
+      drivetrain_nhtsa: getVariableValue('Drive Type'),
+      engine_nhtsa: getVariableValue('Engine Model') || getVariableValue('Engine Configuration'),
+      fuel_type_nhtsa: getVariableValue('Fuel Type - Primary'),
+      transmission_nhtsa: getVariableValue('Transmission Style'),
+      vehicle_type_nhtsa: getVariableValue('Vehicle Type'),
+      vin_decoded_at: new Date().toISOString()
+    };
+
+    console.log('Extracted VIN data:', vinData);
+
+    // Update vehicle with decoded VIN data
+    const { error: updateError } = await supabaseClient
+      .from('vehicles')
+      .update(vinData)
+      .eq('id', vehicleId);
+
+    if (updateError) {
+      console.error('Error updating vehicle with VIN data:', updateError);
+      return false;
+    }
+
+    console.log(`Successfully updated vehicle ${vehicleId} with VIN data`);
+    return true;
+    
+  } catch (error) {
+    console.error(`Error decoding VIN ${vin}:`, error);
+    return false;
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -21,7 +75,66 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    const { vin, vehicleId } = await req.json();
+    const requestBody = await req.json();
+    const { vin, vehicleId, action, batch_size } = requestBody;
+
+    // Handle batch decode action for cron job
+    if (action === 'batch_decode') {
+      console.log('Starting batch VIN decode process...');
+      
+      // Get vehicles with VINs that haven't been decoded yet or need refresh
+      const { data: vehicles, error: fetchError } = await supabaseClient
+        .from('vehicles')
+        .select('id, vin')
+        .not('vin', 'is', null)
+        .or('vin_decoded_at.is.null,vin_decoded_at.lt.2025-01-01')
+        .limit(batch_size || 10);
+
+      if (fetchError) {
+        console.error('Error fetching vehicles for batch decode:', fetchError);
+        throw new Error('Failed to fetch vehicles for batch decode');
+      }
+
+      if (!vehicles || vehicles.length === 0) {
+        console.log('No vehicles found for VIN decoding');
+        return new Response(
+          JSON.stringify({ 
+            success: true,
+            message: 'No vehicles found for VIN decoding',
+            decoded_count: 0
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log(`Found ${vehicles.length} vehicles to decode VINs for`);
+      let decoded_count = 0;
+
+      // Process each vehicle
+      for (const vehicle of vehicles) {
+        if (vehicle.vin && vehicle.vin.length === 17) {
+          try {
+            const success = await decodeVin(vehicle.vin, vehicle.id, supabaseClient);
+            if (success) decoded_count++;
+            // Add small delay between requests to be respectful to NHTSA API
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (error) {
+            console.error(`Failed to decode VIN for vehicle ${vehicle.id}:`, error);
+          }
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          message: `Batch decode completed. ${decoded_count}/${vehicles.length} vehicles processed`,
+          decoded_count
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Handle single VIN decode (original functionality)
 
     if (!vin || vin.length !== 17) {
       throw new Error('Valid 17-character VIN is required');
