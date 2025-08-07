@@ -101,6 +101,57 @@ export const useVehicles = () => {
       
       setVehicles(vehicles);
 
+      // Backfill UI fields (fuel_type, transmission) from NHTSA values if missing or outdated
+      (async () => {
+        try {
+          const fixes = vehicles
+            .map(v => {
+              let mappedFuel: string | undefined;
+              let mappedTrans: string | undefined;
+              if (v.fuel_type_nhtsa) {
+                const ft = v.fuel_type_nhtsa.toLowerCase();
+                if (ft.includes('electric')) mappedFuel = 'Electric';
+                else if (ft.includes('hybrid') && ft.includes('plug')) mappedFuel = 'Plug-in hybrid';
+                else if (ft.includes('hybrid')) mappedFuel = 'Hybrid';
+                else if (ft.includes('diesel')) mappedFuel = 'Diesel';
+                else if (ft.includes('flex')) mappedFuel = 'Flex';
+                else mappedFuel = 'Gasoline';
+              }
+              if (v.transmission_nhtsa) {
+                const tr = v.transmission_nhtsa.toLowerCase();
+                mappedTrans = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+              }
+              const needsFuelFix = typeof mappedFuel !== 'undefined' && v.fuel_type !== mappedFuel;
+              const needsTransFix = typeof mappedTrans !== 'undefined' && v.transmission !== mappedTrans;
+              if (needsFuelFix || needsTransFix) {
+                return { id: v.id, fuel_type: needsFuelFix ? mappedFuel : undefined, transmission: needsTransFix ? mappedTrans : undefined };
+              }
+              return null;
+            })
+            .filter(Boolean) as { id: string; fuel_type?: string; transmission?: string }[];
+
+          if (fixes.length) {
+            // Update local state immediately
+            setVehicles(prev => prev.map(v => {
+              const f = fixes.find(x => x.id === v.id);
+              return f ? { ...v, ...(f.fuel_type ? { fuel_type: f.fuel_type } : {}), ...(f.transmission ? { transmission: f.transmission } : {}) } : v;
+            }));
+
+            // Persist to DB (non-blocking per-vehicle updates)
+            await Promise.allSettled(
+              fixes.map(f =>
+                supabase
+                  .from('vehicles')
+                  .update(pruneUndefined({ fuel_type: f.fuel_type, transmission: f.transmission }))
+                  .eq('id', f.id)
+              )
+            );
+          }
+        } catch (e) {
+          console.error('Backfill of UI fields from NHTSA failed', e);
+        }
+      })();
+
       // Auto-decode VINs for vehicles that have VINs but no decoded data (non-blocking)
       const vehiclesToDecode = vehicles.filter(v => 
         v.vin && v.vin.length === 17 && !v.vin_decoded_at

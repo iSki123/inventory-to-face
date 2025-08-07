@@ -922,8 +922,9 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
             exterior_color_standardized,
             interior_color_standardized,
             condition: vehicle.condition,
-            fuel_type: vehicle.fuel_type,
-            transmission: vehicle.transmission,
+            // Only include scraped fuel/transmission if present; avoid forcing defaults
+            ...(vehicle.fuel_type ? { fuel_type: vehicle.fuel_type } : {}),
+            ...(vehicle.transmission ? { transmission: vehicle.transmission } : {}),
             description: finalDescription,
             ai_description: aiDescription,
             vin: vehicle.vin,

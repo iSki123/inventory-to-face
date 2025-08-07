@@ -25,15 +25,37 @@ async function decodeVin(vin: string, vehicleId: string, supabaseClient: any): P
     if (!vinCheckError && existingVinData) {
       console.log(`Using existing VIN data for ${vin} from previous decode`);
       
+      const nowIso = new Date().toISOString();
       const vinData = {
         ...existingVinData,
-        vin_decoded_at: new Date().toISOString()
+        vin_decoded_at: nowIso
       };
 
-      // Update vehicle with existing decoded VIN data
+      // Derive UI-friendly fields from NHTSA values
+      let mappedFuelType: string | undefined;
+      let mappedTransmission: string | undefined;
+      const ft = (existingVinData.fuel_type_nhtsa || '').toLowerCase();
+      if (ft) {
+        if (ft.includes('electric')) mappedFuelType = 'Electric';
+        else if (ft.includes('hybrid') && ft.includes('plug')) mappedFuelType = 'Plug-in hybrid';
+        else if (ft.includes('hybrid')) mappedFuelType = 'Hybrid';
+        else if (ft.includes('diesel')) mappedFuelType = 'Diesel';
+        else if (ft.includes('flex')) mappedFuelType = 'Flex';
+        else mappedFuelType = 'Gasoline';
+      }
+      const tr = (existingVinData.transmission_nhtsa || '').toLowerCase();
+      if (tr) {
+        mappedTransmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+      }
+
+      const updatePayload: Record<string, any> = { ...vinData };
+      if (typeof mappedFuelType !== 'undefined') updatePayload.fuel_type = mappedFuelType;
+      if (typeof mappedTransmission !== 'undefined') updatePayload.transmission = mappedTransmission;
+
+      // Update vehicle with existing decoded VIN data and mapped UI fields
       const { error: updateError } = await supabaseClient
         .from('vehicles')
-        .update(vinData)
+        .update(updatePayload)
         .eq('id', vehicleId);
 
       if (updateError) {
@@ -41,7 +63,7 @@ async function decodeVin(vin: string, vehicleId: string, supabaseClient: any): P
         return false;
       }
 
-      console.log(`Successfully updated vehicle ${vehicleId} with existing VIN data`);
+      console.log(`Successfully updated vehicle ${vehicleId} with existing VIN data and UI mappings`);
       return true;
     }
     
@@ -74,10 +96,31 @@ async function decodeVin(vin: string, vehicleId: string, supabaseClient: any): P
 
     console.log('Extracted VIN data:', vinData);
 
-    // Update vehicle with decoded VIN data
+    // Derive UI-friendly fields from NHTSA values
+    let mappedFuelType: string | undefined;
+    let mappedTransmission: string | undefined;
+    const ft = (vinData.fuel_type_nhtsa || '').toLowerCase();
+    if (ft) {
+      if (ft.includes('electric')) mappedFuelType = 'Electric';
+      else if (ft.includes('hybrid') && ft.includes('plug')) mappedFuelType = 'Plug-in hybrid';
+      else if (ft.includes('hybrid')) mappedFuelType = 'Hybrid';
+      else if (ft.includes('diesel')) mappedFuelType = 'Diesel';
+      else if (ft.includes('flex')) mappedFuelType = 'Flex';
+      else mappedFuelType = 'Gasoline';
+    }
+    const tr = (vinData.transmission_nhtsa || '').toLowerCase();
+    if (tr) {
+      mappedTransmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+    }
+
+    const updatePayload: Record<string, any> = { ...vinData };
+    if (typeof mappedFuelType !== 'undefined') updatePayload.fuel_type = mappedFuelType;
+    if (typeof mappedTransmission !== 'undefined') updatePayload.transmission = mappedTransmission;
+
+    // Update vehicle with decoded VIN data + mapped UI fields
     const { error: updateError } = await supabaseClient
       .from('vehicles')
-      .update(vinData)
+      .update(updatePayload)
       .eq('id', vehicleId);
 
     if (updateError) {
@@ -218,9 +261,30 @@ serve(async (req) => {
 
     // Update vehicle with decoded VIN data if vehicleId is provided
     if (vehicleId) {
+      // Also map UI fields from NHTSA values for immediate usability
+      let mappedFuelType: string | undefined;
+      let mappedTransmission: string | undefined;
+      const ft = (vinData.fuel_type_nhtsa || '').toLowerCase();
+      if (ft) {
+        if (ft.includes('electric')) mappedFuelType = 'Electric';
+        else if (ft.includes('hybrid') && ft.includes('plug')) mappedFuelType = 'Plug-in hybrid';
+        else if (ft.includes('hybrid')) mappedFuelType = 'Hybrid';
+        else if (ft.includes('diesel')) mappedFuelType = 'Diesel';
+        else if (ft.includes('flex')) mappedFuelType = 'Flex';
+        else mappedFuelType = 'Gasoline';
+      }
+      const tr = (vinData.transmission_nhtsa || '').toLowerCase();
+      if (tr) {
+        mappedTransmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+      }
+
+      const updatePayload: Record<string, any> = { ...vinData };
+      if (typeof mappedFuelType !== 'undefined') updatePayload.fuel_type = mappedFuelType;
+      if (typeof mappedTransmission !== 'undefined') updatePayload.transmission = mappedTransmission;
+
       const { error: updateError } = await supabaseClient
         .from('vehicles')
-        .update(vinData)
+        .update(updatePayload)
         .eq('id', vehicleId);
 
       if (updateError) {
@@ -228,7 +292,7 @@ serve(async (req) => {
         throw new Error('Failed to update vehicle with VIN data');
       }
 
-      console.log(`Successfully updated vehicle ${vehicleId} with VIN data`);
+      console.log(`Successfully updated vehicle ${vehicleId} with VIN data and UI mappings`);
     }
 
     return new Response(
