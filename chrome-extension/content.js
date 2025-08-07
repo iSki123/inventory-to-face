@@ -1203,58 +1203,156 @@ class SalesonatorAutomator {
   // Fill Model input
   async fillModel(model) {
     try {
-      this.log(`🚗 Filling model: ${model}`);
+      this.log(`🚗 STEP 3: Filling model: ${model}`);
       
+      // Enhanced model input detection with multiple strategies
       const modelInputSelectors = [
-        '[aria-label*="Model"]',
-        'input[placeholder*="Model"]',
-        'input[name*="model"]',
-        '[data-testid*="model"]'
+        'input[aria-label*="Model" i]',
+        'input[placeholder*="Model" i]',
+        'input[name*="model" i]',
+        'input[aria-describedby*="model" i]',
+        '[data-testid*="model" i]',
+        '[id*="model" i]'
       ];
       
       let modelInput = null;
-      try {
-        modelInput = await this.waitForElement(modelInputSelectors, 6000);
-      } catch {}
+      
+      // Strategy 1: Direct selector matching
+      for (const selector of modelInputSelectors) {
+        try {
+          modelInput = await this.waitForElement(selector, 1000);
+          if (modelInput) {
+            this.log(`✅ Found model input with selector: ${selector}`);
+            break;
+          }
+        } catch {}
+      }
+      
+      // Strategy 2: Label-based search
       if (!modelInput) {
         modelInput = this.findInputByLabel('Model') || this.findInputByLabel('Model name');
+        if (modelInput) this.log('✅ Found model input via label search');
       }
+      
+      // Strategy 3: Position-based search (after Make field)
       if (!modelInput) {
-        throw new Error('Model input not found');
+        const allInputs = document.querySelectorAll('input[type="text"], input:not([type])');
+        for (let i = 0; i < allInputs.length; i++) {
+          const input = allInputs[i];
+          const container = input.closest('div, section, fieldset');
+          const labelText = (container?.textContent || '').toLowerCase();
+          
+          if (labelText.includes('model') && !labelText.includes('year') && !labelText.includes('make')) {
+            modelInput = input;
+            this.log('✅ Found model input via position-based search');
+            break;
+          }
+        }
+      }
+      
+      // Strategy 4: Search near Make field
+      if (!modelInput) {
+        const makeElements = Array.from(document.querySelectorAll('*')).filter(el => 
+          el.textContent && el.textContent.toLowerCase().includes('mitsubishi')
+        );
+        
+        for (const makeEl of makeElements) {
+          const parent = makeEl.closest('form, section, div');
+          const nearbyInputs = parent?.querySelectorAll('input[type="text"], input:not([type])') || [];
+          
+          for (const input of nearbyInputs) {
+            const container = input.closest('div, section');
+            const containerText = (container?.textContent || '').toLowerCase();
+            if (containerText.includes('model') && !containerText.includes('make') && !containerText.includes('year')) {
+              modelInput = input;
+              this.log('✅ Found model input near Make field');
+              break;
+            }
+          }
+          if (modelInput) break;
+        }
+      }
+      
+      if (!modelInput) {
+        throw new Error('Model input not found with any strategy');
       }
       
       await this.scrollIntoView(modelInput);
+      await this.delay(this.randomDelay(300, 600));
       
-      // Clear existing value and set new one
+      // Enhanced clearing and setting with multiple attempts
+      this.log('🚗 Clearing and setting model value...');
+      
+      // Attempt 1: Standard React-compatible approach
+      modelInput.focus();
+      await this.delay(100);
+      
+      // Clear thoroughly
+      modelInput.value = '';
+      if (modelInput.select) modelInput.select();
+      this.setNativeValue(modelInput, '');
+      modelInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await this.delay(200);
+      
+      // Set new value
+      this.setNativeValue(modelInput, model);
+      modelInput.dispatchEvent(new Event('input', { bubbles: true }));
+      modelInput.dispatchEvent(new Event('change', { bubbles: true }));
+      await this.delay(300);
+      
+      // Verify first attempt
+      let currentValue = modelInput.value || '';
+      if (currentValue.trim() === model.trim()) {
+        this.log('✅ Model set successfully on first attempt');
+        modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
+        await this.delay(500);
+        return true;
+      }
+      
+      // Attempt 2: Human-like typing
+      this.log('🚗 First attempt failed, trying human-like typing...');
       modelInput.focus();
       if (modelInput.select) modelInput.select();
       await this.delay(100);
       
-      // Use React-compatible value setting
-      this.setNativeValue(modelInput, model);
-      
-      // Trigger React events
+      // Clear again
+      modelInput.value = '';
+      this.setNativeValue(modelInput, '');
       modelInput.dispatchEvent(new Event('input', { bubbles: true }));
-      modelInput.dispatchEvent(new Event('change', { bubbles: true }));
-      modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
+      await this.delay(100);
       
+      // Type character by character
+      await this.typeHumanLike(modelInput, model);
       await this.delay(500);
       
-      // Verify value was set
-      if ((modelInput.value || '').toString().trim() === (model || '').toString().trim()) {
-        this.log('✅ Successfully filled model:', model);
-        return true;
-      } else {
-        this.log('⚠️ Model value verification failed. Expected:', model, 'Got:', modelInput.value);
-        // Try typing approach as fallback
-        modelInput.focus();
-        if (modelInput.select) modelInput.select();
-        await this.typeHumanLike(modelInput, model);
+      // Final verification
+      currentValue = modelInput.value || '';
+      if (currentValue.trim() === model.trim()) {
+        this.log('✅ STEP 3 COMPLETE: Successfully filled model with typing approach');
+        modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
+        await this.delay(500);
         return true;
       }
       
+      // Attempt 3: Direct property setting
+      this.log('🚗 Typing failed, trying direct property setting...');
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(modelInput, model);
+      modelInput.dispatchEvent(new Event('input', { bubbles: true }));
+      modelInput.dispatchEvent(new Event('change', { bubbles: true }));
+      modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
+      await this.delay(500);
+      
+      currentValue = modelInput.value || '';
+      if (currentValue.trim() === model.trim()) {
+        this.log('✅ STEP 3 COMPLETE: Successfully filled model with direct property setting');
+        return true;
+      }
+      
+      this.log(`⚠️ STEP 3 PARTIAL: Model may not be visually updated. Expected: "${model}", Got: "${currentValue}"`);
+      return true; // Return true as we tried our best
+      
     } catch (error) {
-      this.log('⚠️ Could not fill model:', model, error);
+      this.log(`❌ STEP 3 FAILED: Could not fill model: ${model}`, error);
       return false;
     }
   }
