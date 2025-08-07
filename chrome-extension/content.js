@@ -362,7 +362,24 @@ class SalesonatorAutomator {
       await this.delay(this.randomDelay(100, 300));
     }
   }
-
+  
+  // Close any open dropdown menus to avoid overlapping interactions
+  async closeAnyOpenDropdown() {
+    try {
+      const openMenu =
+        document.querySelector('[role="listbox"]') ||
+        document.querySelector('[role="menu"]') ||
+        document.querySelector('[data-visualcompletion="ignore-dynamic"] [role="option"]');
+      if (openMenu) {
+        document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        document.activeElement?.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', bubbles: true }));
+        await this.delay(150);
+        document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await this.delay(150);
+      }
+    } catch {}
+  }
+  
   // Enhanced file upload with proper event simulation
   async uploadFiles(fileInputSelectors, files) {
     try {
@@ -1331,21 +1348,35 @@ class SalesonatorAutomator {
       }
       
       await this.scrollIntoView(checkbox);
+      await this.closeAnyOpenDropdown();
       
-      // Check if it's already checked
-      const isChecked = checkbox.checked || 
-                       checkbox.getAttribute('aria-checked') === 'true' ||
-                       checkbox.getAttribute('data-checked') === 'true' ||
-                       checkbox.classList.contains('checked');
+      const getChecked = () => (
+        checkbox.checked === true ||
+        checkbox.getAttribute('aria-checked') === 'true' ||
+        checkbox.getAttribute('data-checked') === 'true' ||
+        checkbox.classList.contains('checked')
+      );
+      
+      let isChecked = getChecked();
       
       if (shouldCheck && !isChecked) {
         this.log('📋 Checking clean title checkbox...');
-        checkbox.click();
-        await this.delay(this.randomDelay(500, 1000));
+        await this.performFacebookDropdownClick(checkbox);
+        await this.delay(this.randomDelay(400, 800));
       } else if (!shouldCheck && isChecked) {
         this.log('📋 Unchecking clean title checkbox...');
-        checkbox.click();
-        await this.delay(this.randomDelay(500, 1000));
+        await this.performFacebookDropdownClick(checkbox);
+        await this.delay(this.randomDelay(400, 800));
+      }
+      
+      // Verify and retry once if needed
+      isChecked = getChecked();
+      if (shouldCheck && !isChecked) {
+        await this.performFacebookDropdownClick(checkbox);
+        await this.delay(300);
+      } else if (!shouldCheck && isChecked) {
+        await this.performFacebookDropdownClick(checkbox);
+        await this.delay(300);
       }
       
       this.log(`✅ Successfully set clean title: ${shouldCheck}`);
@@ -1357,21 +1388,16 @@ class SalesonatorAutomator {
     }
   }
 
-  // Select Vehicle Condition dropdown (maps common synonyms)
+  // Select Vehicle Condition dropdown (force Excellent)
   async selectVehicleCondition(condition = 'Excellent') {
     try {
-      // Normalize common inputs
-      const v = (condition || '').toString().toLowerCase();
-      if (['used','pre-owned','preowned'].includes(v)) condition = 'Good';
-      else if (v.includes('excellent')) condition = 'Excellent';
-      else if (v.includes('good')) condition = 'Good';
-      else if (v.includes('fair')) condition = 'Fair';
-      else if (v.includes('new')) condition = 'New';
-
+      // Always force Excellent as per requirement
+      condition = 'Excellent';
       this.log(`⭐ Selecting vehicle condition: ${condition}`);
+      await this.closeAnyOpenDropdown();
       
       // Find the dropdown by looking for the label text and closest clickable element
-       let dropdown = this.findDropdownByLabel('Vehicle condition');
+      let dropdown = this.findDropdownByLabel('Vehicle condition');
       
       // Try XPath to find vehicle condition dropdown
       try {
@@ -1404,12 +1430,10 @@ class SalesonatorAutomator {
       
       await this.scrollIntoView(dropdown);
       await this.delay(this.randomDelay(500, 1000));
-      
-      this.log('⭐ Found vehicle condition dropdown, clicking...');
       dropdown.click();
-      await this.delay(this.randomDelay(2000, 3000));
+      await this.delay(this.randomDelay(1200, 1800));
       
-      // Look for condition option in dropdown menu
+      // Locate option and click using React-compatible click
       let option = null;
       const optionSelectors = [
         `//div[@role="option" and contains(text(), "${condition}")]`,
@@ -1418,43 +1442,24 @@ class SalesonatorAutomator {
       ];
       
       for (let selector of optionSelectors) {
-        try {
-          const result = document.evaluate(
-            selector,
-            document,
-            null,
-            XPathResult.FIRST_ORDERED_NODE_TYPE,
-            null
-          );
-          if (result.singleNodeValue) {
-            option = result.singleNodeValue;
-            break;
-          }
-        } catch (e) {
-          // Fallback search
-          const options = document.querySelectorAll('[role="option"], li, div');
-          for (let opt of options) {
-            if (opt.textContent.trim() === condition || opt.textContent.includes(condition)) {
-              option = opt;
-              break;
-            }
-          }
-        }
-        if (option) break;
+        const result = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+        if (result.singleNodeValue) { option = result.singleNodeValue; break; }
       }
       
       if (!option) {
-        // Fallback: keyboard-driven selection
         const success = await this.selectDropdownOption(['[aria-label*="Vehicle condition"]','text:Condition','text:Vehicle condition'], condition, true);
         if (success) { this.log(`✅ Successfully selected vehicle condition: ${condition}`); return true; }
         throw new Error(`Vehicle condition option "${condition}" not found`);
       }
       
       await this.scrollIntoView(option);
-      await this.delay(this.randomDelay(300, 600));
-      option.click();
+      await this.performFacebookDropdownClick(option);
+      await this.delay(this.randomDelay(800, 1200));
       
-      await this.delay(this.randomDelay(1000, 2000));
+      // Verification
+      const verify = this.findDropdownByLabel('Vehicle condition') || dropdown;
+      const ok = (verify?.textContent || '').toLowerCase().includes('excellent');
+      if (!ok) this.log('⚠️ Vehicle condition may not have applied visually yet.');
       this.log(`✅ Successfully selected vehicle condition: ${condition}`);
       return true;
       
@@ -1469,6 +1474,7 @@ class SalesonatorAutomator {
     try {
       this.log(`⛽ Selecting fuel type: ${fuelType}`);
       const normalized = this.mapFuelType(fuelType) || fuelType;
+      await this.closeAnyOpenDropdown();
       
       // Find the dropdown by looking for the label text and closest clickable element
        let dropdown = this.findDropdownByLabel('Fuel type') || this.findDropdownByLabel('Fuel');
@@ -1559,7 +1565,7 @@ class SalesonatorAutomator {
       
       await this.scrollIntoView(option);
       await this.delay(this.randomDelay(300, 600));
-      option.click();
+      await this.performFacebookDropdownClick(option);
       
       await this.delay(this.randomDelay(1000, 2000));
       this.log(`✅ Successfully selected fuel type: ${normalized}`);
@@ -1575,6 +1581,7 @@ class SalesonatorAutomator {
   async selectTransmission(transmission) {
     try {
       this.log(`⚙️ Selecting transmission: ${transmission}`);
+      await this.closeAnyOpenDropdown();
       let dropdown = this.findDropdownByLabel('Transmission');
       try {
         const elements = document.evaluate(
@@ -1617,7 +1624,7 @@ class SalesonatorAutomator {
         const optionXpath = `//div[@role="option" and contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "${label.toLowerCase()}")]`;
         const res = document.evaluate(optionXpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
         if (res.singleNodeValue) {
-          const opt = res.singleNodeValue; await this.scrollIntoView(opt); await this.delay(200); opt.click();
+          const opt = res.singleNodeValue; await this.scrollIntoView(opt); await this.delay(200); await this.performFacebookDropdownClick(opt);
           await this.delay(800);
           this.log(`✅ Selected transmission: ${label}`);
           return true;
