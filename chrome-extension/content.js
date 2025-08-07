@@ -7,6 +7,7 @@ class SalesonatorAutomator {
     this.debugMode = true;
     this.retryAttempts = 3;
     this.setupMessageListener();
+    this.installNavigationGuards();
   }
 
   // Utility function for randomized delays (human-like behavior)
@@ -443,6 +444,7 @@ class SalesonatorAutomator {
   async postVehicle(vehicleData) {
     try {
       this.log('🚗 Starting enhanced vehicle posting process...', vehicleData);
+      this.isPosting = true;
       
       for (let attempt = 0; attempt < this.retryAttempts; attempt++) {
         try {
@@ -465,6 +467,7 @@ class SalesonatorAutomator {
           
           if (success) {
             this.log('✅ Vehicle posted successfully');
+            this.isPosting = false;
             return { success: true };
           }
           
@@ -488,6 +491,7 @@ class SalesonatorAutomator {
       
     } catch (error) {
       this.log('❌ Vehicle posting failed completely:', error);
+      this.isPosting = false;
       return { success: false, error: error.message };
     }
   }
@@ -2390,6 +2394,38 @@ class SalesonatorAutomator {
     }
   }
 
+  // Navigation guards to prevent accidental redirects during posting
+  installNavigationGuards() {
+    if (this._navGuardsInstalled) return;
+    this._navGuardsInstalled = true;
+
+    // Block anchor navigations inside dropdown/listbox/menu while posting
+    const blocker = (e) => {
+      if (!this.isPosting) return;
+      const a = e.target?.closest && e.target.closest('a[href]');
+      if (!a) return;
+      const inMenu = !!a.closest('[role="listbox"], [role="menu"], [aria-haspopup="listbox"], [data-visualcompletion="ignore-dynamic"]');
+      const onCreatePage = window.location.href.includes('/marketplace/create');
+      if (inMenu || onCreatePage) {
+        e.preventDefault();
+        e.stopPropagation();
+        a.removeAttribute('href');
+        a.setAttribute('data-salesonator-blocked', 'true');
+        console.warn('[Salesonator] Blocked anchor navigation during posting:', a.textContent?.trim());
+      }
+    };
+    document.addEventListener('click', blocker, true);
+    document.addEventListener('mousedown', blocker, true);
+
+    // Soft-prevent page unload while posting (defense-in-depth)
+    window.addEventListener('beforeunload', (e) => {
+      if (this.isPosting) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+  }
+
   // Message listener setup
   setupMessageListener() {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -2453,6 +2489,13 @@ class SalesonatorAutomator {
       // Ensure element is in view and focused
       await this.scrollIntoView(el);
       await this.delay(this.randomDelay(200, 400));
+
+      // Temporarily disable any nested anchors to prevent navigation
+      const nestedAnchors = Array.from(el.querySelectorAll?.('a[href]') || []);
+      nestedAnchors.forEach(a => {
+        a.setAttribute('data-salesonator-original-href', a.getAttribute('href'));
+        a.removeAttribute('href');
+      });
 
       // Pre-click preparation - mimic human behavior
       el.focus();
