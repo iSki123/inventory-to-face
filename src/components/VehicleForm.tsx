@@ -155,9 +155,44 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
   // Update form data when vehicle prop changes or profile loads
   useEffect(() => {
     if (vehicle) {
+      // Map existing NHTSA data to form fields if available
+      const mappedData: Partial<Vehicle> = { ...vehicle };
+      
+      // Map body style from NHTSA to Facebook format if not already set
+      if (vehicle.body_style_nhtsa && !vehicle.body_style_nhtsa.includes('SUV')) {
+        const nhtsaBodyStyle = vehicle.body_style_nhtsa.toLowerCase();
+        if (nhtsaBodyStyle.includes('convertible')) mappedData.body_style_nhtsa = 'Convertible';
+        else if (nhtsaBodyStyle.includes('coupe')) mappedData.body_style_nhtsa = 'Coupe';
+        else if (nhtsaBodyStyle.includes('hatchback')) mappedData.body_style_nhtsa = 'Hatchback';
+        else if (nhtsaBodyStyle.includes('sedan')) mappedData.body_style_nhtsa = 'Sedan';
+        else if (nhtsaBodyStyle.includes('suv') || nhtsaBodyStyle.includes('sport utility')) mappedData.body_style_nhtsa = 'SUV';
+        else if (nhtsaBodyStyle.includes('pickup') || nhtsaBodyStyle.includes('truck')) mappedData.body_style_nhtsa = 'Truck';
+        else if (nhtsaBodyStyle.includes('van') || nhtsaBodyStyle.includes('minivan')) mappedData.body_style_nhtsa = 'Van/Minivan';
+        else if (nhtsaBodyStyle.includes('wagon')) mappedData.body_style_nhtsa = 'Wagon';
+        else mappedData.body_style_nhtsa = 'SUV'; // Default fallback
+      }
+
+      // Map fuel type from NHTSA to Facebook format if not already properly set
+      if (vehicle.fuel_type_nhtsa && (!vehicle.fuel_type || vehicle.fuel_type === 'Gasoline')) {
+        const fuelType = vehicle.fuel_type_nhtsa.toLowerCase();
+        if (fuelType.includes('electric')) mappedData.fuel_type = 'Electric';
+        else if (fuelType.includes('hybrid') && fuelType.includes('plug')) mappedData.fuel_type = 'Plug-in hybrid';
+        else if (fuelType.includes('hybrid')) mappedData.fuel_type = 'Hybrid';
+        else if (fuelType.includes('diesel')) mappedData.fuel_type = 'Diesel';
+        else if (fuelType.includes('flex')) mappedData.fuel_type = 'Flex';
+        else mappedData.fuel_type = 'Gasoline';
+      }
+
+      // Map transmission from NHTSA to Facebook format if not already properly set
+      if (vehicle.transmission_nhtsa && (!vehicle.transmission || vehicle.transmission === 'Automatic transmission')) {
+        const transmission = vehicle.transmission_nhtsa.toLowerCase();
+        if (transmission.includes('manual')) mappedData.transmission = 'Manual transmission';
+        else mappedData.transmission = 'Automatic transmission';
+      }
+
       setFormData({
-        ...vehicle,
-        transmission: vehicle.transmission || 'Automatic transmission',
+        ...mappedData,
+        transmission: mappedData.transmission || 'Automatic transmission',
       });
     } else if (profile) {
       // When creating a new vehicle, populate with profile info
