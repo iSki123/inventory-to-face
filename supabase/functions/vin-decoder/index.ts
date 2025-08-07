@@ -110,14 +110,23 @@ serve(async (req) => {
       console.log(`Found ${vehicles.length} vehicles to decode VINs for`);
       let decoded_count = 0;
 
-      // Process each vehicle
+      // Process each vehicle with intelligent timing
       for (const vehicle of vehicles) {
         if (vehicle.vin && vehicle.vin.length === 17) {
           try {
             const success = await decodeVin(vehicle.vin, vehicle.id, supabaseClient);
             if (success) decoded_count++;
-            // Add small delay between requests to be respectful to NHTSA API
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Smart delay based on time of day (EST)
+            const now = new Date();
+            const estHour = (now.getUTCHours() - 5 + 24) % 24; // Convert to EST
+            const isBusinessHours = estHour >= 6 && estHour <= 18;
+            const isWeekday = now.getUTCDay() >= 1 && now.getUTCDay() <= 5;
+            
+            // Longer delays during business hours to be more respectful
+            const delayMs = (isBusinessHours && isWeekday) ? 2000 : 1000;
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            
           } catch (error) {
             console.error(`Failed to decode VIN for vehicle ${vehicle.id}:`, error);
           }
