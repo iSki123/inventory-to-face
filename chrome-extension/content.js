@@ -43,24 +43,28 @@ class SalesonatorAutomator {
   waitForElement(selectors, timeout = 10000, parentElement = document) {
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
+
+      // Normalize selectors to an array (defensive against single-string input)
+      const list = Array.isArray(selectors) ? selectors : [selectors];
+      const display = Array.isArray(selectors) ? selectors[0] : selectors;
       
       // Try immediate selection first
-      const immediateElement = this.findElementWithFallbacks(selectors, parentElement);
+      const immediateElement = this.findElementWithFallbacks(list, parentElement);
       if (immediateElement) {
-        this.log('Element found immediately:', selectors[0]);
+        this.log('Element found immediately:', display);
         return resolve(immediateElement);
       }
 
       // Set up MutationObserver for dynamic detection
       const observer = new MutationObserver(() => {
-        const element = this.findElementWithFallbacks(selectors, parentElement);
+        const element = this.findElementWithFallbacks(list, parentElement);
         if (element) {
           observer.disconnect();
-          this.log('Element found via MutationObserver:', selectors[0]);
+          this.log('Element found via MutationObserver:', display);
           resolve(element);
         } else if (Date.now() - startTime > timeout) {
           observer.disconnect();
-          reject(new Error(`Timeout waiting for element: ${selectors.join(', ')}`));
+          reject(new Error(`Timeout waiting for element: ${list.join(', ')}`));
         }
       });
 
@@ -74,7 +78,7 @@ class SalesonatorAutomator {
       // Fallback timeout
       setTimeout(() => {
         observer.disconnect();
-        reject(new Error(`Timeout waiting for element: ${selectors.join(', ')}`));
+        reject(new Error(`Timeout waiting for element: ${list.join(', ')}`));
       }, timeout);
     });
   }
@@ -1517,6 +1521,13 @@ class SalesonatorAutomator {
       
       if (!checkbox) {
         throw new Error('Clean title checkbox not found after comprehensive search');
+      }
+
+      // Normalize to the actual checkbox control if a wrapper/icon was matched
+      if (checkbox && !(checkbox.tagName === 'INPUT' || checkbox.getAttribute('role') === 'checkbox')) {
+        const container = checkbox.closest('label, div, span, section, form');
+        const alt = container?.querySelector('input[type="checkbox"], [role="checkbox"]');
+        if (alt) checkbox = alt;
       }
       
       await this.scrollIntoView(checkbox);
