@@ -51,7 +51,7 @@ export function AppSidebar() {
     isActive ? "bg-muted text-primary font-medium" : "hover:bg-muted/50";
 
   const isAdmin = profile?.role === 'owner';
-  const canAccessAdmin = profile?.role === 'owner' || profile?.role === 'manager';
+  const canAccessAdmin = profile?.role === 'owner' || profile?.role === 'manager' || profile?.role === 'admin';
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">
