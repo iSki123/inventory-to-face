@@ -158,19 +158,7 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
       // Map existing NHTSA data to form fields if available
       const mappedData: Partial<Vehicle> = { ...vehicle };
       
-      // Map body style from NHTSA to Facebook format if not already set
-      if (vehicle.body_style_nhtsa && !vehicle.body_style_nhtsa.includes('SUV')) {
-        const nhtsaBodyStyle = vehicle.body_style_nhtsa.toLowerCase();
-        if (nhtsaBodyStyle.includes('convertible')) mappedData.body_style_nhtsa = 'Convertible';
-        else if (nhtsaBodyStyle.includes('coupe')) mappedData.body_style_nhtsa = 'Coupe';
-        else if (nhtsaBodyStyle.includes('hatchback')) mappedData.body_style_nhtsa = 'Hatchback';
-        else if (nhtsaBodyStyle.includes('sedan')) mappedData.body_style_nhtsa = 'Sedan';
-        else if (nhtsaBodyStyle.includes('suv') || nhtsaBodyStyle.includes('sport utility')) mappedData.body_style_nhtsa = 'SUV';
-        else if (nhtsaBodyStyle.includes('pickup') || nhtsaBodyStyle.includes('truck')) mappedData.body_style_nhtsa = 'Truck';
-        else if (nhtsaBodyStyle.includes('van') || nhtsaBodyStyle.includes('minivan')) mappedData.body_style_nhtsa = 'Van/Minivan';
-        else if (nhtsaBodyStyle.includes('wagon')) mappedData.body_style_nhtsa = 'Wagon';
-        else mappedData.body_style_nhtsa = 'SUV'; // Default fallback
-      }
+      // Keep the NHTSA data as-is and let the form use it properly
 
       // Map fuel type from NHTSA to Facebook format if not already properly set
       if (vehicle.fuel_type_nhtsa && (!vehicle.fuel_type || vehicle.fuel_type === 'Gasoline')) {
