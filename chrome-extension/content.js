@@ -522,6 +522,8 @@ class SalesonatorAutomator {
     
     // SIXTH: Fill Price
     await this.fillPrice(vehicleData.price);
+    // Ensure hidden FB fields are revealed
+    await this.ensureAdditionalFieldsVisible();
     
     // SEVENTH: Fill Body Style (map from NHTSA if needed)
     const mappedBodyStyle = vehicleData.bodyStyle || vehicleData.body_style || this.mapBodyStyle(vehicleData.body_style_nhtsa || vehicleData.vehicle_type_nhtsa || '');
@@ -942,6 +944,25 @@ class SalesonatorAutomator {
     } catch (error) {
       this.log('⚠️ Could not fill price:', price, error);
       return false;
+    }
+  }
+
+  // Ensure additional FB form sections are visible to reveal hidden fields
+  async ensureAdditionalFieldsVisible() {
+    try {
+      const triggers = ['more details','additional details','additional information','show more','see more','add details','add more details'];
+      const clickable = Array.from(document.querySelectorAll('button, [role="button"], a, div'));
+      for (const label of triggers) {
+        const el = clickable.find(e => (e.textContent || '').toLowerCase().includes(label));
+        if (el) {
+          await this.scrollIntoView(el);
+          await this.delay(this.randomDelay(200, 500));
+          el.click();
+          await this.delay(this.randomDelay(800, 1200));
+        }
+      }
+    } catch (e) {
+      this.log('No additional fields toggle found or error expanding.', e);
     }
   }
 
@@ -1424,7 +1445,7 @@ class SalesonatorAutomator {
       this.log(`⛽ Selecting fuel type: ${fuelType}`);
       
       // Find the dropdown by looking for the label text and closest clickable element
-       let dropdown = this.findDropdownByLabel('Fuel type');
+       let dropdown = this.findDropdownByLabel('Fuel type') || this.findDropdownByLabel('Fuel');
       
       // Try XPath to find fuel type dropdown
       try {
@@ -1449,6 +1470,13 @@ class SalesonatorAutomator {
             break;
           }
         }
+      }
+      
+      if (!dropdown) {
+        // Try expanding hidden sections and retry
+        await this.ensureAdditionalFieldsVisible();
+        // Re-attempt finding dropdown
+        dropdown = this.findDropdownByLabel('Fuel type') || this.findDropdownByLabel('Fuel');
       }
       
       if (!dropdown) {
@@ -1537,6 +1565,10 @@ class SalesonatorAutomator {
           }
         }
       }
+      if (!dropdown) { // Try expanding and retry
+        await this.ensureAdditionalFieldsVisible();
+        dropdown = this.findDropdownByLabel('Transmission') || dropdown;
+      }
       if (!dropdown) throw new Error('Transmission dropdown not found');
       await this.scrollIntoView(dropdown);
       await this.delay(this.randomDelay(500, 1000));
@@ -1592,7 +1624,7 @@ class SalesonatorAutomator {
     if (v.includes('coupe')) return 'Coupe';
     if (v.includes('convert')) return 'Convertible';
     if (v.includes('wagon')) return 'Wagon';
-    if (v.includes('van') || v.includes('minivan')) return 'Van';
+    if (v.includes('van') || v.includes('minivan')) return 'Van/Minivan';
     if (v.includes('truck') || v.includes('pickup') || v.includes('pick-up')) return 'Truck';
     return null;
   }
@@ -1742,18 +1774,19 @@ class SalesonatorAutomator {
       this.log('📸 Found file input, proceeding with image processing...');
       
       // Get pre-downloaded images or download them now
-      this.log(`📸 Processing ${images.length} images...`);
-      const files = await this.getPreDownloadedImages(images);
+        const uniqueImages = Array.from(new Set((images || []).filter(Boolean)));
+        this.log(`📸 Processing ${uniqueImages.length} images (deduped)...`);
+      const files = await this.getPreDownloadedImages(uniqueImages);
       
       if (files.filter(f => f !== null).length === 0) {
         this.log('📸 No pre-downloaded images found, downloading now...');
-        const downloadedFiles = await this.downloadImagesViaBackground(images);
+        const downloadedFiles = await this.downloadImagesViaBackground(uniqueImages);
         files.splice(0, files.length, ...downloadedFiles);
       }
       
       const validFiles = files.filter(file => file !== null);
       
-      this.log(`📸 Successfully processed ${validFiles.length} out of ${images.length} images`);
+      this.log(`📸 Successfully processed ${validFiles.length} out of ${uniqueImages.length} images`);
       
       if (validFiles.length === 0) {
         this.log('❌ No valid images to upload');

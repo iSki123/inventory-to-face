@@ -690,7 +690,8 @@ function parseOctoparseData(rawData: any[]): any[] {
       }
       
       console.log(`Extracted ${images.length} images for ${make} ${model} (item ${index}):`, images.slice(0, 3));
-      return images.slice(0, 10); // Limit to 10 images max
+      const uniqueImages = Array.from(new Set(images.filter(Boolean)));
+      return uniqueImages.slice(0, 10); // Limit to 10 images max, de-duplicated
     };
     
     const vehicle = {
