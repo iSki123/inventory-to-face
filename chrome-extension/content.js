@@ -548,8 +548,8 @@ class SalesonatorAutomator {
     // TENTH: Check Clean Title (always default to checked)
     await this.selectCleanTitle(true);
     
-    // ELEVENTH: Select Vehicle Condition (default to "Excellent")
-    await this.selectVehicleCondition(vehicleData.condition || 'Excellent');
+    // ELEVENTH: Select Vehicle Condition (force to "Excellent" as requested)
+    await this.selectVehicleCondition('Excellent');
     
     // TWELFTH: Select Fuel Type (map from NHTSA if present)
     const mappedFuel = this.mapFuelType(

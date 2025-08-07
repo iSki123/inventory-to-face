@@ -98,6 +98,7 @@ async function getPendingVehicles(supabaseClient: any, userId: string) {
       interior_color_standardized: vehicle.interior_color_standardized,
       condition: vehicle.condition,
       description: vehicle.description,
+      ai_description: vehicle.ai_description,
       images: vehicle.images || [],
       features: vehicle.features || [],
       vin: vehicle.vin,
