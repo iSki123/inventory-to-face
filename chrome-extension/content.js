@@ -1212,7 +1212,10 @@ class SalesonatorAutomator {
         'input[name*="model" i]',
         'input[aria-describedby*="model" i]',
         '[data-testid*="model" i]',
-        '[id*="model" i]'
+        '[id*="model" i]',
+        // Non-input textboxes Facebook sometimes uses
+        '[role="textbox"][aria-label*="Model" i]',
+        'div[contenteditable="true"][aria-label*="Model" i]'
       ];
       
       let modelInput = null;
@@ -1315,6 +1318,50 @@ class SalesonatorAutomator {
             this.log('✅ Found model input via heuristic range scan');
             break;
           }
+        }
+      }
+      
+      // Strategy 7: Label span association and aria-labelledby
+      if (!modelInput) {
+        const labelCandidates = Array.from(document.querySelectorAll('span, label, div')).filter(el => {
+          const t = (el.textContent || '').trim().toLowerCase();
+          return t === 'model' || t.startsWith('model');
+        });
+        for (const label of labelCandidates) {
+          // 7a. aria-labelledby linkage
+          const id = label.getAttribute('id');
+          if (id) {
+            const byLabelled = document.querySelector(`input[aria-labelledby~="${id}"], [role="textbox"][aria-labelledby~="${id}"]`);
+            if (byLabelled) { modelInput = byLabelled; this.log('✅ Found model input via aria-labelledby'); break; }
+          }
+          // 7b. Search within closest container
+          const container = label.closest('div[role="group"], form, section, div') || document;
+          const within = container.querySelectorAll('input[type="text"], input:not([type]), [role="textbox"], [contenteditable="true"]');
+          let best = null, bestDist = Infinity;
+          const ly = label.getBoundingClientRect().top;
+          for (const el of within) {
+            const r = el.getBoundingClientRect();
+            const visible = r.width >= 40 && r.height >= 18;
+            const dist = Math.abs(r.top - ly);
+            if (visible && dist < bestDist) { best = el; bestDist = dist; }
+          }
+          if (best) { modelInput = best; this.log('✅ Found model input near label container'); break; }
+          // 7c. Preceding input in DOM order within same container
+          const allInContainer = Array.from(within);
+          const labelIndex = allInContainer.indexOf(label);
+          if (!modelInput && labelIndex > 0) {
+            const prevInput = allInContainer.slice(0, labelIndex).reverse().find(el => el.tagName === 'INPUT' || el.getAttribute('role') === 'textbox' || el.getAttribute('contenteditable') === 'true');
+            if (prevInput) { modelInput = prevInput; this.log('✅ Found model input preceding the label'); break; }
+          }
+          // 7d. Try focusing via label click and read activeElement
+          try {
+            label.click();
+            await this.delay(100);
+            const active = document.activeElement;
+            if (active && (active.tagName === 'INPUT' || active.getAttribute('role') === 'textbox' || active.getAttribute('contenteditable') === 'true')) {
+              modelInput = active; this.log('✅ Found model input via focus after label click'); break;
+            }
+          } catch {}
         }
       }
       
