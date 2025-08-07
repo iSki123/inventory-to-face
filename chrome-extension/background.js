@@ -307,6 +307,55 @@ class SalesonatorBackground {
     }
   }
 
+  // Handle scraped vehicle inventory
+  async handleScrapedInventory(vehicles, source) {
+    try {
+      console.log(`[SCRAPER] Received ${vehicles.length} vehicles from ${source}`);
+      
+      // Get user token for authentication
+      const token = await this.getUserToken();
+      if (!token) {
+        throw new Error('User not authenticated - please login to Salesonator extension');
+      }
+      
+      // Send to Supabase scrape-vehicle endpoint
+      const endpoint = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/scrape-vehicle';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+        },
+        body: JSON.stringify({ 
+          vehicles,
+          source,
+          scraped_at: new Date().toISOString()
+        })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
+      }
+      
+      const result = await response.json();
+      console.log('[SCRAPER] Successfully saved vehicles:', result);
+      
+      return {
+        success: true,
+        inserted: result.inserted || 0,
+        updated: result.updated || 0,
+        total: vehicles.length,
+        source
+      };
+      
+    } catch (error) {
+      console.error('[SCRAPER] Error saving vehicles:', error);
+      throw error;
+    }
+  }
+
   // Simple hash function for consistent storage keys (same as content script)
   hashString(str) {
     let hash = 0;
