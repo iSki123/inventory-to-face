@@ -552,7 +552,9 @@ class SalesonatorAutomator {
     await this.selectVehicleCondition(vehicleData.condition || 'Excellent');
     
     // TWELFTH: Select Fuel Type (map from NHTSA if present)
-    const mappedFuel = vehicleData.fuelType || vehicleData.fuel_type || (vehicleData.fuel_type_nhtsa ? this.mapFuelType(vehicleData.fuel_type_nhtsa) : null);
+    const mappedFuel = this.mapFuelType(
+      vehicleData.fuelType || vehicleData.fuel_type || vehicleData.fuel_type_nhtsa || ''
+    );
     if (mappedFuel) {
       await this.selectFuelType(mappedFuel);
     }
@@ -894,14 +896,27 @@ class SalesonatorAutomator {
     try {
       this.log(`💰 Filling price: ${price}`);
 
-      // Normalize to integer dollars (strip non-digits)
+      // Normalize to integer dollars (strip non-digits and fix cents if needed)
+      const rawDigits = String(price ?? '').replace(/[^\d]/g, '');
       const toNumber = (val) => {
         if (val === null || val === undefined) return null;
         const digits = String(val).replace(/[^\d]/g, '');
         return digits ? parseInt(digits, 10) : null;
       };
-      const expectedNum = toNumber(price);
+
+      let expectedNum = rawDigits ? parseInt(rawDigits, 10) : null;
       if (!expectedNum || expectedNum <= 0) throw new Error('Invalid price value provided');
+
+      // Heuristic: some sources store price in cents (e.g., 2155000 -> 21550)
+      // If 6+ digits and ends with "00", treat as cents and divide by 100
+      if (rawDigits.length >= 6 && rawDigits.endsWith('00')) {
+        const centsAdjusted = Math.round(expectedNum / 100);
+        // Only apply if the adjusted value looks like a realistic vehicle price
+        if (centsAdjusted >= 1000 && centsAdjusted <= 250000) {
+          expectedNum = centsAdjusted;
+        }
+      }
+      this.log('💰 Normalized price to dollars:', expectedNum);
 
       const priceInputSelectors = [
         '[aria-label*="Price"]',
@@ -996,104 +1011,55 @@ class SalesonatorAutomator {
   async selectBodyStyle(bodyStyle) {
     try {
       this.log(`🚗 Selecting body style: ${bodyStyle}`);
-      
+
       // Find the dropdown by looking for the label text and closest clickable element
-      const bodyStyleSelectors = [
-        'div:has-text("Body style") + div[role="button"]',
+      const dropdownSelectors = [
         '[aria-label*="Body style"]',
-        'div:has-text("Body style")',
-        'span:has-text("Body style")',
-        'label:has-text("Body style") + div',
-        '*[id*="body"] + div[role="button"]'
+        'text:Body style'
       ];
-      
-      // Look for the actual clickable dropdown element
-      let dropdown = this.findDropdownByLabel('Body style');
-      for (let selector of bodyStyleSelectors) {
+      let dropdown = this.findDropdownByLabel('Body style') || await this.waitForElement(dropdownSelectors, 5000).catch(() => null);
+
+      if (!dropdown) {
+        // Try XPath
         try {
-          const elements = document.evaluate(
-            `//div[contains(text(), "Body style")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
+          const res = document.evaluate(
+            `//*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "body style")]/following::*[(@role='combobox' or @role='button')][1]`,
             document,
             null,
             XPathResult.FIRST_ORDERED_NODE_TYPE,
             null
           );
-          if (elements.singleNodeValue) {
-            dropdown = elements.singleNodeValue;
-            break;
-          }
-        } catch (e) {
-          // Try direct CSS selector
-          const els = document.querySelectorAll('div[role="button"], span[role="button"]');
-          for (let el of els) {
-            if (el.textContent.includes('Body style') || 
-                el.parentElement?.textContent.includes('Body style') ||
-                el.previousElementSibling?.textContent.includes('Body style')) {
-              dropdown = el;
-              break;
-            }
-          }
-        }
-        if (dropdown) break;
+          if (res.singleNodeValue) dropdown = res.singleNodeValue;
+        } catch {}
       }
-      
-      if (!dropdown) {
-        throw new Error('Body style dropdown not found');
-      }
-      
+
+      if (!dropdown) throw new Error('Body style dropdown not found');
+
       await this.scrollIntoView(dropdown);
       await this.delay(this.randomDelay(500, 1000));
-      
       this.log('🚗 Found body style dropdown, clicking...');
       dropdown.click();
-      await this.delay(this.randomDelay(2000, 3000));
-      
-      // Look for body style option in dropdown menu
-      const optionSelectors = [
-        `//div[@role="option" and contains(text(), "${bodyStyle}")]`,
-        `//div[contains(text(), "${bodyStyle}") and contains(@class, "option")]`,
-        `//li[contains(text(), "${bodyStyle}")]`
-      ];
-      
-      let option = null;
-      for (let selector of optionSelectors) {
-        try {
-          const result = document.evaluate(
-            selector,
-            document,
-            null,
-            XPathResult.FIRST_ORDERED_NODE_TYPE,
-            null
-          );
-          if (result.singleNodeValue) {
-            option = result.singleNodeValue;
-            break;
-          }
-        } catch (e) {
-          // Fallback to contains search
-          const options = document.querySelectorAll('[role="option"], li, div');
-          for (let opt of options) {
-            if (opt.textContent.trim() === bodyStyle || opt.textContent.includes(bodyStyle)) {
-              option = opt;
-              break;
-            }
-          }
-        }
-        if (option) break;
-      }
-      
+      await this.delay(this.randomDelay(1200, 2000));
+
+      // Try to find option by text (case-insensitive, deep text)
+      const norm = (s) => (s || '').toLowerCase().trim();
+      const target = norm(bodyStyle);
+      let option = Array.from(document.querySelectorAll('[role="option"], li, div[role="menuitem"]')).find(opt => norm(opt.textContent).includes(target));
+
       if (!option) {
-        throw new Error(`Body style option "${bodyStyle}" not found`);
+        // Fallback: use keyboard-driven selection
+        const success = await this.selectDropdownOption(['[aria-label*="Body style"]','text:Body style'], bodyStyle, true);
+        if (success) { this.log(`✅ Successfully selected body style: ${bodyStyle}`); return true; }
       }
-      
+
+      if (!option) throw new Error(`Body style option "${bodyStyle}" not found`);
+
       await this.scrollIntoView(option);
       await this.delay(this.randomDelay(300, 600));
       option.click();
-      
-      await this.delay(this.randomDelay(1000, 2000));
+      await this.delay(this.randomDelay(800, 1500));
       this.log(`✅ Successfully selected body style: ${bodyStyle}`);
       return true;
-      
     } catch (error) {
       this.log(`⚠️ Could not select body style: ${bodyStyle}`, error);
       return false;
@@ -1163,6 +1129,17 @@ class SalesonatorAutomator {
         option = options.find((opt) => normalizeKey(opt.textContent || '').includes('offwhite'));
       }
 
+      // Fallback to keyboard-driven selection
+      if (!option) {
+        const success = await this.selectDropdownOption(['[aria-label*="Exterior color"]','text:Exterior color'], exteriorColor, true);
+        if (success) {
+          // Verify selection is displayed near the label
+          const verify = this.findDropdownByLabel('Exterior color') || dropdown;
+          const ok = (verify?.textContent || '').toLowerCase().includes(norm(exteriorColor));
+          if (ok) { this.log(`✅ Successfully selected exterior color: ${exteriorColor}`); return true; }
+        }
+      }
+
       if (!option) throw new Error(`Exterior color option "${exteriorColor}" not found`);
 
       await this.scrollIntoView(option);
@@ -1170,6 +1147,10 @@ class SalesonatorAutomator {
       option.click();
 
       await this.delay(this.randomDelay(800, 1500));
+      // Verify the displayed value updated
+      const verify = this.findDropdownByLabel('Exterior color') || dropdown;
+      const ok = (verify?.textContent || '').toLowerCase().includes(norm(exteriorColor));
+      if (!ok) this.log('⚠️ Exterior color may not have applied visually yet.');
       this.log(`✅ Successfully selected exterior color: ${exteriorColor}`);
       return true;
 
@@ -1243,6 +1224,16 @@ class SalesonatorAutomator {
         option = options.find((opt) => normalizeKey(opt.textContent || '').includes('offwhite'));
       }
 
+      // Fallback to keyboard-driven selection
+      if (!option) {
+        const success = await this.selectDropdownOption(['[aria-label*="Interior color"]','text:Interior color'], interiorColor, true);
+        if (success) {
+          const verify = this.findDropdownByLabel('Interior color') || dropdown;
+          const ok = (verify?.textContent || '').toLowerCase().includes(norm(interiorColor));
+          if (ok) { this.log(`✅ Successfully selected interior color: ${interiorColor}`); return true; }
+        }
+      }
+
       if (!option) throw new Error(`Interior color option "${interiorColor}" not found`);
 
       await this.scrollIntoView(option);
@@ -1250,6 +1241,9 @@ class SalesonatorAutomator {
       option.click();
 
       await this.delay(this.randomDelay(800, 1500));
+      const verify = this.findDropdownByLabel('Interior color') || dropdown;
+      const ok = (verify?.textContent || '').toLowerCase().includes(norm(interiorColor));
+      if (!ok) this.log('⚠️ Interior color may not have applied visually yet.');
       this.log(`✅ Successfully selected interior color: ${interiorColor}`);
       return true;
 
@@ -1336,9 +1330,17 @@ class SalesonatorAutomator {
     }
   }
 
-  // Select Vehicle Condition dropdown (default to "Excellent")
+  // Select Vehicle Condition dropdown (maps common synonyms)
   async selectVehicleCondition(condition = 'Excellent') {
     try {
+      // Normalize common inputs
+      const v = (condition || '').toString().toLowerCase();
+      if (['used','pre-owned','preowned'].includes(v)) condition = 'Good';
+      else if (v.includes('excellent')) condition = 'Excellent';
+      else if (v.includes('good')) condition = 'Good';
+      else if (v.includes('fair')) condition = 'Fair';
+      else if (v.includes('new')). condition = 'New';
+
       this.log(`⭐ Selecting vehicle condition: ${condition}`);
       
       // Find the dropdown by looking for the label text and closest clickable element
@@ -1415,6 +1417,9 @@ class SalesonatorAutomator {
       }
       
       if (!option) {
+        // Fallback: keyboard-driven selection
+        const success = await this.selectDropdownOption(['[aria-label*="Vehicle condition"]','text:Condition','text:Vehicle condition'], condition, true);
+        if (success) { this.log(`✅ Successfully selected vehicle condition: ${condition}`); return true; }
         throw new Error(`Vehicle condition option "${condition}" not found`);
       }
       
@@ -1436,6 +1441,7 @@ class SalesonatorAutomator {
   async selectFuelType(fuelType) {
     try {
       this.log(`⛽ Selecting fuel type: ${fuelType}`);
+      const normalized = this.mapFuelType(fuelType) || fuelType;
       
       // Find the dropdown by looking for the label text and closest clickable element
        let dropdown = this.findDropdownByLabel('Fuel type') || this.findDropdownByLabel('Fuel');
@@ -1486,9 +1492,9 @@ class SalesonatorAutomator {
       // Look for fuel type option in dropdown menu
       let option = null;
       const optionSelectors = [
-        `//div[@role="option" and contains(text(), "${fuelType}")]`,
-        `//div[contains(text(), "${fuelType}") and contains(@class, "option")]`,
-        `//li[contains(text(), "${fuelType}")]`
+        `//div[@role="option" and contains(text(), "${normalized}")]`,
+        `//div[contains(text(), "${normalized}") and contains(@class, "option")]`,
+        `//li[contains(text(), "${normalized}")]`
       ];
       
       for (let selector of optionSelectors) {
@@ -1508,7 +1514,7 @@ class SalesonatorAutomator {
           // Fallback search
           const options = document.querySelectorAll('[role="option"], li, div');
           for (let opt of options) {
-            if (opt.textContent.trim() === fuelType || opt.textContent.includes(fuelType)) {
+            if (opt.textContent.trim() === normalized || opt.textContent.includes(normalized)) {
               option = opt;
               break;
             }
@@ -1518,7 +1524,10 @@ class SalesonatorAutomator {
       }
       
       if (!option) {
-        throw new Error(`Fuel type option "${fuelType}" not found`);
+        // Fallback: keyboard-driven selection
+        const success = await this.selectDropdownOption(['[aria-label*="Fuel type"]','text:Fuel type','text:Fuel'], normalized, true);
+        if (success) { this.log(`✅ Successfully selected fuel type: ${normalized}`); return true; }
+        throw new Error(`Fuel type option "${normalized}" not found`);
       }
       
       await this.scrollIntoView(option);
@@ -1526,7 +1535,7 @@ class SalesonatorAutomator {
       option.click();
       
       await this.delay(this.randomDelay(1000, 2000));
-      this.log(`✅ Successfully selected fuel type: ${fuelType}`);
+      this.log(`✅ Successfully selected fuel type: ${normalized}`);
       return true;
       
     } catch (error) {
@@ -1568,8 +1577,16 @@ class SalesonatorAutomator {
       dropdown.click();
       await this.delay(this.randomDelay(1500, 2500));
 
-      const candidates = [transmission, this.mapTransmission(transmission)];
-      for (const label of candidates.filter(Boolean)) {
+      const candidates = [
+        transmission,
+        this.mapTransmission(transmission),
+        'Automatic transmission',
+        'Automatic',
+        'Manual transmission',
+        'Manual'
+      ].filter(Boolean);
+
+      for (const label of candidates) {
         const optionXpath = `//div[@role="option" and contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "${label.toLowerCase()}")]`;
         const res = document.evaluate(optionXpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
         if (res.singleNodeValue) {
