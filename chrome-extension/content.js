@@ -520,11 +520,10 @@ class SalesonatorAutomator {
       }
     }
     
-    // Navigate to marketplace create page
+    // Check if we need to navigate - avoid navigation if already on marketplace
     if (!currentUrl.includes('facebook.com/marketplace')) {
-      this.log('🧭 Navigating to Facebook Marketplace...');
-      window.location.href = 'https://www.facebook.com/marketplace/create/vehicle';
-      await this.delay(5000);
+      this.log('⚠️ Not on Facebook Marketplace - please navigate manually to avoid page reload');
+      throw new Error('Please navigate to Facebook Marketplace manually first');
     }
   }
 
@@ -532,80 +531,106 @@ class SalesonatorAutomator {
   async fillVehicleForm(vehicleData) {
     this.log('📝 Filling vehicle form with enhanced automation...');
     
-    // FIRST: Handle vehicle type dropdown selection
+    // Sequential field completion with proper closure verification
+    this.log('🔄 Starting sequential form completion...');
+    
+    // FIRST: Close any open dropdowns and handle vehicle type
+    await this.closeAnyOpenDropdown();
+    await this.delay(1000);
     await this.selectVehicleType();
-    await this.delay(this.randomDelay(2000, 4000)); // Human-like pause
+    await this.delay(3000); // Longer pause to ensure completion
     
-    // SECOND: Fill Year dropdown
-    await this.selectYear(vehicleData.year);
-    await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
+    // SECOND: Year dropdown with verification
+    await this.closeAnyOpenDropdown();
+    await this.delay(500);
+    const yearSuccess = await this.selectYear(vehicleData.year);
+    if (yearSuccess) await this.delay(3000);
     
-    // THIRD: Fill Make dropdown  
-    await this.selectMake(vehicleData.make);
-    await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
+    // THIRD: Make dropdown with verification
+    await this.closeAnyOpenDropdown();
+    await this.delay(500);
+    const makeSuccess = await this.selectMake(vehicleData.make);
+    if (makeSuccess) await this.delay(3000);
     
-    // FOURTH: Fill Model input
+    // FOURTH: Model input (less interference-prone)
+    await this.closeAnyOpenDropdown();
+    await this.delay(500);
     await this.fillModel(vehicleData.model);
-    await this.delay(this.randomDelay(1000, 2000)); // Human-like pause
+    await this.delay(2000);
     
-    // FIFTH: Fill Mileage if available
+    // FIFTH: Price input
+    await this.closeAnyOpenDropdown();
+    await this.delay(500);
+    await this.fillPrice(vehicleData.price);
+    await this.delay(2000);
+    
+    // SIXTH: Mileage if available
     if (vehicleData.mileage) {
+      await this.closeAnyOpenDropdown();
+      await this.delay(500);
       await this.fillMileage(vehicleData.mileage);
-      await this.delay(this.randomDelay(1000, 2000)); // Human-like pause
+      await this.delay(2000);
     }
     
-    // SIXTH: Fill Price
-    await this.fillPrice(vehicleData.price);
-    await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
-    // Ensure hidden FB fields are revealed
+    // SEVENTH: Ensure additional fields are visible before continuing
     await this.ensureAdditionalFieldsVisible();
+    await this.delay(1000);
     
-    // SEVENTH: Fill Body Style (map from NHTSA if needed)
+    // EIGHTH: Body Style dropdown
     const mappedBodyStyle = vehicleData.bodyStyle || vehicleData.body_style || this.mapBodyStyle(vehicleData.body_style_nhtsa || vehicleData.vehicle_type_nhtsa || '');
     if (mappedBodyStyle) {
+      await this.closeAnyOpenDropdown();
+      await this.delay(500);
       await this.selectBodyStyle(mappedBodyStyle);
-      await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
+      await this.delay(3000);
     }
     
-    // EIGHTH: Fill Exterior Color (standardize to FB options)
+    // NINTH: Vehicle condition dropdown
+    await this.closeAnyOpenDropdown();
+    await this.delay(500);
+    await this.selectVehicleCondition('Excellent');
+    await this.delay(3000);
+    
+    // TENTH: Fuel type dropdown
+    const mappedFuel = this.mapFuelType(vehicleData.fuelType || vehicleData.fuel_type || vehicleData.fuel_type_nhtsa || '');
+    if (mappedFuel) {
+      await this.closeAnyOpenDropdown();
+      await this.delay(500);
+      await this.selectFuelType(mappedFuel);
+      await this.delay(3000);
+    }
+    
+    // ELEVENTH: Transmission dropdown
+    const mappedTransmission = this.mapTransmission(vehicleData.transmission || vehicleData.transmission_nhtsa || '');
+    await this.closeAnyOpenDropdown();
+    await this.delay(500);
+    await this.selectTransmission(mappedTransmission);
+    await this.delay(3000);
+    
+    // TWELFTH: Clean title checkbox
+    await this.closeAnyOpenDropdown();
+    await this.delay(500);
+    await this.selectCleanTitle(true);
+    await this.delay(1000);
+    
+    // THIRTEENTH: Color selections (less critical, can be done together)
     const standardizedExterior = this.standardizeExteriorColor(vehicleData.exteriorColor || vehicleData.exterior_color);
     if (standardizedExterior && standardizedExterior !== 'Unknown') {
-      await this.ensureAdditionalFieldsVisible();
+      await this.closeAnyOpenDropdown();
+      await this.delay(500);
       await this.selectExteriorColor(standardizedExterior);
-      await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
+      await this.delay(3000);
     }
     
-    // NINTH: Fill Interior Color (default to Black if unknown)
     const standardizedInterior = this.standardizeInteriorColor(vehicleData.interiorColor || vehicleData.interior_color);
     if (standardizedInterior) {
-      await this.ensureAdditionalFieldsVisible();
+      await this.closeAnyOpenDropdown();
+      await this.delay(500);
       await this.selectInteriorColor(standardizedInterior);
-      await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
+      await this.delay(3000);
     }
     
-    // TENTH: Check Clean Title (always default to checked)
-    await this.selectCleanTitle(true);
-    await this.delay(this.randomDelay(1000, 2000)); // Human-like pause
-    
-    // ELEVENTH: Select Vehicle Condition (force to "Excellent" as requested)
-    await this.selectVehicleCondition('Excellent');
-    await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
-    
-    // TWELFTH: Select Fuel Type (map from NHTSA if present)
-    const mappedFuel = this.mapFuelType(
-      vehicleData.fuelType || vehicleData.fuel_type || vehicleData.fuel_type_nhtsa || ''
-    );
-    if (mappedFuel) {
-      await this.selectFuelType(mappedFuel);
-      await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
-    }
-
-    // THIRTEENTH: Select Transmission (default to Automatic)
-    const mappedTransmission = this.mapTransmission(vehicleData.transmission || vehicleData.transmission_nhtsa || '');
-    await this.selectTransmission(mappedTransmission);
-    await this.delay(this.randomDelay(1500, 3000)); // Human-like pause
-    
-    // FOURTEENTH: Fill Description with AI description from database if available
+    // FOURTEENTH: Description (final step)
     const description = vehicleData.ai_description || 
                        vehicleData.description || 
                        `${vehicleData.year} ${vehicleData.make} ${vehicleData.model} for sale. Contact for more details.`;
