@@ -254,12 +254,11 @@ class SalesonatorAutomator {
   // Enhanced human-like typing simulation
   async typeHumanLike(element, text, speed = 'normal') {
     await this.scrollIntoView(element);
-    await this.delay(this.randomDelay(200, 500));
+    await this.delay(this.randomDelay(300, 700));
     
     element.focus();
     await this.delay(this.randomDelay(100, 300));
     
-    // Clear existing content safely
     if (element.select && typeof element.select === 'function') {
       element.select();
     } else {
@@ -268,21 +267,28 @@ class SalesonatorAutomator {
     await this.delay(this.randomDelay(50, 150));
     
     const speedMultipliers = {
-      slow: [100, 250],
-      normal: [50, 150],
-      fast: [30, 80]
+      slow: [120, 260],
+      normal: [50, 200],
+      fast: [30, 90]
     };
-    
     const [minDelay, maxDelay] = speedMultipliers[speed] || speedMultipliers.normal;
     
-    // Type character by character with random delays
+    // Type character by character with random delays and occasional typos
     for (let i = 0; i < text.length; i++) {
-      const currentValue = element.value + text[i];
-      this.setNativeValue(element, currentValue);
-      
-      // Add realistic typing variations
+      let char = text[i];
+      // 12% chance to simulate a small typo
+      if (Math.random() < 0.12 && /[a-z]/i.test(char)) {
+        const typo = String.fromCharCode(char.charCodeAt(0) + (Math.random() < 0.5 ? 1 : -1));
+        this.setNativeValue(element, (element.value || '') + typo);
+        await this.delay(this.randomDelay(minDelay, maxDelay));
+        // backspace correction
+        element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+        this.setNativeValue(element, (element.value || '').slice(0, -1));
+        element.dispatchEvent(new KeyboardEvent('keyup', { key: 'Backspace', bubbles: true }));
+        await this.delay(this.randomDelay(minDelay, maxDelay));
+      }
+      this.setNativeValue(element, (element.value || '') + char);
       if (Math.random() < 0.1) {
-        // Simulate brief pause (thinking)
         await this.delay(this.randomDelay(200, 600));
       } else {
         await this.delay(this.randomDelay(minDelay, maxDelay));
@@ -290,6 +296,7 @@ class SalesonatorAutomator {
     }
     
     // Final events
+    element.dispatchEvent(new Event('change', { bubbles: true }));
     element.dispatchEvent(new Event('blur', { bubbles: true }));
     await this.delay(this.randomDelay(100, 300));
   }

@@ -28,6 +28,20 @@
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.carsforsale.com/*"
+      ],
+      "js": ["scrapers/carsforsale-scraper.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.autotrader.com/*"
+      ],
+      "js": ["scrapers/autotrader-scraper.js"],
+      "run_at": "document_idle"
     }
   ],
   "action": {

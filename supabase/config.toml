@@ -21,3 +21,9 @@ verify_jwt = false
 
 [functions.vin-decoder]
 verify_jwt = false
+
+[functions.generate-vehicle-images]
+verify_jwt = false
+
+[functions.scrape-vehicle]
+verify_jwt = false

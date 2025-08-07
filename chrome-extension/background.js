@@ -58,6 +58,17 @@ class SalesonatorBackground {
         // Log activity for debugging
         console.log('Salesonator Activity:', request.data);
         sendResponse({ success: true });
+        return; // done
+      }
+
+      if (request.action === 'scrapedInventory') {
+        this.handleScrapedInventory(request.vehicles, request.source)
+          .then(sendResponse)
+          .catch(error => {
+            console.error('Scraped inventory error:', error);
+            sendResponse({ success: false, error: error.message });
+          });
+        return true; // async
       }
     } catch (error) {
       console.error('Message handler error:', error);
