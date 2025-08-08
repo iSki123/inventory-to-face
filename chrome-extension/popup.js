@@ -57,16 +57,17 @@ class SalesonatorExtension {
     try {
       console.log('Checking for web app authentication...');
       
-      // Check all open tabs for Salesonator
+      // Check all open tabs for Salesonator (much broader search)
       const allTabs = await chrome.tabs.query({});
       console.log('Found tabs:', allTabs.length);
       
       for (const tab of allTabs) {
         if (tab.url && 
             (tab.url.includes('lovableproject.com') || 
-             tab.url.includes('localhost:3000') ||
+             tab.url.includes('localhost') ||
              tab.url.includes('salesonator') ||
-             tab.url.includes('inventory-to-face'))) {
+             tab.url.includes('inventory-to-face') ||
+             tab.url.includes('7163d240-f16f-476c-b2aa-a96bf0373743'))) {
           
           console.log('Checking Salesonator tab:', tab.url);
           
@@ -81,11 +82,13 @@ class SalesonatorExtension {
                 const allKeys = Object.keys(localStorage);
                 console.log('All localStorage keys:', allKeys);
                 
-                // Check for multiple possible auth key patterns
+                // Check for multiple possible auth key patterns (broader search)
                 const authKeys = allKeys.filter(key => 
-                  (key.startsWith('sb-') && key.includes('auth-token')) ||
-                  key.includes('supabase.auth.token') ||
-                  key.includes('auth-token')
+                  key.startsWith('sb-') ||
+                  key.includes('supabase') ||
+                  key.includes('auth') ||
+                  key.includes('token') ||
+                  key.includes('session')
                 );
                 
                 console.log('Found potential auth keys:', authKeys);
