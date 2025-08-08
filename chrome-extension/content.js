@@ -1667,82 +1667,149 @@ class SalesonatorAutomator {
     }
   }
 
-  // Select Vehicle Condition dropdown (force Excellent)
+  // Select Vehicle Condition dropdown with enhanced detection (similar to body style)
   async selectVehicleCondition(condition = 'Excellent') {
     try {
       // Always force Excellent as per requirement
       condition = 'Excellent';
+      console.log(`[CONDITION DEBUG] Starting vehicle condition selection: ${condition}`);
       this.log(`⭐ Selecting vehicle condition: ${condition}`);
-      await this.closeAnyOpenDropdown();
       
-      // Find the dropdown by looking for the label text and closest clickable element
-      let dropdown = this.findDropdownByLabel('Vehicle condition');
+      // Clean condition string (remove extra spaces)
+      const cleanCondition = (condition || '').toString().trim();
       
-      // Try XPath to find vehicle condition dropdown
-      try {
-        const elements = document.evaluate(
-          `//div[contains(text(), "Vehicle condition") or contains(text(), "Condition")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
-          document,
-          null,
-          XPathResult.FIRST_ORDERED_NODE_TYPE,
-          null
-        );
-        if (elements.singleNodeValue) {
-          dropdown = elements.singleNodeValue;
-        }
-      } catch (e) {
-        // Fallback to direct search
-        const els = document.querySelectorAll('div[role="button"], span[role="button"]');
-        for (let el of els) {
-          if (el.textContent.includes('Vehicle condition') || el.textContent.includes('Condition') || 
-              el.parentElement?.textContent.includes('Vehicle condition') ||
-              el.previousElementSibling?.textContent.includes('Vehicle condition')) {
-            dropdown = el;
-            break;
-          }
-        }
-      }
-      
-      if (!dropdown) {
-        throw new Error('Vehicle condition dropdown not found');
-      }
-      
-      await this.scrollIntoView(dropdown);
-      await this.delay(this.randomDelay(500, 1000));
-      dropdown.click();
-      await this.delay(this.randomDelay(1200, 1800));
-      
-      // Locate option and click using React-compatible click
-      let option = null;
-      const optionSelectors = [
-        `//div[@role="option" and contains(text(), "${condition}")]`,
-        `//div[contains(text(), "${condition}") and contains(@class, "option")]`,
-        `//li[contains(text(), "${condition}")]`
+      // Look for vehicle condition dropdown more specifically
+      const conditionDropdownSelectors = [
+        'text:Vehicle condition', // Visible label
+        'text:Condition', // Shorter label
+        '[aria-label*="Vehicle condition"]',
+        '[aria-label*="Condition"]',
+        'div[role="button"]', // Generic fallback
+        'select'
       ];
       
-      for (let selector of optionSelectors) {
-        const result = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-        if (result.singleNodeValue) { option = result.singleNodeValue; break; }
+      console.log(`[CONDITION DEBUG] Looking for condition dropdown with selectors:`, conditionDropdownSelectors);
+      
+      const conditionDropdown = await this.waitForElement(conditionDropdownSelectors, 8000);
+      await this.scrollIntoView(conditionDropdown);
+      await this.delay(this.randomDelay(500, 1000));
+      
+      this.log('⭐ Found vehicle condition dropdown, clicking to open...');
+      console.log(`[CONDITION DEBUG] Found dropdown:`, conditionDropdown);
+      
+      // Use a more reliable open sequence for React-controlled dropdowns
+      conditionDropdown.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      conditionDropdown.click();
+      await this.delay(this.randomDelay(1200, 1800)); // Wait for dropdown to open
+      
+      // Prefer searching within the options container only
+      let optionsContainer = null;
+      try {
+        optionsContainer = await this.waitForElement(['[role="listbox"]', '[role="menu"]'], 4000);
+        console.log(`[CONDITION DEBUG] Found options container:`, optionsContainer);
+      } catch {
+        console.log(`[CONDITION DEBUG] No options container found, using document scope`);
       }
       
-      if (!option) {
-        const success = await this.selectDropdownOption(['[aria-label*="Vehicle condition"]','text:Condition','text:Vehicle condition'], condition, true);
-        if (success) { this.log(`✅ Successfully selected vehicle condition: ${condition}`); return true; }
-        throw new Error(`Vehicle condition option "${condition}" not found`);
+      const getExactOption = () => {
+        const scope = optionsContainer || document;
+        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
+        console.log(`[CONDITION DEBUG] Found ${opts.length} options in scope`);
+        const found = opts.find(o => {
+          const text = (o.textContent || '').trim().toLowerCase();
+          console.log(`[CONDITION DEBUG] Checking option: "${text}" against "${cleanCondition.toLowerCase()}"`);
+          return text === cleanCondition.toLowerCase();
+        });
+        if (found) console.log(`[CONDITION DEBUG] Exact match found:`, found);
+        return found;
+      };
+      
+      const getFuzzyOption = () => {
+        const scope = optionsContainer || document;
+        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
+        const found = opts.find(o => {
+          const text = (o.textContent || '').toLowerCase();
+          return text.includes(cleanCondition.toLowerCase());
+        });
+        if (found) console.log(`[CONDITION DEBUG] Fuzzy match found:`, found);
+        return found;
+      };
+      
+      let conditionOption = getExactOption();
+      
+      // If not found, try typeahead (Facebook supports it)
+      if (!conditionOption && cleanCondition) {
+        console.log(`[CONDITION DEBUG] Trying typeahead for: ${cleanCondition}`);
+        for (const ch of cleanCondition.toLowerCase()) {
+          conditionDropdown.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
+          await this.delay(this.randomDelay(40, 100));
+        }
+        await this.delay(this.randomDelay(300, 600));
+        conditionOption = getExactOption();
       }
       
-      await this.scrollIntoView(option);
-      await this.performFacebookDropdownClick(option);
-      await this.delay(this.randomDelay(800, 1200));
+      // Fallback to fuzzy match
+      if (!conditionOption) {
+        console.log(`[CONDITION DEBUG] Trying fuzzy match`);
+        conditionOption = getFuzzyOption();
+      }
       
-      // Verification
-      const verify = this.findDropdownByLabel('Vehicle condition') || dropdown;
-      const ok = (verify?.textContent || '').toLowerCase().includes('excellent');
-      if (!ok) this.log('⚠️ Vehicle condition may not have applied visually yet.');
-      this.log(`✅ Successfully selected vehicle condition: ${condition}`);
-      return true;
+      // Ultimate fallback: any element with the text inside the container
+      if (!conditionOption) {
+        console.log(`[CONDITION DEBUG] Trying ultimate fallback search`);
+        const elem = this.findElementByText(cleanCondition, ['div','span','li'], optionsContainer || document);
+        if (elem) conditionOption = elem.closest('[role="option"]') || elem;
+        if (conditionOption) console.log(`[CONDITION DEBUG] Ultimate fallback found:`, conditionOption);
+      }
+      
+      if (!conditionOption) {
+        console.log(`[CONDITION DEBUG] No condition option found for "${cleanCondition}"`);
+        throw new Error(`Vehicle condition option not found for "${cleanCondition}"`);
+      }
+      
+      console.log(`[CONDITION DEBUG] Selected condition option:`, conditionOption);
+      await this.scrollIntoView(conditionOption);
+      await this.delay(this.randomDelay(300, 600));
+      conditionOption.click();
+      await this.delay(this.randomDelay(1000, 1500)); // Wait for selection to register
+      
+      // Enhanced verification with multiple checks
+      const verifications = {
+        dropdownText: false,
+        selectedValue: false,
+        ariaSelected: false
+      };
+      
+      // Check if dropdown text changed
+      const dropdownText = (conditionDropdown.textContent || '').toLowerCase();
+      verifications.dropdownText = dropdownText.includes(cleanCondition.toLowerCase());
+      console.log(`[CONDITION DEBUG] Dropdown text verification: ${verifications.dropdownText} (text: "${dropdownText}")`);
+      
+      // Check if there's a selected value attribute
+      if (conditionDropdown.value) {
+        verifications.selectedValue = conditionDropdown.value.toLowerCase().includes(cleanCondition.toLowerCase());
+        console.log(`[CONDITION DEBUG] Selected value verification: ${verifications.selectedValue} (value: "${conditionDropdown.value}")`);
+      }
+      
+      // Check if the option is marked as selected
+      if (conditionOption.getAttribute('aria-selected') === 'true') {
+        verifications.ariaSelected = true;
+        console.log(`[CONDITION DEBUG] Aria-selected verification: ${verifications.ariaSelected}`);
+      }
+      
+      const success = Object.values(verifications).some(v => v);
+      
+      if (success) {
+        this.log('✅ Successfully selected vehicle condition:', condition);
+        return true;
+      } else {
+        console.log(`[CONDITION DEBUG] Vehicle condition selection may have failed - no evidence of selection found`);
+        this.log('⚠️ Vehicle condition selection verification failed for:', condition);
+        return false;
+      }
       
     } catch (error) {
+      console.log(`[CONDITION DEBUG] Error in selectVehicleCondition:`, error);
       this.log(`⚠️ Could not select vehicle condition: ${condition}`, error);
       return false;
     }
