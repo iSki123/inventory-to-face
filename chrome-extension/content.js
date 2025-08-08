@@ -977,9 +977,10 @@ class SalesonatorAutomator {
 
   // Fill Mileage input
   async fillMileage(mileage) {
+    // Apply minimum mileage of 300 for Facebook Marketplace
+    const adjustedMileage = Math.max(300, parseInt(mileage) || 0);
+    
     try {
-      // Apply minimum mileage of 300 for Facebook Marketplace
-      const adjustedMileage = Math.max(300, parseInt(mileage) || 0);
       this.log(`📏 Filling mileage: ${mileage} (adjusted to: ${adjustedMileage})`);
       
       const mileageInputSelectors = [
