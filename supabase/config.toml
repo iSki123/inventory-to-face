@@ -27,6 +27,3 @@ verify_jwt = false
 
 [functions.scrape-vehicle]
 verify_jwt = false
-
-[functions.verify-admin]
-verify_jwt = false
