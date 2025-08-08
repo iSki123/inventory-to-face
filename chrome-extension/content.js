@@ -185,22 +185,30 @@ class SalesonatorAutomator {
     const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
     const target = norm(labelText);
     
-    this.log(`[findInputByLabel] Searching for: "${labelText}"`);
+    console.log(`[SALESONATOR DEBUG] Starting search for: "${labelText}"`);
+    console.log(`[SALESONATOR DEBUG] Normalized target: "${target}"`);
     
     // 1) REVERSEENG METHOD: Find span with exact text and get associated input (Facebook's pattern)
     try {
       const spanElements = Array.from(parentElement.querySelectorAll('span'));
-      for (const span of spanElements) {
+      console.log(`[SALESONATOR DEBUG] Found ${spanElements.length} span elements`);
+      
+      for (let i = 0; i < spanElements.length; i++) {
+        const span = spanElements[i];
         const spanText = norm(span.textContent || span.innerText);
+        const spanId = span.id;
+        
+        console.log(`[SALESONATOR DEBUG] Span ${i+1}: text="${spanText}", id="${spanId}"`);
+        
         if (spanText === target || spanText.includes(target)) {
-          this.log(`Found matching span for "${labelText}":`, span);
+          console.log(`[SALESONATOR DEBUG] MATCH FOUND! Span ${i+1}:`, span);
+          console.log(`[SALESONATOR DEBUG] Matched span HTML:`, span.outerHTML);
           
           // Method A: Check aria-labelledby relationship
-          const spanId = span.id;
           if (spanId) {
             const input = parentElement.querySelector(`input[aria-labelledby="${spanId}"]`);
             if (input) {
-              this.log(`Found input via aria-labelledby:`, input);
+              console.log(`[SALESONATOR DEBUG] Found input via aria-labelledby:`, input);
               return input;
             }
           }
@@ -208,9 +216,10 @@ class SalesonatorAutomator {
           // Method B: Look in the label container (Facebook's main pattern)
           const label = span.closest('label');
           if (label) {
-            const input = label.querySelector('input[type="text"], textarea');
+            console.log(`[SALESONATOR DEBUG] Found label container:`, label);
+            const input = label.querySelector('input[type="text"], textarea, input:not([type])');
             if (input) {
-              this.log(`Found input in label container:`, input);
+              console.log(`[SALESONATOR DEBUG] Found input in label container:`, input);
               return input;
             }
           }
@@ -218,9 +227,10 @@ class SalesonatorAutomator {
           // Method C: Look in immediate parent container  
           const container = span.closest('div');
           if (container) {
-            const input = container.querySelector('input[type="text"], textarea');
+            console.log(`[SALESONATOR DEBUG] Found div container:`, container);
+            const input = container.querySelector('input[type="text"], textarea, input:not([type])');
             if (input) {
-              this.log(`Found input in div container:`, input);
+              console.log(`[SALESONATOR DEBUG] Found input in div container:`, input);
               return input;
             }
           }
@@ -228,19 +238,48 @@ class SalesonatorAutomator {
           // Method D: Traverse up the DOM tree to find input
           let current = span.parentElement;
           let depth = 0;
-          while (current && current !== parentElement && depth < 5) {
-            const input = current.querySelector('input[type="text"], textarea');
+          while (current && current !== parentElement && depth < 8) {
+            const input = current.querySelector('input[type="text"], textarea, input:not([type])');
             if (input) {
-              this.log(`Found input in parent hierarchy at depth ${depth}:`, input);
+              console.log(`[SALESONATOR DEBUG] Found input in parent hierarchy at depth ${depth}:`, input);
               return input;
             }
             current = current.parentElement;
             depth++;
           }
+          
+          // Method E: Search siblings and nearby elements (Facebook's flat structure)
+          const spanParent = span.parentElement;
+          if (spanParent) {
+            // Check all siblings for inputs
+            const siblings = Array.from(spanParent.children);
+            for (const sibling of siblings) {
+              if (sibling !== span) {
+                const input = sibling.querySelector('input[type="text"], textarea, input:not([type])');
+                if (input) {
+                  console.log(`[SALESONATOR DEBUG] Found input in sibling:`, input);
+                  return input;
+                }
+              }
+            }
+            
+            // Check next sibling elements
+            let nextSibling = spanParent.nextElementSibling;
+            let siblingDepth = 0;
+            while (nextSibling && siblingDepth < 3) {
+              const input = nextSibling.querySelector('input[type="text"], textarea, input:not([type])');
+              if (input) {
+                console.log(`[SALESONATOR DEBUG] Found input in next sibling at depth ${siblingDepth}:`, input);
+                return input;
+              }
+              nextSibling = nextSibling.nextElementSibling;
+              siblingDepth++;
+            }
+          }
         }
       }
     } catch (e) {
-      this.log('Error in span search:', e);
+      console.error('[SALESONATOR DEBUG] Error in span search:', e);
     }
 
     // 2) Traditional label[for] association
@@ -1305,21 +1344,36 @@ class SalesonatorAutomator {
       
       let modelInput = null;
       
+      console.log('[SALESONATOR DEBUG] ========== MODEL FIELD DETECTION START ==========');
+      console.log('[SALESONATOR DEBUG] Available selectors:', modelInputSelectors);
+      
       // Strategy 1: Direct selector matching
       for (const selector of modelInputSelectors) {
         try {
+          console.log(`[SALESONATOR DEBUG] Trying selector: ${selector}`);
           modelInput = await this.waitForElement(selector, 1000);
           if (modelInput) {
+            console.log(`[SALESONATOR DEBUG] ✅ Found model input with selector: ${selector}`, modelInput);
             this.log(`✅ Found model input with selector: ${selector}`);
             break;
+          } else {
+            console.log(`[SALESONATOR DEBUG] ❌ Selector failed: ${selector}`);
           }
-        } catch {}
+        } catch (e) {
+          console.log(`[SALESONATOR DEBUG] ❌ Selector error: ${selector}`, e);
+        }
       }
       
       // Strategy 2: Label-based search
       if (!modelInput) {
+        console.log('[SALESONATOR DEBUG] Attempting label-based search for Model field...');
         modelInput = this.findInputByLabel('Model') || this.findInputByLabel('Model name');
-        if (modelInput) this.log('✅ Found model input via label search');
+        if (modelInput) {
+          console.log('[SALESONATOR DEBUG] ✅ Found model input via label search:', modelInput);
+          this.log('✅ Found model input via label search');
+        } else {
+          console.log('[SALESONATOR DEBUG] ❌ Label-based search failed for Model field');
+        }
       }
       
       // Strategy 3: Position-based search (after Make field)
@@ -1487,10 +1541,26 @@ class SalesonatorAutomator {
       }
 
       if (!modelInput) {
+        console.log('[SALESONATOR DEBUG] ❌ MODEL FIELD NOT FOUND - All strategies failed!');
+        console.log('[SALESONATOR DEBUG] Available spans on page:');
+        const allSpans = Array.from(document.querySelectorAll('span'));
+        allSpans.forEach((span, i) => {
+          const text = (span.textContent || '').trim();
+          if (text.length > 0 && text.length < 50) { // Only log reasonable text
+            console.log(`  Span ${i}: "${text}" (id: ${span.id || 'none'})`);
+          }
+        });
+        console.log('[SALESONATOR DEBUG] Available inputs on page:');
+        const allInputs = Array.from(document.querySelectorAll('input'));
+        allInputs.forEach((input, i) => {
+          console.log(`  Input ${i}: type="${input.type}", id="${input.id || 'none'}", value="${input.value}"`, input);
+        });
+        console.log('[SALESONATOR DEBUG] ========== MODEL FIELD DETECTION END ==========');
         throw new Error('Model input not found with any strategy');
       }
       
-      this.log('[MODEL DETECT] Element chosen for Model input', {
+      console.log('[SALESONATOR DEBUG] ✅ MODEL FIELD FOUND!', modelInput);
+      console.log('[SALESONATOR DEBUG] Model field details:', {
         tag: modelInput.tagName,
         id: modelInput.id || null,
         role: modelInput.getAttribute('role') || null,
@@ -1501,15 +1571,27 @@ class SalesonatorAutomator {
       await this.delay(this.randomDelay(300, 600));
       
       // Enhanced clearing and setting with multiple attempts
+      console.log('[SALESONATOR DEBUG] 🚗 Starting Model field filling...');
+      console.log('[SALESONATOR DEBUG] Model value to fill:', model);
       this.log('🚗 Clearing and setting model value...');
 
       const isInput = modelInput && modelInput.tagName === 'INPUT';
       const isCE = !!modelInput && (modelInput.getAttribute('contenteditable') === 'true' || modelInput.getAttribute('role') === 'textbox');
+      
+      console.log('[SALESONATOR DEBUG] Element type analysis:', {
+        isInput: isInput,
+        isContentEditable: isCE,
+        tagName: modelInput.tagName,
+        contenteditable: modelInput.getAttribute('contenteditable'),
+        role: modelInput.getAttribute('role')
+      });
 
       // Special path for Facebook contenteditable/textbox fields (inspired by reverseeng enterText)
       if (!isInput && isCE) {
+        console.log('[SALESONATOR DEBUG] 🧠 Using contenteditable/textbox path for Model');
         this.log('🧠 Using contenteditable/textbox path for Model');
         modelInput.focus();
+        console.log('[SALESONATOR DEBUG] Focused element, attempting selectAll and insertText...');
         try { document.execCommand('selectAll', false, null); } catch {}
         try { document.execCommand('insertText', false, model); } catch {}
         // Fire React-friendly events
@@ -1517,12 +1599,15 @@ class SalesonatorAutomator {
         modelInput.dispatchEvent(new Event('change', { bubbles: true }));
         await this.delay(300);
         const txt = (modelInput.textContent || modelInput.innerText || '').trim();
+        console.log('[SALESONATOR DEBUG] Content after filling:', txt);
         if (txt && (txt === model.trim() || txt.toLowerCase().includes(model.toLowerCase()))) {
+          console.log('[SALESONATOR DEBUG] ✅ Content verified successfully!');
           this.log('✅ STEP 3 COMPLETE: Model set via contenteditable/textbox path');
           modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
           await this.delay(300);
           return true;
         }
+        console.log('[SALESONATOR DEBUG] ⚠️ Content verification failed, falling back...');
         this.log('⚠️ Contenteditable path did not verify, falling back to input strategies if possible');
       }
       
