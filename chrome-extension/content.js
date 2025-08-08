@@ -978,7 +978,9 @@ class SalesonatorAutomator {
   // Fill Mileage input
   async fillMileage(mileage) {
     try {
-      this.log(`📏 Filling mileage: ${mileage}`);
+      // Apply minimum mileage of 300 for Facebook Marketplace
+      const adjustedMileage = Math.max(300, parseInt(mileage) || 0);
+      this.log(`📏 Filling mileage: ${mileage} (adjusted to: ${adjustedMileage})`);
       
       const mileageInputSelectors = [
         '[aria-label*="Mileage"]',
@@ -1006,8 +1008,8 @@ class SalesonatorAutomator {
       if (mileageInput.select) mileageInput.select();
       await this.delay(100);
       
-      // Use React-compatible value setting
-      this.setNativeValue(mileageInput, mileage.toString());
+      // Use React-compatible value setting with adjusted mileage
+      this.setNativeValue(mileageInput, adjustedMileage.toString());
       
       // Trigger React events
       mileageInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1017,20 +1019,20 @@ class SalesonatorAutomator {
       await this.delay(500);
       
       // Verify value was set
-      if ((mileageInput.value || '').toString() === mileage.toString()) {
-        this.log('✅ Successfully filled mileage:', mileage);
+      if ((mileageInput.value || '').toString() === adjustedMileage.toString()) {
+        this.log('✅ Successfully filled mileage:', adjustedMileage);
         return true;
       } else {
-        this.log('⚠️ Mileage value verification failed. Expected:', mileage.toString(), 'Got:', mileageInput.value);
+        this.log('⚠️ Mileage value verification failed. Expected:', adjustedMileage.toString(), 'Got:', mileageInput.value);
         // Try typing approach as fallback
         mileageInput.focus();
         if (mileageInput.select) mileageInput.select();
-        await this.typeHumanLike(mileageInput, mileage.toString());
+        await this.typeHumanLike(mileageInput, adjustedMileage.toString());
         return true;
       }
       
     } catch (error) {
-      this.log('⚠️ Could not fill mileage:', mileage, error);
+      this.log('⚠️ Could not fill mileage:', adjustedMileage, error);
       return false;
     }
   }
