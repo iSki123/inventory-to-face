@@ -689,8 +689,7 @@ class SalesonatorAutomator {
       this.log('❌ Navigation to marketplace failed:', error);
       throw new Error(`Failed to navigate to marketplace: ${error.message}`);
     }
-  }
-  }
+    }
 
   // Enhanced form filling with React-native value setting
   async fillVehicleForm(vehicleData) {
