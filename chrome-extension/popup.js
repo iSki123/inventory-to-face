@@ -26,6 +26,7 @@ class SalesonatorExtension {
     document.getElementById('stopPosting').addEventListener('click', () => this.stopPosting());
     document.getElementById('delay').addEventListener('change', () => this.saveSettings());
     document.getElementById('login').addEventListener('click', () => this.showLoginForm());
+    document.getElementById('openDashboard').addEventListener('click', () => this.openDashboard());
 
     // Check for existing web app authentication first
     console.log('🔍 Starting web app authentication check...');
@@ -238,6 +239,51 @@ class SalesonatorExtension {
         mainSection.style.display = 'none';
       }
     }
+  }
+
+  async openDashboard() {
+    try {
+      // Open Salesonator dashboard in new tab
+      const dashboardUrl = 'https://preview--inventory-to-face.lovable.app/';
+      await chrome.tabs.create({ url: dashboardUrl, active: true });
+      
+      // Show message that we're waiting for auto-login
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = 'Dashboard opened. Please log in to enable auto-authentication.';
+      
+      // Start checking for authentication every 2 seconds
+      this.startAuthCheckInterval();
+    } catch (error) {
+      console.error('Error opening dashboard:', error);
+    }
+  }
+
+  startAuthCheckInterval() {
+    // Clear any existing interval
+    if (this.authCheckInterval) {
+      clearInterval(this.authCheckInterval);
+    }
+    
+    // Check every 2 seconds for authentication
+    this.authCheckInterval = setInterval(async () => {
+      const webAppAuth = await this.checkWebAppAuthentication();
+      if (webAppAuth) {
+        clearInterval(this.authCheckInterval);
+        console.log('✅ Auto-authentication detected!');
+        await chrome.storage.sync.set({ userToken: webAppAuth.token });
+        this.showWebAppAuthSuccess();
+        document.getElementById('loginSection').style.display = 'none';
+        document.getElementById('mainSection').style.display = 'block';
+      }
+    }, 2000);
+    
+    // Stop checking after 2 minutes
+    setTimeout(() => {
+      if (this.authCheckInterval) {
+        clearInterval(this.authCheckInterval);
+        this.authCheckInterval = null;
+      }
+    }, 120000);
   }
 
   showLoginForm() {
