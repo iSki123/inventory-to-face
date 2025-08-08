@@ -466,8 +466,8 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
           offset += pageSize;
           
           // Safety check to prevent infinite loops and edge function timeouts
-          if (totalPages > 50) { // Reduced from 100 to prevent timeouts
-            console.warn('Reached maximum page limit (50), stopping pagination');
+          if (totalPages > 100) { // Increased limit to import more vehicles
+            console.warn('Reached maximum page limit (100), stopping pagination');
             break;
           }
 
@@ -1256,9 +1256,9 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
               }).catch(err => console.warn('AI description generation failed:', err));
             }
             
-            // Generate AI images asynchronously if no images exist
+            // Generate AI images asynchronously if no images exist OR if images array is empty
             if (!vehicle.images || vehicle.images.length === 0) {
-              console.log(`Vehicle ${inserted.id} needs AI-generated images`);
+              console.log(`Vehicle ${inserted.id} has ${vehicle.images?.length || 0} images, generating AI images`);
               supabaseClient.functions.invoke('generate-vehicle-images', {
                 body: {
                   vehicleId: inserted.id,
@@ -1270,15 +1270,19 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
                     interior_color: vehicle.interior_color,
                     vin: vehicle.vin
                   },
-                  dealershipName: userProfile?.dealership_name || 'DEALER'
+                  dealershipName: userProfile?.dealership_name || 'Auto Dealer'
                 }
               }).then(({ data, error }) => {
-                if (!error) {
-                  console.log(`AI image generation completed for vehicle ${inserted.id}`);
+                if (!error && data?.success) {
+                  console.log(`AI image generation completed for vehicle ${inserted.id}: ${data.imagesGenerated} images created`);
                 } else {
-                  console.warn(`AI image generation failed for vehicle ${inserted.id}:`, error);
+                  console.warn(`AI image generation failed for vehicle ${inserted.id}:`, error?.message || 'Unknown error');
                 }
-              }).catch(err => console.warn('AI image generation failed:', err));
+              }).catch(err => {
+                console.warn('AI image generation request failed:', err?.message || err);
+              });
+            } else {
+              console.log(`Vehicle ${inserted.id} already has ${vehicle.images.length} images, skipping AI generation`);
             }
 
             return inserted;
