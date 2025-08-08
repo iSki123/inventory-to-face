@@ -1227,10 +1227,34 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
     
     console.log(`📊 PARSING SUMMARY: ${vehicleData.length} vehicles ready for import, ${vehiclesNeedingVinDecoding.length} vehicles need VIN decoding`);
     
-    // Process VIN decoding for vehicles missing make/model data
-    if (vehiclesNeedingVinDecoding.length > 0) {
-      console.log(`🔍 Starting VIN decoding for ${vehiclesNeedingVinDecoding.length} vehicles...`);
-      const decodedVehicles = await processVinDecoding(supabaseClient, vehiclesNeedingVinDecoding);
+    // Filter out vehicles without VIN numbers at the earliest stage
+    const vehiclesWithVin = vehicleData.filter(vehicle => {
+      if (!vehicle.vin || typeof vehicle.vin !== 'string' || vehicle.vin.trim() === '') {
+        console.log(`❌ Skipping vehicle without VIN: ${vehicle.year || 'N/A'} ${vehicle.make || 'N/A'} ${vehicle.model || 'N/A'}`);
+        return false;
+      }
+      return true;
+    });
+    
+    const vehiclesNeedingVinDecodingWithVin = vehiclesNeedingVinDecoding.filter(vehicle => {
+      if (!vehicle.vin || typeof vehicle.vin !== 'string' || vehicle.vin.trim() === '') {
+        console.log(`❌ Skipping vehicle needing VIN decoding because VIN is missing: ${vehicle.year || 'N/A'} ${vehicle.make || 'N/A'} ${vehicle.model || 'N/A'}`);
+        return false;
+      }
+      return true;
+    });
+    
+    vehicleData = vehiclesWithVin;
+    const vinlessSkippedCount = (parseResult.validVehicles.length - vehiclesWithVin.length) + (vehiclesNeedingVinDecoding.length - vehiclesNeedingVinDecodingWithVin.length);
+    
+    if (vinlessSkippedCount > 0) {
+      console.log(`❌ ${vinlessSkippedCount} vehicles skipped due to missing VIN numbers`);
+    }
+    
+    // Process VIN decoding for vehicles missing make/model data (only those with VINs)
+    if (vehiclesNeedingVinDecodingWithVin.length > 0) {
+      console.log(`🔍 Starting VIN decoding for ${vehiclesNeedingVinDecodingWithVin.length} vehicles...`);
+      const decodedVehicles = await processVinDecoding(supabaseClient, vehiclesNeedingVinDecodingWithVin);
       vehicleData = vehicleData.concat(decodedVehicles);
       console.log(`🔍 VIN decoding completed. Total vehicles for import: ${vehicleData.length}`);
     }
