@@ -652,15 +652,8 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
             <Dialog open={selectedImageIndex !== null} onOpenChange={() => setSelectedImageIndex(null)}>
               <DialogContent className="max-w-4xl max-h-[90vh] p-2">
                 <DialogHeader>
-                  <DialogTitle className="flex items-center justify-between">
-                    <span>Vehicle Image {selectedImageIndex + 1} of {formData.images.length}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedImageIndex(null)}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
+                  <DialogTitle>
+                    Vehicle Image {selectedImageIndex + 1} of {formData.images.length}
                   </DialogTitle>
                 </DialogHeader>
                 <div className="flex items-center justify-center min-h-[400px]">
