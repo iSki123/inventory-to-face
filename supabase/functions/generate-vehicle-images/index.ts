@@ -198,37 +198,51 @@ serve(async (req) => {
 
     console.log(`Generated ${generatedImages.length} images for vehicle ${vehicleId}`);
     
-    if (generatedImages.length === 0) {
-      throw new Error('Failed to generate any images: ' + imageGenerationErrors.join(', '));
+    // Update vehicle with generated images even if only some were successful
+    if (generatedImages.length > 0) {
+      // Update vehicle with generated images
+      const { error: updateError } = await supabaseClient
+        .from('vehicles')
+        .update({
+          images: generatedImages,
+          ai_images_generated: true,
+          ai_image_generation_completed_at: new Date().toISOString()
+        })
+        .eq('id', vehicleId);
+
+      if (updateError) {
+        console.error('Error updating vehicle with generated images:', updateError);
+        throw new Error(`Failed to update vehicle: ${updateError.message}`);
+      }
+
+      console.log('Successfully updated vehicle with AI-generated images');
+    } else {
+      console.error('No images were successfully generated');
+      // Update the vehicle to mark that image generation was attempted but failed
+      await supabaseClient
+        .from('vehicles')
+        .update({
+          ai_image_generation_completed_at: new Date().toISOString()
+        })
+        .eq('id', vehicleId);
     }
 
-    // Update vehicle with generated images
-    const { error: updateError } = await supabaseClient
-      .from('vehicles')
-      .update({
-        images: generatedImages,
-        ai_images_generated: true,
-        ai_image_generation_completed_at: new Date().toISOString()
-      })
-      .eq('id', vehicleId);
-
-    if (updateError) {
-      console.error('Error updating vehicle with generated images:', updateError);
-      throw new Error(`Failed to update vehicle: ${updateError.message}`);
-    }
-
-    console.log('Successfully updated vehicle with AI-generated images');
 
     return new Response(
       JSON.stringify({
-        success: true,
+        success: generatedImages.length > 0,
         vehicleId,
         generatedImages: generatedImages.length,
         images: generatedImages,
         errors: imageGenerationErrors.length > 0 ? imageGenerationErrors : undefined,
-        message: `Successfully generated ${generatedImages.length} AI images for ${vehicleData.year} ${vehicleData.make} ${vehicleData.model}`
+        message: generatedImages.length > 0 
+          ? `Successfully generated ${generatedImages.length} AI images for ${vehicleData.year} ${vehicleData.make} ${vehicleData.model}`
+          : `Failed to generate any images for ${vehicleData.year} ${vehicleData.make} ${vehicleData.model}. Errors: ${imageGenerationErrors.join(', ')}`
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: generatedImages.length > 0 ? 200 : 500
+      }
     );
 
   } catch (error) {
