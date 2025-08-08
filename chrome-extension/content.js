@@ -807,8 +807,8 @@ class SalesonatorAutomator {
       await safeDelay(900, 1400);
     }
 
-    // 3) Location (typed, clear first, choose suggestion)
-    await attempt('Location', async () => { try { await this.setLocationTyped(vehicleData); return true; } catch { return false; } });
+    // 3) Location (typed, clear first, choose suggestion) - Enhanced Detection
+    await attempt('Location', async () => { try { return await this.fillLocationFieldEnhanced(vehicleData); } catch { return false; } });
 
     // 4) Year (dropdown)
     if (vehicleData.year) {
@@ -832,15 +832,15 @@ class SalesonatorAutomator {
       }
     });
 
-    // 7) Mileage (typed, min 300)
+    // 7) Mileage (typed, min 300) - Enhanced Detection
     await attempt('Mileage', async () => {
       let miles = parseInt(String(vehicleData.mileage||vehicleData.odometer||'').replace(/[^\d]/g,''),10);
       if (!miles || miles < 300) miles = 300;
-      return this.fillMileage(miles);
+      return await this.fillMileageFieldEnhanced(miles);
     });
 
-    // 8) Price (typed)
-    await attempt('Price', async () => this.fillPrice(vehicleData.price));
+    // 8) Price (typed) - Enhanced Detection
+    await attempt('Price', async () => this.fillPriceFieldEnhanced(vehicleData.price));
 
     // 9) Body style (dropdown)
     const mappedBodyStyle = vehicleData.bodyStyle || vehicleData.body_style || this.mapBodyStyle(vehicleData.body_style_nhtsa || vehicleData.vehicle_type_nhtsa || '');
@@ -876,9 +876,9 @@ class SalesonatorAutomator {
     const trans = this.mapTransmission(vehicleData.transmission || vehicleData.transmission_nhtsa || 'Automatic');
     await attempt('Transmission', async () => this.selectTransmission(trans));
 
-    // 16) Description (typed)
+    // 16) Description (typed) - Enhanced Detection
     const description = vehicleData.ai_description || vehicleData.description || `${vehicleData.year||''} ${vehicleData.make||''} ${this.toTitleCase(vehicleData.model||'')}`.trim();
-    await attempt('Description', async () => this.fillDescription(description));
+    await attempt('Description', async () => this.fillDescriptionFieldEnhanced(description));
 
     this.log('✅ Strict order form fill complete');
   }
