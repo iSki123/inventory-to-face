@@ -380,6 +380,9 @@ async function getScrapingStatus(supabaseClient: any, sourceId: string) {
 }
 
 async function processScrapedData(supabaseClient: any, sourceId: string, userId: string) {
+  console.log('=== PROCESS SCRAPED DATA STARTED ===');
+  console.log('Source ID:', sourceId, 'User ID:', userId);
+
   const { data: source } = await supabaseClient
     .from('vehicle_sources')
     .select('*')
@@ -396,30 +399,73 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
 
   if (accessToken && source.octoparse_task_id) {
     try {
-      // Fetch scraped data from Octoparse API (correct endpoint)
-      const response = await fetch(`https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${source.octoparse_task_id}&offset=0&size=1000`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      });
+      console.log(`Processing scraped data from task ID: ${source.octoparse_task_id}`);
+      
+      // Fetch scraped data from Octoparse API with pagination (same as importSpecificTask)
+      const pageSize = 500;
+      let offset = 0;
+      let allRawData: any[] = [];
+      let totalPages = 0;
 
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Octoparse API response:', JSON.stringify(result, null, 2));
-        // Handle Octoparse response format
-        const rawData = result.data?.dataList || result.dataList || result.data || [];
-        vehicleData = parseOctoparseData(rawData);
-        console.log(`Parsed ${vehicleData.length} vehicles from Octoparse data`);
-      } else {
-        console.warn('Failed to fetch Octoparse data, using fallback');
-        vehicleData = generateMockVehicleData();
+      while (true) {
+        const url = `https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${source.octoparse_task_id}&offset=${offset}&size=${pageSize}`;
+        console.log(`Fetching page ${totalPages + 1}:`, { offset, pageSize, url });
+        
+        const pageResp = await fetch(url, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${accessToken}` },
+        });
+
+        console.log(`Octoparse page response status: ${pageResp.status}`);
+
+        if (!pageResp.ok) {
+          const errorText = await pageResp.text();
+          console.error('Octoparse page fetch failed:', pageResp.status, errorText);
+          
+          // If this is the first page and it fails, fall back to mock data
+          if (offset === 0) {
+            console.warn('First page fetch failed, falling back to mock data');
+            vehicleData = generateMockVehicleData();
+            break;
+          } else {
+            // If subsequent pages fail, continue with what we have
+            console.warn(`Page at offset ${offset} failed, continuing with ${allRawData.length} records`);
+            break;
+          }
+        }
+
+        const pageJson = await pageResp.json();
+        const pageList = pageJson.data?.dataList || pageJson.dataList || pageJson.data || [];
+        console.log(`Fetched ${pageList.length} rows at offset ${offset} (page ${totalPages + 1})`);
+
+        allRawData = allRawData.concat(pageList);
+        totalPages++;
+
+        // Stop if we got fewer results than requested (last page)
+        if (pageList.length < pageSize) {
+          console.log(`Reached last page. Total pages processed: ${totalPages}`);
+          break;
+        }
+        
+        offset += pageSize;
+        
+        // Safety check to prevent infinite loops
+        if (totalPages > 100) {
+          console.warn('Reached maximum page limit (100), stopping pagination');
+          break;
+        }
       }
+
+      console.log(`Total raw data fetched: ${allRawData.length} records from ${totalPages} pages`);
+      vehicleData = parseOctoparseData(allRawData);
+      console.log(`Parsed ${vehicleData.length} vehicles from Octoparse data`);
+      
     } catch (error) {
       console.error('Error fetching Octoparse data:', error);
       vehicleData = generateMockVehicleData();
     }
   } else {
+    console.log('No API key or task ID found, using mock data');
     // Fallback to mock data if no API key or task ID
     vehicleData = generateMockVehicleData();
   }
