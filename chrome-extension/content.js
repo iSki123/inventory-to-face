@@ -1291,96 +1291,128 @@ class SalesonatorAutomator {
   async selectExteriorColor(exteriorColor) {
     try {
       this.log(`🎨 Selecting exterior color: ${exteriorColor}`);
-
-      const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-      const normalizeKey = (s) => norm(s).replace(/[\s-]/g, '');
-      const target = normalizeKey(exteriorColor);
-
-      // Find the dropdown by looking for the label text and closest clickable element
-      let dropdown = this.findDropdownByLabel('Exterior color');
-      if (!dropdown) {
-        await this.ensureAdditionalFieldsVisible();
-        dropdown = this.findDropdownByLabel('Exterior color');
+      console.log(`[EXTERIOR COLOR DEBUG] Starting exterior color selection for: ${exteriorColor}`);
+      
+      // Clean exterior color string
+      const cleanExteriorColor = (exteriorColor || '').toString().trim();
+      
+      // Find exterior color dropdown using the same proven selectors as other successful dropdowns
+      const exteriorColorDropdownSelectors = [
+        'text:Exterior color',
+        '[aria-label*="Exterior color"]',
+        'div[role="button"]:has-text("Exterior color")',
+        'span:has-text("Exterior color")',
+        '[data-testid*="exterior"]'
+      ];
+      
+      console.log(`[EXTERIOR COLOR DEBUG] Searching for exterior color dropdown with selectors:`, exteriorColorDropdownSelectors);
+      
+      const exteriorColorDropdown = await this.waitForElement(exteriorColorDropdownSelectors, 8000);
+      if (!exteriorColorDropdown) {
+        throw new Error('Exterior color dropdown not found');
       }
-
-      // Try XPath to find exterior color dropdown
-      if (!dropdown) {
-        try {
-          const elements = document.evaluate(
-            `//div[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "exterior color") or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "exterior")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
-            document,
-            null,
-            XPathResult.FIRST_ORDERED_NODE_TYPE,
-            null
-          );
-          if (elements.singleNodeValue) {
-            dropdown = elements.singleNodeValue;
-          }
-        } catch {}
-      }
-
-      if (!dropdown) {
-        // Fallback to direct search
-        const els = document.querySelectorAll('div[role="button"], span[role="button"], [role="combobox"]');
-        for (let el of els) {
-          const pt = norm(el.parentElement?.textContent || '');
-          const prev = norm(el.previousElementSibling?.textContent || '');
-          if (pt.includes('exterior color') || prev.includes('exterior color')) { dropdown = el; break; }
-        }
-      }
-
-      if (!dropdown) throw new Error('Exterior color dropdown not found');
-
-      await this.scrollIntoView(dropdown);
-      await this.delay(this.randomDelay(500, 1000));
-
-      this.log('🎨 Found exterior color dropdown, clicking...');
-      dropdown.click();
-      await this.delay(this.randomDelay(1200, 2000));
-
-      // Search options only within the visible options container
-      let optionsContainer = null;
-      try {
-        optionsContainer = await this.waitForElement(['[role="listbox"]','[role="menu"]'], 4000);
-      } catch {}
-      const options = Array.from((optionsContainer || document).querySelectorAll('[role="option"]'));
-      let option = options.find((opt) => {
-        const txt = (opt.textContent || '').trim();
-        const label = opt.getAttribute?.('aria-label') || '';
-        return normalizeKey(txt) === target || normalizeKey(label) === target || normalizeKey(txt).includes(target);
+      
+      console.log(`[EXTERIOR COLOR DEBUG] Found exterior color dropdown:`, exteriorColorDropdown);
+      console.log(`[EXTERIOR COLOR DEBUG] Dropdown tagName:`, exteriorColorDropdown.tagName);
+      console.log(`[EXTERIOR COLOR DEBUG] Dropdown textContent:`, exteriorColorDropdown.textContent);
+      
+      await this.scrollIntoView(exteriorColorDropdown);
+      this.log('🎨 Found exterior color dropdown, clicking to open...');
+      
+      console.log(`[EXTERIOR COLOR DEBUG] Clicking exterior color dropdown...`);
+      // Use the same reliable open sequence as other successful dropdowns
+      exteriorColorDropdown.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      exteriorColorDropdown.click();
+      await this.delay(this.randomDelay(1200, 1800)); // Wait for dropdown to open
+      
+      console.log(`[EXTERIOR COLOR DEBUG] Checking if dropdown opened...`);
+      const optionsAfterClick = document.querySelectorAll('[role="option"]');
+      console.log(`[EXTERIOR COLOR DEBUG] Found options after click:`, optionsAfterClick.length);
+      
+      // Log first 20 options to debug
+      Array.from(optionsAfterClick).slice(0, 20).forEach((opt, idx) => {
+        console.log(`[EXTERIOR COLOR DEBUG] Option ${idx + 1}:`, opt.textContent?.trim());
       });
-
-      if (!option && target.includes('offwhite')) {
-        option = options.find((opt) => normalizeKey(opt.textContent || '').includes('offwhite'));
+      
+      // Enhanced option detection using same proven methods
+      let exteriorColorOption = null;
+      
+      // Method 1: Direct text search using the proven waitForElement pattern
+      try {
+        console.log(`[EXTERIOR COLOR DEBUG] Trying direct text search for: ${cleanExteriorColor}`);
+        exteriorColorOption = await this.waitForElement(`text:${cleanExteriorColor}`, 2000);
+        console.log(`[EXTERIOR COLOR DEBUG] Direct text search result:`, exteriorColorOption);
+      } catch (e) {
+        console.log(`[EXTERIOR COLOR DEBUG] Direct text search failed:`, e.message);
       }
-
-      // Fallback to keyboard-driven selection
-      if (!option) {
-        const success = await this.selectDropdownOption(['[aria-label*="Exterior color"]','text:Exterior color'], exteriorColor, true);
-        if (success) {
-          // Verify selection is displayed near the label
-          const verify = this.findDropdownByLabel('Exterior color') || dropdown;
-          const ok = (verify?.textContent || '').toLowerCase().includes(norm(exteriorColor));
-          if (ok) { this.log(`✅ Successfully selected exterior color: ${exteriorColor}`); return true; }
+      
+      // Method 2: Manual search through options if direct search fails
+      if (!exteriorColorOption && optionsAfterClick.length > 0) {
+        console.log(`[EXTERIOR COLOR DEBUG] Trying manual search through ${optionsAfterClick.length} options...`);
+        
+        // Normalize the target color for comparison
+        const normalized = cleanExteriorColor.toLowerCase();
+        
+        // Method 2a: Exact match
+        exteriorColorOption = Array.from(optionsAfterClick).find(opt => 
+          opt.textContent?.trim().toLowerCase() === normalized
+        );
+        
+        // Method 2b: Fuzzy match if exact fails
+        if (!exteriorColorOption) {
+          exteriorColorOption = Array.from(optionsAfterClick).find(opt => 
+            opt.textContent?.trim().toLowerCase().includes(normalized.toLowerCase())
+          );
         }
+        
+        // Method 2c: Try common variations
+        if (!exteriorColorOption && normalized === 'off white') {
+          exteriorColorOption = Array.from(optionsAfterClick).find(opt => {
+            const text = opt.textContent?.trim().toLowerCase();
+            return text === 'off white' || text === 'offwhite' || text === 'cream' || text === 'ivory';
+          });
+        }
+        
+        console.log(`[EXTERIOR COLOR DEBUG] Manual search result:`, exteriorColorOption);
       }
-
-      if (!option) throw new Error(`Exterior color option "${exteriorColor}" not found`);
-
-      await this.scrollIntoView(option);
-      await this.delay(this.randomDelay(300, 600));
-      await this.performFacebookDropdownClick(option);
-
-      await this.delay(this.randomDelay(800, 1500));
-      // Verify the displayed value updated
-      const verify = this.findDropdownByLabel('Exterior color') || dropdown;
-      const ok = (verify?.textContent || '').toLowerCase().includes(norm(exteriorColor));
-      if (!ok) this.log('⚠️ Exterior color may not have applied visually yet.');
-      this.log(`✅ Successfully selected exterior color: ${exteriorColor}`);
-      return true;
-
+      
+      if (!exteriorColorOption) {
+        console.log(`[EXTERIOR COLOR DEBUG] ❌ No exterior color option found for: ${cleanExteriorColor}`);
+        console.log(`[EXTERIOR COLOR DEBUG] Available options:`, Array.from(optionsAfterClick).map(opt => opt.textContent?.trim()));
+        throw new Error(`Exterior color option ${cleanExteriorColor} not found among ${optionsAfterClick.length} options`);
+      }
+      
+      console.log(`[EXTERIOR COLOR DEBUG] 🎨 Found exterior color option, clicking: ${cleanExteriorColor}`);
+      await this.performFacebookDropdownClick(exteriorColorOption);
+      await this.delay(2000);
+      
+      // Enhanced verification
+      console.log(`[EXTERIOR COLOR DEBUG] Verifying exterior color selection...`);
+      await this.delay(500);
+      console.log(`[EXTERIOR COLOR DEBUG] Dropdown selected value:`, exteriorColorDropdown.textContent?.trim());
+      
+      // Check if exterior color appears in form
+      const dropdownText = exteriorColorDropdown.textContent?.trim();
+      const success = dropdownText?.includes(cleanExteriorColor) || 
+                     dropdownText?.includes(exteriorColor) ||
+                     document.body.textContent.includes(`Exterior color: ${cleanExteriorColor}`);
+      
+      console.log(`[EXTERIOR COLOR DEBUG] Exterior color verification:`, {
+        dropdownContainsColor: dropdownText?.includes(cleanExteriorColor),
+        success: success
+      });
+      
+      if (success) {
+        this.log(`✅ Successfully filled exterior color: ${cleanExteriorColor}`);
+        return true;
+      } else {
+        this.log(`⚠️ Exterior color selection may have failed - dropdown text: ${dropdownText}`);
+        return false;
+      }
+      
     } catch (error) {
       this.log(`⚠️ Could not select exterior color: ${exteriorColor}`, error);
+      console.log(`[EXTERIOR COLOR DEBUG] ❌ Error selecting exterior color:`, error);
       return false;
     }
   }
@@ -1389,95 +1421,128 @@ class SalesonatorAutomator {
   async selectInteriorColor(interiorColor) {
     try {
       this.log(`🪑 Selecting interior color: ${interiorColor}`);
-
-      const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-      const normalizeKey = (s) => norm(s).replace(/[\s-]/g, '');
-      const target = normalizeKey(interiorColor);
-
-      // Find the dropdown by looking for the label text and closest clickable element
-      let dropdown = this.findDropdownByLabel('Interior color');
-
-      if (!dropdown) {
-        await this.ensureAdditionalFieldsVisible();
-        dropdown = this.findDropdownByLabel('Interior color');
+      console.log(`[INTERIOR COLOR DEBUG] Starting interior color selection for: ${interiorColor}`);
+      
+      // Clean interior color string
+      const cleanInteriorColor = (interiorColor || '').toString().trim();
+      
+      // Find interior color dropdown using the same proven selectors as other successful dropdowns
+      const interiorColorDropdownSelectors = [
+        'text:Interior color',
+        '[aria-label*="Interior color"]',
+        'div[role="button"]:has-text("Interior color")',
+        'span:has-text("Interior color")',
+        '[data-testid*="interior"]'
+      ];
+      
+      console.log(`[INTERIOR COLOR DEBUG] Searching for interior color dropdown with selectors:`, interiorColorDropdownSelectors);
+      
+      const interiorColorDropdown = await this.waitForElement(interiorColorDropdownSelectors, 8000);
+      if (!interiorColorDropdown) {
+        throw new Error('Interior color dropdown not found');
       }
-
-      // Try XPath to find interior color dropdown
-      if (!dropdown) {
-        try {
-          const elements = document.evaluate(
-            `//div[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "interior color") or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "interior")]/following-sibling::*[contains(@role, "button") or contains(@class, "dropdown")]`,
-            document,
-            null,
-            XPathResult.FIRST_ORDERED_NODE_TYPE,
-            null
-          );
-          if (elements.singleNodeValue) {
-            dropdown = elements.singleNodeValue;
-          }
-        } catch {}
-      }
-
-      if (!dropdown) {
-        // Fallback to direct search
-        const els = document.querySelectorAll('div[role="button"], span[role="button"], [role="combobox"]');
-        for (let el of els) {
-          const pt = norm(el.parentElement?.textContent || '');
-          const prev = norm(el.previousElementSibling?.textContent || '');
-          if (pt.includes('interior color') || prev.includes('interior color')) { dropdown = el; break; }
-        }
-      }
-
-      if (!dropdown) throw new Error('Interior color dropdown not found');
-
-      await this.scrollIntoView(dropdown);
-      await this.delay(this.randomDelay(500, 1000));
-
-      this.log('🪑 Found interior color dropdown, clicking...');
-      dropdown.click();
-      await this.delay(this.randomDelay(1200, 2000));
-
-      // Search options only within the visible options container
-      let optionsContainer = null;
-      try {
-        optionsContainer = await this.waitForElement(['[role="listbox"]','[role="menu"]'], 4000);
-      } catch {}
-      const options = Array.from((optionsContainer || document).querySelectorAll('[role="option"]'));
-      let option = options.find((opt) => {
-        const txt = (opt.textContent || '').trim();
-        const label = opt.getAttribute?.('aria-label') || '';
-        return normalizeKey(txt) === target || normalizeKey(label) === target || normalizeKey(txt).includes(target);
+      
+      console.log(`[INTERIOR COLOR DEBUG] Found interior color dropdown:`, interiorColorDropdown);
+      console.log(`[INTERIOR COLOR DEBUG] Dropdown tagName:`, interiorColorDropdown.tagName);
+      console.log(`[INTERIOR COLOR DEBUG] Dropdown textContent:`, interiorColorDropdown.textContent);
+      
+      await this.scrollIntoView(interiorColorDropdown);
+      this.log('🪑 Found interior color dropdown, clicking to open...');
+      
+      console.log(`[INTERIOR COLOR DEBUG] Clicking interior color dropdown...`);
+      // Use the same reliable open sequence as other successful dropdowns
+      interiorColorDropdown.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      interiorColorDropdown.click();
+      await this.delay(this.randomDelay(1200, 1800)); // Wait for dropdown to open
+      
+      console.log(`[INTERIOR COLOR DEBUG] Checking if dropdown opened...`);
+      const optionsAfterClick = document.querySelectorAll('[role="option"]');
+      console.log(`[INTERIOR COLOR DEBUG] Found options after click:`, optionsAfterClick.length);
+      
+      // Log first 20 options to debug
+      Array.from(optionsAfterClick).slice(0, 20).forEach((opt, idx) => {
+        console.log(`[INTERIOR COLOR DEBUG] Option ${idx + 1}:`, opt.textContent?.trim());
       });
-
-      if (!option && target.includes('offwhite')) {
-        option = options.find((opt) => normalizeKey(opt.textContent || '').includes('offwhite'));
+      
+      // Enhanced option detection using same proven methods
+      let interiorColorOption = null;
+      
+      // Method 1: Direct text search using the proven waitForElement pattern
+      try {
+        console.log(`[INTERIOR COLOR DEBUG] Trying direct text search for: ${cleanInteriorColor}`);
+        interiorColorOption = await this.waitForElement(`text:${cleanInteriorColor}`, 2000);
+        console.log(`[INTERIOR COLOR DEBUG] Direct text search result:`, interiorColorOption);
+      } catch (e) {
+        console.log(`[INTERIOR COLOR DEBUG] Direct text search failed:`, e.message);
       }
-
-      // Fallback to keyboard-driven selection
-      if (!option) {
-        const success = await this.selectDropdownOption(['[aria-label*="Interior color"]','text:Interior color'], interiorColor, true);
-        if (success) {
-          const verify = this.findDropdownByLabel('Interior color') || dropdown;
-          const ok = (verify?.textContent || '').toLowerCase().includes(norm(interiorColor));
-          if (ok) { this.log(`✅ Successfully selected interior color: ${interiorColor}`); return true; }
+      
+      // Method 2: Manual search through options if direct search fails
+      if (!interiorColorOption && optionsAfterClick.length > 0) {
+        console.log(`[INTERIOR COLOR DEBUG] Trying manual search through ${optionsAfterClick.length} options...`);
+        
+        // Normalize the target color for comparison
+        const normalized = cleanInteriorColor.toLowerCase();
+        
+        // Method 2a: Exact match
+        interiorColorOption = Array.from(optionsAfterClick).find(opt => 
+          opt.textContent?.trim().toLowerCase() === normalized
+        );
+        
+        // Method 2b: Fuzzy match if exact fails
+        if (!interiorColorOption) {
+          interiorColorOption = Array.from(optionsAfterClick).find(opt => 
+            opt.textContent?.trim().toLowerCase().includes(normalized.toLowerCase())
+          );
         }
+        
+        // Method 2c: Try common variations for interior colors
+        if (!interiorColorOption && normalized === 'black') {
+          interiorColorOption = Array.from(optionsAfterClick).find(opt => {
+            const text = opt.textContent?.trim().toLowerCase();
+            return text === 'black' || text === 'charcoal' || text === 'dark';
+          });
+        }
+        
+        console.log(`[INTERIOR COLOR DEBUG] Manual search result:`, interiorColorOption);
       }
-
-      if (!option) throw new Error(`Interior color option "${interiorColor}" not found`);
-
-      await this.scrollIntoView(option);
-      await this.delay(this.randomDelay(300, 600));
-      await this.performFacebookDropdownClick(option);
-
-      await this.delay(this.randomDelay(800, 1500));
-      const verify = this.findDropdownByLabel('Interior color') || dropdown;
-      const ok = (verify?.textContent || '').toLowerCase().includes(norm(interiorColor));
-      if (!ok) this.log('⚠️ Interior color may not have applied visually yet.');
-      this.log(`✅ Successfully selected interior color: ${interiorColor}`);
-      return true;
-
+      
+      if (!interiorColorOption) {
+        console.log(`[INTERIOR COLOR DEBUG] ❌ No interior color option found for: ${cleanInteriorColor}`);
+        console.log(`[INTERIOR COLOR DEBUG] Available options:`, Array.from(optionsAfterClick).map(opt => opt.textContent?.trim()));
+        throw new Error(`Interior color option ${cleanInteriorColor} not found among ${optionsAfterClick.length} options`);
+      }
+      
+      console.log(`[INTERIOR COLOR DEBUG] 🪑 Found interior color option, clicking: ${cleanInteriorColor}`);
+      await this.performFacebookDropdownClick(interiorColorOption);
+      await this.delay(2000);
+      
+      // Enhanced verification
+      console.log(`[INTERIOR COLOR DEBUG] Verifying interior color selection...`);
+      await this.delay(500);
+      console.log(`[INTERIOR COLOR DEBUG] Dropdown selected value:`, interiorColorDropdown.textContent?.trim());
+      
+      // Check if interior color appears in form
+      const dropdownText = interiorColorDropdown.textContent?.trim();
+      const success = dropdownText?.includes(cleanInteriorColor) || 
+                     dropdownText?.includes(interiorColor) ||
+                     document.body.textContent.includes(`Interior color: ${cleanInteriorColor}`);
+      
+      console.log(`[INTERIOR COLOR DEBUG] Interior color verification:`, {
+        dropdownContainsColor: dropdownText?.includes(cleanInteriorColor),
+        success: success
+      });
+      
+      if (success) {
+        this.log(`✅ Successfully filled interior color: ${cleanInteriorColor}`);
+        return true;
+      } else {
+        this.log(`⚠️ Interior color selection may have failed - dropdown text: ${dropdownText}`);
+        return false;
+      }
+      
     } catch (error) {
       this.log(`⚠️ Could not select interior color: ${interiorColor}`, error);
+      console.log(`[INTERIOR COLOR DEBUG] ❌ Error selecting interior color:`, error);
       return false;
     }
   }
