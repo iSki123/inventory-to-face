@@ -109,19 +109,93 @@ class SalesonatorBackground {
       const data = await response.json();
       
       if (data.access_token) {
-        // Store the token
+        // Check subscription and credits
+        const eligibilityCheck = await this.checkUserEligibility(data.access_token);
+        
+        if (!eligibilityCheck.eligible) {
+          throw new Error(eligibilityCheck.reason || 'User not eligible for extension access');
+        }
+
+        // Store the token and user info
         await chrome.storage.sync.set({
           userToken: data.access_token,
-          userEmail: credentials.email
+          userEmail: credentials.email,
+          userCredits: eligibilityCheck.credits,
+          userSubscribed: eligibilityCheck.subscribed
         });
         
-        return { success: true, token: data.access_token };
+        return { 
+          success: true, 
+          token: data.access_token,
+          credits: eligibilityCheck.credits,
+          subscribed: eligibilityCheck.subscribed
+        };
       } else {
         throw new Error(data.error_description || 'Authentication failed');
       }
     } catch (error) {
       console.error('Authentication error:', error);
       throw error;
+    }
+  }
+
+  // Check if user is eligible to use the extension
+  async checkUserEligibility(token) {
+    try {
+      // First check subscription status
+      const subscriptionResponse = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/check-subscription', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+        }
+      });
+
+      const subscriptionData = await subscriptionResponse.json();
+      
+      // Then check user profile for credits
+      const profileResponse = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/profiles?select=credits,is_active', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+        }
+      });
+
+      const profileData = await profileResponse.json();
+      const profile = profileData[0];
+
+      if (!profile || !profile.is_active) {
+        return {
+          eligible: false,
+          reason: 'Account is not active or profile not found'
+        };
+      }
+
+      const hasCredits = profile.credits > 0;
+      const hasSubscription = subscriptionData.subscribed;
+
+      if (!hasCredits && !hasSubscription) {
+        return {
+          eligible: false,
+          reason: 'You need either credits or an active subscription to use the extension'
+        };
+      }
+
+      return {
+        eligible: true,
+        credits: profile.credits,
+        subscribed: hasSubscription
+      };
+
+    } catch (error) {
+      console.error('Eligibility check error:', error);
+      return {
+        eligible: false,
+        reason: 'Failed to verify account eligibility'
+      };
     }
   }
 

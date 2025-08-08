@@ -274,8 +274,8 @@ export default function UserManagement() {
                           <SelectContent>
                             <SelectItem value="sales_rep">Sales Rep</SelectItem>
                             <SelectItem value="manager">Manager</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
                             <SelectItem value="owner">Owner</SelectItem>
-                            
                           </SelectContent>
                         </Select>
                       </TableCell>
