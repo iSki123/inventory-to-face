@@ -1047,40 +1047,93 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
   try {
     console.log('Calling importSpecificTask...');
     console.log(`Importing data from task ID: ${taskId}`);
-    console.log(`Using Octoparse API URL: https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${taskId}&offset=0&size=1000`);
     
     // Fetch scraped data from Octoparse API using specific task ID (paginate to get all items)
-    const pageSize = 500;
+    const pageSize = 100; // Smaller page size for better performance
     let offset = 0;
     let allRawData: any[] = [];
+    let totalPages = 0;
+    let consecutiveFailures = 0;
+    const maxConsecutiveFailures = 3;
+
+    console.log(`Starting paginated fetch from Octoparse for task ${taskId}`);
 
     while (true) {
       const url = `https://openapi.octoparse.com/api/alldata/GetDataOfTaskByOffset?taskId=${taskId}&offset=${offset}&size=${pageSize}`;
-      console.log('Fetching page:', { offset, pageSize, url });
-      const pageResp = await fetch(url, {
-        method: 'GET',
-        headers: { 'Authorization': `Bearer ${accessToken}` },
-      });
+      console.log(`Fetching page ${totalPages + 1}:`, { offset, pageSize });
+      
+      try {
+        const pageResp = await fetch(url, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${accessToken}` },
+        });
 
-      console.log(`Octoparse page response status: ${pageResp.status}`);
+        console.log(`Octoparse page response status: ${pageResp.status}`);
 
-      if (!pageResp.ok) {
-        const errorText = await pageResp.text();
-        console.error('Octoparse page fetch failed:', pageResp.status, errorText);
-        throw new Error(`Failed to fetch data page (offset ${offset}): ${pageResp.status}`);
+        if (!pageResp.ok) {
+          const errorText = await pageResp.text();
+          console.error('Octoparse page fetch failed:', pageResp.status, errorText);
+          consecutiveFailures++;
+          
+          // If this is the first page and it fails, throw error
+          if (offset === 0) {
+            throw new Error(`Failed to fetch first page of data: ${pageResp.status} ${errorText}`);
+          } else if (consecutiveFailures >= maxConsecutiveFailures) {
+            console.warn(`Too many consecutive failures (${consecutiveFailures}), stopping pagination with ${allRawData.length} records`);
+            break;
+          } else {
+            console.warn(`Page at offset ${offset} failed, skipping to next page`);
+            offset += pageSize;
+            totalPages++;
+            continue;
+          }
+        }
+
+        const pageJson = await pageResp.json();
+        const pageList = pageJson.data?.dataList || pageJson.dataList || pageJson.data || [];
+        console.log(`Fetched ${pageList.length} rows at offset ${offset} (page ${totalPages + 1})`);
+
+        if (pageList.length === 0) {
+          console.log('No more data available, ending pagination');
+          break;
+        }
+
+        allRawData = allRawData.concat(pageList);
+        totalPages++;
+        consecutiveFailures = 0; // Reset failure counter on success
+
+        // Stop if we got fewer results than requested (last page)
+        if (pageList.length < pageSize) {
+          console.log(`Reached last page. Total pages processed: ${totalPages}`);
+          break;
+        }
+        
+        offset += pageSize;
+        
+        // Safety check to prevent infinite loops and edge function timeouts
+        if (totalPages > 30) { // Limit to prevent timeouts
+          console.warn('Reached maximum page limit (30), stopping pagination');
+          break;
+        }
+
+        // Add a small delay between requests to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+      } catch (fetchError) {
+        console.error(`Error fetching page at offset ${offset}:`, fetchError);
+        consecutiveFailures++;
+        
+        if (consecutiveFailures >= maxConsecutiveFailures) {
+          console.warn(`Too many consecutive failures (${consecutiveFailures}), stopping pagination with ${allRawData.length} records`);
+          break;
+        }
+        
+        offset += pageSize;
+        totalPages++;
       }
-
-      const pageJson = await pageResp.json();
-      const pageList = pageJson.data?.dataList || pageJson.dataList || pageJson.data || [];
-      console.log(`Fetched ${pageList.length} rows at offset ${offset}`);
-
-      allRawData = allRawData.concat(pageList);
-
-      if (pageList.length < pageSize) {
-        break; // last page
-      }
-      offset += pageSize;
     }
+
+    console.log(`Total raw data fetched: ${allRawData.length} records from ${totalPages} pages`);
 
     let vehicleData = parseOctoparseData(allRawData);
     console.log(`Parsed ${vehicleData.length} vehicles from task ${taskId} (raw rows: ${allRawData.length})`);
@@ -1103,9 +1156,6 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
       );
     }
     
-    const insertedVehicles = [];
-    const errors = [];
-
     // Fetch user profile for default contact info and dealership name
     const { data: userProfile } = await supabaseClient
       .from('profiles')
@@ -1113,190 +1163,156 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
       .eq('user_id', userId)
       .maybeSingle();
     
-    const vehiclesNeedingImages: any[] = [];
+    const insertedVehicles = [];
+    const errors = [];
+    const batchSize = 10; // Process vehicles in batches to avoid timeouts
     
-    for (const vehicle of vehicleData) {
-      try {
-        // Generate AI description with custom prompt if provided, but don't fail if it doesn't work
-        let aiDescription = null;
-        let finalDescription = vehicle.description || `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
-        
-        if (!vehicle.description || vehicle.description.length < 30) {
-          try {
-            console.log(`Generating AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
-            const { data, error } = await supabaseClient.functions.invoke('generate-vehicle-description', {
-              body: { 
-                vehicle,
-                customPrompt: aiDescriptionPrompt 
-              }
-            });
+    console.log(`Processing ${vehicleData.length} vehicles in batches of ${batchSize}`);
 
-            // Accept both success=true responses and fallback descriptions from errors
-            if (data?.description) {
-              aiDescription = data.description;
-              finalDescription = aiDescription; // Use AI description as the main description
-              console.log(`Generated AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
-            } else {
-              console.log('AI description generation failed, continuing without it:', error?.message || 'Unknown error');
-            }
-          } catch (error) {
-            console.warn('Failed to generate AI description, continuing without it:', error);
-          }
-        }
+    for (let i = 0; i < vehicleData.length; i += batchSize) {
+      const batch = vehicleData.slice(i, i + batchSize);
+      console.log(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(vehicleData.length/batchSize)} (${batch.length} vehicles)`);
+      
+      // Process batch in parallel but insert vehicles first without AI descriptions
+      const batchPromises = batch.map(async (vehicle, batchIndex) => {
+        try {
+          const absoluteIndex = i + batchIndex;
+          console.log(`Processing vehicle ${absoluteIndex + 1}/${vehicleData.length}: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
 
-        console.log(`Inserting vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
-        console.log('Vehicle data to insert:', JSON.stringify({
-          year: vehicle.year,
-          make: vehicle.make,
-          model: vehicle.model,
-          price: vehicle.price,
-          mileage: vehicle.mileage,
-          user_id: userId
-        }, null, 2));
-        
-        // Apply color standardization for Facebook Marketplace compatibility
-        const exterior_color_standardized = standardizeExteriorColor(vehicle.exterior_color);
-        const interior_color_standardized = standardizeInteriorColor(vehicle.interior_color);
-        
-        console.log(`Color standardization: ${vehicle.exterior_color} -> ${exterior_color_standardized}, ${vehicle.interior_color} -> ${interior_color_standardized}`);
+          // Apply color standardization for Facebook Marketplace compatibility
+          const exterior_color_standardized = standardizeExteriorColor(vehicle.exterior_color);
+          const interior_color_standardized = standardizeInteriorColor(vehicle.interior_color);
+          
+          console.log(`Color standardization: ${vehicle.exterior_color} -> ${exterior_color_standardized}, ${vehicle.interior_color} -> ${interior_color_standardized}`);
 
-        const { data: inserted, error } = await supabaseClient
-          .from('vehicles')
-          .insert([{
+          console.log(`Inserting vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+          console.log('Vehicle data to insert:', JSON.stringify({
             year: vehicle.year,
             make: vehicle.make,
             model: vehicle.model,
             price: vehicle.price,
             mileage: vehicle.mileage,
-            exterior_color: vehicle.exterior_color,
-            interior_color: vehicle.interior_color,
-            exterior_color_standardized,
-            interior_color_standardized,
-            condition: vehicle.condition,
-            // Only include scraped fuel/transmission if present; avoid forcing defaults
-            ...(vehicle.fuel_type ? { fuel_type: vehicle.fuel_type } : {}),
-            ...(vehicle.transmission ? { transmission: vehicle.transmission } : {}),
-            description: finalDescription,
-            ai_description: aiDescription,
-            vin: vehicle.vin,
-            features: vehicle.features,
-            images: vehicle.images,
-            trim: vehicle.trim,
-            location: vehicle.location || userProfile?.location || '',
-            contact_phone: vehicle.contact_phone || userProfile?.phone || '',
-            contact_email: vehicle.contact_email || userProfile?.email || '',
-            user_id: userId,
-            status: 'available',
-            facebook_post_status: 'draft',
-            ai_images_generated: vehicle.images && vehicle.images.length > 0,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }])
-          .select()
-          .single();
+            user_id: userId
+          }));
 
-        console.log('Database insertion result:', { data: inserted, error: error });
-        
-        if (!error && inserted) {
-          insertedVehicles.push(inserted);
-          console.log(`Successfully inserted vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} with ID: ${inserted.id}`);
+          // Insert vehicle without AI description first for speed
+          const { data: inserted, error } = await supabaseClient
+            .from('vehicles')
+            .insert([{
+              year: vehicle.year,
+              make: vehicle.make,
+              model: vehicle.model,
+              price: vehicle.price,
+              mileage: vehicle.mileage,
+              exterior_color: vehicle.exterior_color,
+              interior_color: vehicle.interior_color,
+              exterior_color_standardized,
+              interior_color_standardized,
+              condition: vehicle.condition,
+              // Only include scraped fuel/transmission if present; avoid forcing defaults
+              ...(vehicle.fuel_type ? { fuel_type: vehicle.fuel_type } : {}),
+              ...(vehicle.transmission ? { transmission: vehicle.transmission } : {}),
+              description: vehicle.description || `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+              vin: vehicle.vin,
+              features: vehicle.features,
+              images: vehicle.images,
+              trim: vehicle.trim,
+              location: vehicle.location || userProfile?.location || '',
+              contact_phone: vehicle.contact_phone || userProfile?.phone || '',
+              contact_email: vehicle.contact_email || userProfile?.email || '',
+              user_id: userId,
+              status: 'available',
+              facebook_post_status: 'draft',
+              ai_images_generated: vehicle.images && vehicle.images.length > 0,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }])
+            .select()
+            .single();
+
+          console.log('Database insertion result:', { data: inserted, error: error });
           
-          // Check if vehicle needs AI-generated images (no images or empty images array)
-          if (!vehicle.images || vehicle.images.length === 0) {
-            console.log(`Vehicle ${inserted.id} needs AI-generated images`);
-            vehiclesNeedingImages.push({
-              vehicleId: inserted.id,
-              vehicleData: {
-                year: vehicle.year,
-                make: vehicle.make,
-                model: vehicle.model,
-                exterior_color: vehicle.exterior_color,
-                interior_color: vehicle.interior_color,
-                vin: vehicle.vin
-              },
-              dealershipName: userProfile?.dealership_name || 'DEALER'
-            });
-          }
-        } else {
-          console.error(`Failed to insert vehicle ${vehicle.year} ${vehicle.make} ${vehicle.model}:`, error);
-          errors.push({ vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`, error: error?.message });
-        }
-      } catch (error) {
-        console.error('Error processing vehicle:', error);
-        errors.push({ vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`, error: error.message });
-      }
-    }
-    
-    // Process vehicles that need AI-generated images
-    console.log(`Processing ${vehiclesNeedingImages.length} vehicles that need AI-generated images`);
-    const imageGenerationResults: any[] = [];
-    
-    for (const vehicleNeedingImages of vehiclesNeedingImages) {
-      try {
-        console.log(`Generating AI images for vehicle ${vehicleNeedingImages.vehicleId}`);
-        
-        // Trigger VIN decoding first to get better vehicle data for AI generation
-        if (vehicleNeedingImages.vehicleData.vin) {
-          console.log(`Decoding VIN for vehicle ${vehicleNeedingImages.vehicleId} before AI image generation`);
-          try {
-            await supabaseClient.functions.invoke('vin-decoder', {
-              body: { 
-                vin: vehicleNeedingImages.vehicleData.vin,
-                vehicleId: vehicleNeedingImages.vehicleId
-              }
-            });
+          if (!error && inserted) {
+            console.log(`Successfully inserted vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} with ID: ${inserted.id}`);
             
-            // Fetch updated vehicle data after VIN decoding
-            const { data: updatedVehicle } = await supabaseClient
-              .from('vehicles')
-              .select('fuel_type_nhtsa, transmission_nhtsa, engine_nhtsa, body_style_nhtsa')
-              .eq('id', vehicleNeedingImages.vehicleId)
-              .maybeSingle();
-            
-            if (updatedVehicle) {
-              // Enhance vehicle data with decoded information
-              vehicleNeedingImages.vehicleData = {
-                ...vehicleNeedingImages.vehicleData,
-                fuel_type: updatedVehicle.fuel_type_nhtsa || vehicleNeedingImages.vehicleData.fuel_type,
-                transmission: updatedVehicle.transmission_nhtsa || vehicleNeedingImages.vehicleData.transmission,
-                engine: updatedVehicle.engine_nhtsa,
-                body_style: updatedVehicle.body_style_nhtsa
-              };
+            // Generate AI description asynchronously after insertion (don't wait for it)
+            if (!vehicle.description || vehicle.description.length < 30) {
+              supabaseClient.functions.invoke('generate-vehicle-description', {
+                body: { 
+                  vehicle: { ...vehicle, id: inserted.id },
+                  customPrompt: aiDescriptionPrompt 
+                }
+              }).then(({ data, error }) => {
+                if (!error && data?.description) {
+                  console.log(`Generated AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+                  // Update the vehicle with AI description
+                  supabaseClient
+                    .from('vehicles')
+                    .update({ ai_description: data.description })
+                    .eq('id', inserted.id)
+                    .then(() => console.log(`Updated AI description for vehicle ${inserted.id}`))
+                    .catch(err => console.warn('Failed to update AI description:', err));
+                }
+              }).catch(err => console.warn('AI description generation failed:', err));
             }
-          } catch (vinError) {
-            console.warn(`VIN decoding failed for vehicle ${vehicleNeedingImages.vehicleId}, proceeding with AI generation:`, vinError);
+            
+            // Generate AI images asynchronously if no images exist
+            if (!vehicle.images || vehicle.images.length === 0) {
+              console.log(`Vehicle ${inserted.id} needs AI-generated images`);
+              supabaseClient.functions.invoke('generate-vehicle-images', {
+                body: {
+                  vehicleId: inserted.id,
+                  vehicleData: {
+                    year: vehicle.year,
+                    make: vehicle.make,
+                    model: vehicle.model,
+                    exterior_color: vehicle.exterior_color,
+                    interior_color: vehicle.interior_color,
+                    vin: vehicle.vin
+                  },
+                  dealershipName: userProfile?.dealership_name || 'DEALER'
+                }
+              }).then(({ data, error }) => {
+                if (!error) {
+                  console.log(`AI image generation completed for vehicle ${inserted.id}`);
+                } else {
+                  console.warn(`AI image generation failed for vehicle ${inserted.id}:`, error);
+                }
+              }).catch(err => console.warn('AI image generation failed:', err));
+            }
+
+            return inserted;
+          } else {
+            console.error(`Failed to insert vehicle ${vehicle.year} ${vehicle.make} ${vehicle.model}:`, error);
+            errors.push({ vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`, error: error?.message });
+            return null;
           }
+        } catch (error) {
+          console.error(`Error processing vehicle ${vehicle.year} ${vehicle.make} ${vehicle.model}:`, error);
+          errors.push({ vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`, error: error.message });
+          return null;
         }
+      });
+
+      try {
+        const batchResults = await Promise.allSettled(batchPromises);
+        const batchInserted = batchResults
+          .filter(result => result.status === 'fulfilled' && result.value)
+          .map(result => (result as PromiseFulfilledResult<any>).value);
         
-        // Generate AI images
-        const { data: imageResult, error: imageError } = await supabaseClient.functions.invoke('generate-vehicle-images', {
-          body: vehicleNeedingImages
-        });
+        insertedVehicles.push(...batchInserted);
+        console.log(`Batch completed: ${batchInserted.length}/${batch.length} vehicles inserted successfully`);
         
-        if (imageError) {
-          console.error(`AI image generation failed for vehicle ${vehicleNeedingImages.vehicleId}:`, imageError);
-          imageGenerationResults.push({
-            vehicleId: vehicleNeedingImages.vehicleId,
-            success: false,
-            error: imageError.message
-          });
-        } else {
-          console.log(`AI image generation completed for vehicle ${vehicleNeedingImages.vehicleId}`);
-          imageGenerationResults.push({
-            vehicleId: vehicleNeedingImages.vehicleId,
-            success: true,
-            generatedImages: imageResult?.generatedImages || 0
-          });
+        // Small delay between batches to prevent overwhelming the database
+        if (i + batchSize < vehicleData.length) {
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
-      } catch (error) {
-        console.error(`Error processing AI images for vehicle ${vehicleNeedingImages.vehicleId}:`, error);
-        imageGenerationResults.push({
-          vehicleId: vehicleNeedingImages.vehicleId,
-          success: false,
-          error: error.message
-        });
+      } catch (batchError) {
+        console.error('Error processing batch:', batchError);
       }
     }
+
+    console.log(`Final result: ${insertedVehicles.length}/${vehicleData.length} vehicles inserted successfully`);
 
     return new Response(
       JSON.stringify({ 
@@ -1304,11 +1320,9 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
         insertedCount: insertedVehicles.length,
         totalFound: vehicleData.length,
         vehicles: insertedVehicles,
-        vehiclesNeedingImages: vehiclesNeedingImages.length,
-        imageGenerationResults,
         errors: errors,
         diagnostics: diagReport,
-        message: `Successfully imported ${insertedVehicles.length} of ${vehicleData.length} vehicles from task ${taskId}. ${vehiclesNeedingImages.length} vehicles queued for AI image generation.`,
+        message: `Successfully imported ${insertedVehicles.length} of ${vehicleData.length} vehicles from task ${taskId}. AI descriptions and images are being generated in the background.`,
         taskId
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
