@@ -56,6 +56,8 @@ Write a description that:
 4. Is 150-300 words long
 5. Ends with a call to action for interested buyers
 6. Avoids excessive capitalization or spammy language
+7. Does not use dashes (-) or asterisks (*) for formatting
+8. May use emojis occasionally for emphasis
 
 Keep it conversational but professional, focusing on value and reliability.`;
 
