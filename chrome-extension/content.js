@@ -505,7 +505,7 @@ class SalesonatorAutomator {
     }
   }
 
-  // Enhanced navigation with better error handling - PREVENTS ANY NAVIGATION AWAY FROM FACEBOOK
+  // Enhanced navigation with better error handling and auto-navigation
   async navigateToMarketplace() {
     const currentUrl = window.location.href;
     this.log('📍 Current URL:', currentUrl);
@@ -516,38 +516,149 @@ class SalesonatorAutomator {
       throw new Error('Must be on Facebook first - please navigate manually');
     }
     
-    if (currentUrl.includes('facebook.com/marketplace/create/vehicle')) {
+    // Check if already on vehicle creation page
+    if (currentUrl.includes('facebook.com/marketplace/create/vehicle') || 
+        this.isOnVehiclePostingDashboard()) {
       this.log('✅ Already on vehicle creation page');
       return;
     }
     
+    // If on marketplace create page but need to select vehicle category
     if (currentUrl.includes('facebook.com/marketplace/create')) {
-      this.log('📝 On marketplace create page, checking for vehicle category...');
-      
-      // Look for vehicle category button/option WITHOUT any navigation
-      const vehicleCategorySelectors = [
-        'aria:Vehicle',
-        'text:Vehicle',
-        'text:Car',
-        'text:Truck',
-        '[data-testid*="vehicle"]',
-        '[data-testid*="car"]'
-      ];
-      
-      try {
-        const vehicleCategory = await this.waitForElement(vehicleCategorySelectors, 3000);
-        await this.scrollIntoView(vehicleCategory);
-        await this.delay(this.randomDelay(300, 600));
-        vehicleCategory.click();
-        await this.delay(this.randomDelay(1000, 2000));
-        return;
-      } catch (error) {
-        this.log('⚠️ Could not find vehicle category, proceeding anyway');
-      }
+      this.log('📝 On marketplace create page, looking for vehicle category...');
+      await this.selectVehicleCategory();
       return;
     }
     
-    // If on Facebook but not marketplace, require manual navigation to prevent redirects
+    // Navigate to marketplace if not already there
+    await this.navigateToMarketplaceCreation();
+  }
+
+  // Check if currently on the vehicle posting dashboard
+  isOnVehiclePostingDashboard() {
+    // Check for key elements that indicate we're on the vehicle posting form
+    const indicators = [
+      document.querySelector('h1')?.textContent?.includes('Vehicle for sale'),
+      document.querySelector('[aria-label*="Vehicle type"]'),
+      document.querySelector('text:About this vehicle'),
+      document.querySelector('[placeholder*="Year"]'),
+      document.querySelector('[placeholder*="Make"]'),
+      document.querySelector('[placeholder*="Model"]'),
+      document.querySelector('text:Add photos'),
+      document.querySelector('text:Add video'),
+      window.location.href.includes('/marketplace/create')
+    ];
+    
+    const foundIndicators = indicators.filter(Boolean).length;
+    this.log(`📊 Found ${foundIndicators} vehicle posting indicators`);
+    
+    // Consider it the vehicle posting dashboard if we find at least 3 indicators
+    return foundIndicators >= 3;
+  }
+
+  // Select vehicle category from the listing type page
+  async selectVehicleCategory() {
+    try {
+      // Look for "Vehicle for sale" option based on the screenshot
+      const vehicleCategorySelectors = [
+        'text:Vehicle for sale',
+        'aria:Vehicle for sale',
+        '[aria-label*="Vehicle for sale"]',
+        'text:Sell a car, truck or other type of vehicle',
+        // Fallback selectors
+        'text:Vehicle',
+        'text:Car',
+        'text:Truck',
+        '[data-testid*="vehicle"]'
+      ];
+      
+      this.log('🔍 Looking for vehicle category option...');
+      const vehicleOption = await this.waitForElement(vehicleCategorySelectors, 5000);
+      
+      if (vehicleOption) {
+        this.log('✅ Found vehicle category option, clicking...');
+        await this.scrollIntoView(vehicleOption);
+        await this.delay(this.randomDelay(300, 600));
+        
+        // Click the vehicle option
+        vehicleOption.click();
+        await this.delay(this.randomDelay(1500, 2500));
+        
+        // Wait for the vehicle form to load
+        await this.waitForElement([
+          '[aria-label*="Vehicle type"]',
+          'text:About this vehicle',
+          '[placeholder*="Year"]'
+        ], 10000);
+        
+        this.log('✅ Vehicle category selected, form loaded');
+      }
+    } catch (error) {
+      this.log('❌ Failed to select vehicle category:', error);
+      throw new Error('Could not find or select vehicle category');
+    }
+  }
+
+  // Navigate to marketplace creation page
+  async navigateToMarketplaceCreation() {
+    try {
+      this.log('🧭 Navigating to marketplace...');
+      
+      // First, try to find and click the Marketplace link in the sidebar
+      const marketplaceSelectors = [
+        'a[href*="/marketplace"]',
+        'text:Marketplace',
+        'aria:Marketplace',
+        '[aria-label*="Marketplace"]'
+      ];
+      
+      const marketplaceLink = await this.waitForElement(marketplaceSelectors, 5000);
+      
+      if (marketplaceLink) {
+        this.log('✅ Found marketplace link, clicking...');
+        await this.scrollIntoView(marketplaceLink);
+        await this.delay(this.randomDelay(300, 600));
+        marketplaceLink.click();
+        await this.delay(this.randomDelay(2000, 3000));
+      } else {
+        // Fallback: navigate directly using the URL
+        this.log('🔄 Marketplace link not found, navigating directly...');
+        window.location.href = 'https://www.facebook.com/marketplace/?ref=bookmark';
+        await this.delay(3000);
+      }
+      
+      // Now look for "Create new listing" or "Sell" button
+      const createListingSelectors = [
+        'text:Create new listing',
+        'text:Sell',
+        'aria:Create new listing',
+        'aria:Sell',
+        '[aria-label*="Create"]',
+        '[aria-label*="Sell"]',
+        'a[href*="/marketplace/create"]'
+      ];
+      
+      this.log('🔍 Looking for create listing button...');
+      const createButton = await this.waitForElement(createListingSelectors, 10000);
+      
+      if (createButton) {
+        this.log('✅ Found create listing button, clicking...');
+        await this.scrollIntoView(createButton);
+        await this.delay(this.randomDelay(300, 600));
+        createButton.click();
+        await this.delay(this.randomDelay(2000, 3000));
+        
+        // Now we should be on the listing type selection page
+        // Automatically select vehicle category
+        await this.selectVehicleCategory();
+      } else {
+        throw new Error('Could not find create listing button');
+      }
+      
+    } catch (error) {
+      this.log('❌ Navigation to marketplace failed:', error);
+      throw new Error('Failed to navigate to marketplace creation page');
+    }
     if (currentUrl.includes('facebook.com') && !currentUrl.includes('marketplace')) {
       this.log('⚠️ On Facebook but not Marketplace - manual navigation required to prevent redirects');
       throw new Error('Please navigate to Facebook Marketplace manually - extension will NOT auto-navigate to prevent redirects');
