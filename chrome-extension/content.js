@@ -6,6 +6,7 @@ class SalesonatorAutomator {
     this.isPosting = false;
     this.debugMode = true;
     this.retryAttempts = 3;
+    this.uploadedImages = []; // Track uploaded images to prevent duplicates
     this.setupMessageListener();
     this.installNavigationGuards();
   }
@@ -449,6 +450,7 @@ class SalesonatorAutomator {
     try {
       this.log('🚗 Starting enhanced vehicle posting process...', vehicleData);
       this.isPosting = true;
+      this.uploadedImages = []; // Reset uploaded images tracking for new posting session
       
       for (let attempt = 0; attempt < this.retryAttempts; attempt++) {
         try {
@@ -472,6 +474,7 @@ class SalesonatorAutomator {
           if (success) {
             this.log('✅ Vehicle posted successfully');
             this.isPosting = false;
+            this.uploadedImages = []; // Reset for next posting session
             return { success: true };
           }
           
@@ -496,6 +499,7 @@ class SalesonatorAutomator {
     } catch (error) {
       this.log('❌ Vehicle posting failed completely:', error);
       this.isPosting = false;
+      this.uploadedImages = []; // Reset on failure too
       return { success: false, error: error.message };
     }
   }
@@ -2278,6 +2282,12 @@ class SalesonatorAutomator {
       this.log('📸 Starting enhanced image upload process...');
       this.log('📸 Processing image uploads for Facebook Marketplace...');
       
+      // Check if we've already uploaded images for this session to prevent duplicates
+      if (this.uploadedImages && this.uploadedImages.length > 0) {
+        this.log('📸 Images already uploaded in this session, skipping duplicate upload');
+        return true;
+      }
+      
       // Find existing file input without triggering dialog
       const fileInputSelectors = [
         'input[type="file"][accept*="image"]',
@@ -2330,11 +2340,29 @@ class SalesonatorAutomator {
         throw new Error('No file input found on page');
       }
       
+      // Check if file input already has files to prevent duplicates
+      if (fileInput.files && fileInput.files.length > 0) {
+        this.log(`📸 File input already contains ${fileInput.files.length} files, checking for duplicates...`);
+        
+        // Create set of existing file names for comparison
+        const existingFileNames = Array.from(fileInput.files).map(f => f.name);
+        this.log('📸 Existing files:', existingFileNames);
+        
+        // If we already have the expected number of files, skip upload
+        const uniqueImages = Array.from(new Set((images || []).filter(Boolean)));
+        if (fileInput.files.length >= uniqueImages.length) {
+          this.log('📸 File input already contains sufficient images, skipping duplicate upload');
+          this.uploadedImages = uniqueImages; // Track uploaded images
+          return true;
+        }
+      }
+      
       this.log('📸 Found file input, proceeding with image processing...');
       
       // Get pre-downloaded images or download them now
-        const uniqueImages = Array.from(new Set((images || []).filter(Boolean)));
-        this.log(`📸 Processing ${uniqueImages.length} images (deduped)...`);
+      const uniqueImages = Array.from(new Set((images || []).filter(Boolean)));
+      this.log(`📸 Processing ${uniqueImages.length} unique images (URL-deduped)...`);
+      
       const files = await this.getPreDownloadedImages(uniqueImages);
       
       if (files.filter(f => f !== null).length === 0) {
@@ -2345,17 +2373,34 @@ class SalesonatorAutomator {
       
       const validFiles = files.filter(file => file !== null);
       
-      this.log(`📸 Successfully processed ${validFiles.length} out of ${uniqueImages.length} images`);
+      // Additional deduplication by file content size and name
+      const deduplicatedFiles = [];
+      const seenSizes = new Set();
       
-      if (validFiles.length === 0) {
-        this.log('❌ No valid images to upload');
+      for (const file of validFiles) {
+        const sizeKey = `${file.size}_${file.name}`;
+        if (!seenSizes.has(sizeKey)) {
+          seenSizes.add(sizeKey);
+          deduplicatedFiles.push(file);
+        } else {
+          this.log(`📸 Skipping duplicate file: ${file.name} (${file.size} bytes)`);
+        }
+      }
+      
+      this.log(`📸 After content deduplication: ${deduplicatedFiles.length} unique files`);
+      
+      if (deduplicatedFiles.length === 0) {
+        this.log('❌ No valid images to upload after deduplication');
         return false;
       }
       
       // Use advanced React-compatible file setting
-      await this.setFilesWithReactCompatibility(fileInput, validFiles);
+      await this.setFilesWithReactCompatibility(fileInput, deduplicatedFiles);
       
-      this.log(`✅ Successfully uploaded ${validFiles.length} images`);
+      // Track uploaded images to prevent future duplicates
+      this.uploadedImages = uniqueImages;
+      
+      this.log(`✅ Successfully uploaded ${deduplicatedFiles.length} unique images`);
       return true;
       
     } catch (error) {
