@@ -34,6 +34,30 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') ?? ''
     );
 
+    // Check if AI image generation is enabled site-wide
+    const { data: settings, error: settingsError } = await supabaseClient
+      .from('site_settings')
+      .select('setting_value')
+      .eq('setting_key', 'ai_image_generation_enabled')
+      .maybeSingle();
+
+    if (settingsError) {
+      console.error('Error fetching site settings:', settingsError);
+    }
+
+    const isEnabled = settings?.setting_value?.enabled !== false; // Default to true if not found
+    
+    if (!isEnabled) {
+      console.log('AI image generation is disabled site-wide');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'AI image generation is currently disabled site-wide' 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log('Starting AI image generation for vehicle:', {
       id: vehicleId,
       year: vehicleData.year,

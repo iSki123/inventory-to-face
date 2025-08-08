@@ -5,11 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { RefreshCw, Database, Car, Zap, Clock, CheckCircle2 } from "lucide-react";
+import { RefreshCw, Database, Car, Zap, Clock, CheckCircle2, Image } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 
 export default function AdminPanel() {
   const [isForceDecoding, setIsForceDecoding] = useState(false);
@@ -17,6 +19,9 @@ export default function AdminPanel() {
   const [singleVin, setSingleVin] = useState("");
   const [isDecodingSingle, setIsDecodingSingle] = useState(false);
   const [result, setResult] = useState<any>(null);
+  
+  // Site settings
+  const { getSetting, updateSetting, loading: settingsLoading } = useSiteSettings();
 
   // Get VIN statistics
   const { data: vinStats, refetch: refetchStats } = useQuery({
@@ -148,12 +153,16 @@ export default function AdminPanel() {
     }
   };
 
+  const handleAIImageToggle = async (enabled: boolean) => {
+    await updateSetting('ai_image_generation_enabled', { enabled });
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Admin Panel - VIN Management</h1>
+        <h1 className="text-3xl font-bold">Admin Panel</h1>
         <p className="text-muted-foreground">
-          Monitor and control VIN decoding operations
+          Manage site settings and VIN decoding operations
         </p>
       </div>
 
@@ -188,6 +197,35 @@ export default function AdminPanel() {
                 }
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Site Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Image className="h-5 w-5" />
+            Site Settings
+          </CardTitle>
+          <CardDescription>
+            Configure global site functionality
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label htmlFor="ai-image-toggle">AI Image Generation</Label>
+              <p className="text-sm text-muted-foreground">
+                Enable or disable AI-generated images for vehicles site-wide
+              </p>
+            </div>
+            <Switch
+              id="ai-image-toggle"
+              checked={getSetting('ai_image_generation_enabled', { enabled: true })?.enabled}
+              onCheckedChange={handleAIImageToggle}
+              disabled={settingsLoading}
+            />
           </div>
         </CardContent>
       </Card>

@@ -656,6 +656,26 @@ export const useVehicles = () => {
 
   const generateAIImages = async (vehicleIds: string[]) => {
     setLoading(true);
+    
+    // Check if AI image generation is enabled site-wide
+    const { data: settings } = await supabase
+      .from('site_settings')
+      .select('setting_value')
+      .eq('setting_key', 'ai_image_generation_enabled')
+      .maybeSingle();
+
+    const isEnabled = (settings?.setting_value as any)?.enabled !== false; // Default to true
+    
+    if (!isEnabled) {
+      toast({
+        title: "Feature Disabled",
+        description: "AI image generation is currently disabled site-wide",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+    
     toast({
       title: "Generating AI Images",
       description: `Starting AI image generation for ${vehicleIds.length} vehicle${vehicleIds.length > 1 ? 's' : ''}...`,

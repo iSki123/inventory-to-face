@@ -1396,10 +1396,19 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
               }).catch(err => console.warn('AI description generation failed:', err));
             }
             
-            // Generate AI images asynchronously if no images exist OR if images array has less than 3 images
-            console.log(`Checking AI image generation for vehicle ${inserted.id}: images = ${JSON.stringify(vehicle.images)}, length = ${vehicle.images?.length || 0}`);
+            // Check if AI image generation is enabled before proceeding
+            const { data: settings } = await supabaseClient
+              .from('site_settings')
+              .select('setting_value')
+              .eq('setting_key', 'ai_image_generation_enabled')
+              .maybeSingle();
+
+            const isAIImageEnabled = settings?.setting_value?.enabled !== false; // Default to true
             
-            if (!vehicle.images || vehicle.images.length < 3) {
+            // Generate AI images asynchronously if enabled and no images exist OR if images array has less than 3 images
+            console.log(`Checking AI image generation for vehicle ${inserted.id}: images = ${JSON.stringify(vehicle.images)}, length = ${vehicle.images?.length || 0}, AI enabled = ${isAIImageEnabled}`);
+            
+            if (isAIImageEnabled && (!vehicle.images || vehicle.images.length < 3)) {
               console.log(`Vehicle ${inserted.id} has ${vehicle.images?.length || 0} images (less than 3), generating AI images`);
               console.log('Calling generate-vehicle-images function...');
               
@@ -1426,6 +1435,8 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
               }).catch(err => {
                 console.warn('AI image generation request failed:', err?.message || err);
               });
+            } else if (!isAIImageEnabled) {
+              console.log(`AI image generation is disabled site-wide, skipping for vehicle ${inserted.id}`);
             } else {
               console.log(`Vehicle ${inserted.id} already has ${vehicle.images.length} images (3 or more), skipping AI generation`);
             }
