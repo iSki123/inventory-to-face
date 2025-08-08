@@ -81,6 +81,8 @@ export const useChatMessages = (channelId: string) => {
   useEffect(() => {
     if (!channelId) return;
 
+    console.log(`Setting up real-time subscription for channel: ${channelId}`);
+
     const channel = supabase
       .channel(`chat-messages-${channelId}`)
       .on(
@@ -91,10 +93,36 @@ export const useChatMessages = (channelId: string) => {
           table: 'chat_messages',
           filter: `channel_id=eq.${channelId}`,
         },
-        (payload) => {
-          console.log('New message received:', payload);
-          // Invalidate and refetch messages to get the full data with joins
-          queryClient.invalidateQueries({ queryKey: ["chat-messages", channelId] });
+        async (payload) => {
+          console.log('New message received via real-time:', payload);
+          
+          // Get the profile data for the new message
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('first_name, last_name, role')
+            .eq('user_id', payload.new.user_id)
+            .single();
+
+          // Create the full message object with profile data
+          const newMessage = {
+            ...payload.new,
+            profiles: profileData
+          } as ChatMessage;
+
+          // Update the query cache directly with the new message
+          queryClient.setQueryData(
+            ["chat-messages", channelId],
+            (oldData: ChatMessage[] | undefined) => {
+              if (!oldData) return [newMessage];
+              
+              // Check if message already exists (avoid duplicates)
+              const messageExists = oldData.some(msg => msg.id === newMessage.id);
+              if (messageExists) return oldData;
+              
+              // Add the new message to the end of the list
+              return [...oldData, newMessage];
+            }
+          );
         }
       )
       .on(
@@ -105,17 +133,73 @@ export const useChatMessages = (channelId: string) => {
           table: 'chat_messages',
           filter: `channel_id=eq.${channelId}`,
         },
+        async (payload) => {
+          console.log('Message updated via real-time:', payload);
+          
+          // Get the profile data for the updated message
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('first_name, last_name, role')
+            .eq('user_id', payload.new.user_id)
+            .single();
+
+          // Create the full message object with profile data
+          const updatedMessage = {
+            ...payload.new,
+            profiles: profileData
+          } as ChatMessage;
+
+          // Update the specific message in the query cache
+          queryClient.setQueryData(
+            ["chat-messages", channelId],
+            (oldData: ChatMessage[] | undefined) => {
+              if (!oldData) return [updatedMessage];
+              
+              return oldData.map(msg => 
+                msg.id === updatedMessage.id ? updatedMessage : msg
+              );
+            }
+          );
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `channel_id=eq.${channelId}`,
+        },
         (payload) => {
-          console.log('Message updated:', payload);
-          queryClient.invalidateQueries({ queryKey: ["chat-messages", channelId] });
+          console.log('Message deleted via real-time:', payload);
+          
+          // Remove the deleted message from the query cache
+          queryClient.setQueryData(
+            ["chat-messages", channelId],
+            (oldData: ChatMessage[] | undefined) => {
+              if (!oldData) return [];
+              return oldData.filter(msg => msg.id !== payload.old.id);
+            }
+          );
         }
       )
       .subscribe((status) => {
         console.log('Chat subscription status:', status);
         setIsConnected(status === 'SUBSCRIBED');
+        
+        if (status === 'SUBSCRIBED') {
+          console.log(`✅ Successfully subscribed to real-time updates for channel ${channelId}`);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error(`❌ Real-time subscription error for channel ${channelId}`);
+          setIsConnected(false);
+        } else if (status === 'TIMED_OUT') {
+          console.warn(`⏰ Real-time subscription timed out for channel ${channelId}`);
+          setIsConnected(false);
+        }
       });
 
     return () => {
+      console.log(`Cleaning up real-time subscription for channel: ${channelId}`);
       supabase.removeChannel(channel);
       setIsConnected(false);
     };
@@ -157,9 +241,68 @@ export const useChatMessages = (channelId: string) => {
 
       return data;
     },
-    onError: (error) => {
+    onMutate: async ({ content, messageType, vehicleId }) => {
+      // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
+      await queryClient.cancelQueries({ queryKey: ["chat-messages", channelId] });
+
+      // Snapshot the previous value
+      const previousMessages = queryClient.getQueryData<ChatMessage[]>(["chat-messages", channelId]);
+
+      // Get current user profile for optimistic update
+      const { data: currentUserProfile } = await supabase
+        .from('profiles')
+        .select('first_name, last_name, role')
+        .eq('user_id', user?.id)
+        .single();
+
+      // Optimistically update to the new value
+      const optimisticMessage: ChatMessage = {
+        id: `temp-${Date.now()}`, // Temporary ID
+        channel_id: channelId,
+        user_id: user?.id || '',
+        message_content: content,
+        message_type: messageType,
+        parent_message_id: undefined,
+        vehicle_id: vehicleId,
+        attachments: undefined,
+        reactions: {},
+        is_pinned: false,
+        is_deleted: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        profiles: currentUserProfile
+      };
+
+      queryClient.setQueryData<ChatMessage[]>(
+        ["chat-messages", channelId],
+        (old) => [...(old ?? []), optimisticMessage]
+      );
+
+      // Return a context object with the snapshotted value
+      return { previousMessages, optimisticMessage };
+    },
+    onError: (error, variables, context) => {
       console.error("Failed to send message:", error);
       toast.error("Failed to send message");
+      
+      // If the mutation fails, use the context returned from onMutate to roll back
+      if (context?.previousMessages) {
+        queryClient.setQueryData(["chat-messages", channelId], context.previousMessages);
+      }
+    },
+    onSuccess: (data, variables, context) => {
+      // Replace the optimistic message with the real one from the server
+      queryClient.setQueryData<ChatMessage[]>(
+        ["chat-messages", channelId],
+        (old) => {
+          if (!old) return [data];
+          
+          // Remove the optimistic message and add the real one
+          const filtered = old.filter(msg => msg.id !== context?.optimisticMessage?.id);
+          return [...filtered];
+          // Note: The real message will be added by the real-time subscription
+        }
+      );
     },
   });
 
