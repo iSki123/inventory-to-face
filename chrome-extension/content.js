@@ -1417,132 +1417,151 @@ class SalesonatorAutomator {
     }
   }
 
-  // Select Interior Color dropdown
+  // Select Interior Color dropdown with enhanced detection (similar to vehicle condition)
   async selectInteriorColor(interiorColor) {
     try {
       this.log(`🪑 Selecting interior color: ${interiorColor}`);
       console.log(`[INTERIOR COLOR DEBUG] Starting interior color selection for: ${interiorColor}`);
       
-      // Clean interior color string
+      // Clean interior color string (remove extra spaces)
       const cleanInteriorColor = (interiorColor || '').toString().trim();
       
-      // Find interior color dropdown using the same proven selectors as other successful dropdowns
+      // Look for interior color dropdown more specifically using proven selectors
       const interiorColorDropdownSelectors = [
-        'text:Interior color',
+        'text:Interior color', // Visible label
+        'text:Interior', // Shorter label 
         '[aria-label*="Interior color"]',
-        'div[role="button"]:has-text("Interior color")',
-        'span:has-text("Interior color")',
-        '[data-testid*="interior"]'
+        '[aria-label*="Interior"]',
+        'div[role="button"]', // Generic fallback
+        'select'
       ];
       
-      console.log(`[INTERIOR COLOR DEBUG] Searching for interior color dropdown with selectors:`, interiorColorDropdownSelectors);
+      console.log(`[INTERIOR COLOR DEBUG] Looking for interior color dropdown with selectors:`, interiorColorDropdownSelectors);
       
       const interiorColorDropdown = await this.waitForElement(interiorColorDropdownSelectors, 8000);
-      if (!interiorColorDropdown) {
-        throw new Error('Interior color dropdown not found');
-      }
-      
-      console.log(`[INTERIOR COLOR DEBUG] Found interior color dropdown:`, interiorColorDropdown);
-      console.log(`[INTERIOR COLOR DEBUG] Dropdown tagName:`, interiorColorDropdown.tagName);
-      console.log(`[INTERIOR COLOR DEBUG] Dropdown textContent:`, interiorColorDropdown.textContent);
-      
       await this.scrollIntoView(interiorColorDropdown);
-      this.log('🪑 Found interior color dropdown, clicking to open...');
+      await this.delay(this.randomDelay(500, 1000));
       
-      console.log(`[INTERIOR COLOR DEBUG] Clicking interior color dropdown...`);
-      // Use the same reliable open sequence as other successful dropdowns
+      this.log('🪑 Found interior color dropdown, clicking to open...');
+      console.log(`[INTERIOR COLOR DEBUG] Found dropdown:`, interiorColorDropdown);
+      
+      // Use a more reliable open sequence for React-controlled dropdowns
       interiorColorDropdown.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
       interiorColorDropdown.click();
       await this.delay(this.randomDelay(1200, 1800)); // Wait for dropdown to open
       
-      console.log(`[INTERIOR COLOR DEBUG] Checking if dropdown opened...`);
-      const optionsAfterClick = document.querySelectorAll('[role="option"]');
-      console.log(`[INTERIOR COLOR DEBUG] Found options after click:`, optionsAfterClick.length);
-      
-      // Log first 20 options to debug
-      Array.from(optionsAfterClick).slice(0, 20).forEach((opt, idx) => {
-        console.log(`[INTERIOR COLOR DEBUG] Option ${idx + 1}:`, opt.textContent?.trim());
-      });
-      
-      // Enhanced option detection using same proven methods
-      let interiorColorOption = null;
-      
-      // Method 1: Direct text search using the proven waitForElement pattern
+      // Prefer searching within the options container only
+      let optionsContainer = null;
       try {
-        console.log(`[INTERIOR COLOR DEBUG] Trying direct text search for: ${cleanInteriorColor}`);
-        interiorColorOption = await this.waitForElement(`text:${cleanInteriorColor}`, 2000);
-        console.log(`[INTERIOR COLOR DEBUG] Direct text search result:`, interiorColorOption);
-      } catch (e) {
-        console.log(`[INTERIOR COLOR DEBUG] Direct text search failed:`, e.message);
+        optionsContainer = await this.waitForElement(['[role="listbox"]', '[role="menu"]'], 4000);
+        console.log(`[INTERIOR COLOR DEBUG] Found options container:`, optionsContainer);
+      } catch {
+        console.log(`[INTERIOR COLOR DEBUG] No options container found, using document scope`);
       }
       
-      // Method 2: Manual search through options if direct search fails
-      if (!interiorColorOption && optionsAfterClick.length > 0) {
-        console.log(`[INTERIOR COLOR DEBUG] Trying manual search through ${optionsAfterClick.length} options...`);
-        
-        // Normalize the target color for comparison
-        const normalized = cleanInteriorColor.toLowerCase();
-        
-        // Method 2a: Exact match
-        interiorColorOption = Array.from(optionsAfterClick).find(opt => 
-          opt.textContent?.trim().toLowerCase() === normalized
-        );
-        
-        // Method 2b: Fuzzy match if exact fails
-        if (!interiorColorOption) {
-          interiorColorOption = Array.from(optionsAfterClick).find(opt => 
-            opt.textContent?.trim().toLowerCase().includes(normalized.toLowerCase())
-          );
+      const getExactOption = () => {
+        const scope = optionsContainer || document;
+        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
+        console.log(`[INTERIOR COLOR DEBUG] Found ${opts.length} options in scope`);
+        const found = opts.find(o => {
+          const text = (o.textContent || '').trim().toLowerCase();
+          console.log(`[INTERIOR COLOR DEBUG] Checking option: "${text}" against "${cleanInteriorColor.toLowerCase()}"`);
+          return text === cleanInteriorColor.toLowerCase();
+        });
+        if (found) console.log(`[INTERIOR COLOR DEBUG] Exact match found:`, found);
+        return found;
+      };
+      
+      const getFuzzyOption = () => {
+        const scope = optionsContainer || document;
+        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
+        const found = opts.find(o => {
+          const text = (o.textContent || '').toLowerCase();
+          return text.includes(cleanInteriorColor.toLowerCase());
+        });
+        if (found) console.log(`[INTERIOR COLOR DEBUG] Fuzzy match found:`, found);
+        return found;
+      };
+      
+      let interiorColorOption = getExactOption();
+      
+      // If not found, try typeahead (Facebook supports it)
+      if (!interiorColorOption && cleanInteriorColor) {
+        console.log(`[INTERIOR COLOR DEBUG] Trying typeahead for: ${cleanInteriorColor}`);
+        for (const ch of cleanInteriorColor.toLowerCase()) {
+          interiorColorDropdown.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
+          await this.delay(this.randomDelay(40, 100));
         }
-        
-        // Method 2c: Try common variations for interior colors
-        if (!interiorColorOption && normalized === 'black') {
-          interiorColorOption = Array.from(optionsAfterClick).find(opt => {
-            const text = opt.textContent?.trim().toLowerCase();
-            return text === 'black' || text === 'charcoal' || text === 'dark';
-          });
-        }
-        
-        console.log(`[INTERIOR COLOR DEBUG] Manual search result:`, interiorColorOption);
+        await this.delay(this.randomDelay(300, 600));
+        interiorColorOption = getExactOption();
+      }
+      
+      // Fallback to fuzzy match
+      if (!interiorColorOption) {
+        console.log(`[INTERIOR COLOR DEBUG] Trying fuzzy match`);
+        interiorColorOption = getFuzzyOption();
+      }
+      
+      // Ultimate fallback: any element with the text inside the container
+      if (!interiorColorOption) {
+        console.log(`[INTERIOR COLOR DEBUG] Trying ultimate fallback search`);
+        const elem = this.findElementByText(cleanInteriorColor, ['div','span','li'], optionsContainer || document);
+        if (elem) interiorColorOption = elem.closest('[role="option"]') || elem;
+        if (interiorColorOption) console.log(`[INTERIOR COLOR DEBUG] Ultimate fallback found:`, interiorColorOption);
       }
       
       if (!interiorColorOption) {
-        console.log(`[INTERIOR COLOR DEBUG] ❌ No interior color option found for: ${cleanInteriorColor}`);
-        console.log(`[INTERIOR COLOR DEBUG] Available options:`, Array.from(optionsAfterClick).map(opt => opt.textContent?.trim()));
-        throw new Error(`Interior color option ${cleanInteriorColor} not found among ${optionsAfterClick.length} options`);
+        console.log(`[INTERIOR COLOR DEBUG] No interior color option found for "${cleanInteriorColor}"`);
+        // Show available options for debugging
+        const allOpts = Array.from((optionsContainer || document).querySelectorAll('[role="option"]'));
+        console.log(`[INTERIOR COLOR DEBUG] Available options:`, allOpts.map(opt => opt.textContent?.trim()));
+        throw new Error(`Interior color option not found for "${cleanInteriorColor}"`);
       }
       
-      console.log(`[INTERIOR COLOR DEBUG] 🪑 Found interior color option, clicking: ${cleanInteriorColor}`);
-      await this.performFacebookDropdownClick(interiorColorOption);
-      await this.delay(2000);
+      console.log(`[INTERIOR COLOR DEBUG] Selected interior color option:`, interiorColorOption);
+      await this.scrollIntoView(interiorColorOption);
+      await this.delay(this.randomDelay(300, 600));
+      interiorColorOption.click();
+      await this.delay(this.randomDelay(1000, 1500)); // Wait for selection to register
       
-      // Enhanced verification
-      console.log(`[INTERIOR COLOR DEBUG] Verifying interior color selection...`);
-      await this.delay(500);
-      console.log(`[INTERIOR COLOR DEBUG] Dropdown selected value:`, interiorColorDropdown.textContent?.trim());
+      // Enhanced verification with multiple checks (same as vehicle condition)
+      const verifications = {
+        dropdownText: false,
+        selectedValue: false,
+        ariaSelected: false
+      };
       
-      // Check if interior color appears in form
-      const dropdownText = interiorColorDropdown.textContent?.trim();
-      const success = dropdownText?.includes(cleanInteriorColor) || 
-                     dropdownText?.includes(interiorColor) ||
-                     document.body.textContent.includes(`Interior color: ${cleanInteriorColor}`);
+      // Check if dropdown text changed
+      const dropdownText = (interiorColorDropdown.textContent || '').toLowerCase();
+      verifications.dropdownText = dropdownText.includes(cleanInteriorColor.toLowerCase());
+      console.log(`[INTERIOR COLOR DEBUG] Dropdown text verification: ${verifications.dropdownText} (text: "${dropdownText}")`);
       
-      console.log(`[INTERIOR COLOR DEBUG] Interior color verification:`, {
-        dropdownContainsColor: dropdownText?.includes(cleanInteriorColor),
-        success: success
-      });
+      // Check if there's a selected value attribute
+      if (interiorColorDropdown.value) {
+        verifications.selectedValue = interiorColorDropdown.value.toLowerCase().includes(cleanInteriorColor.toLowerCase());
+        console.log(`[INTERIOR COLOR DEBUG] Selected value verification: ${verifications.selectedValue} (value: "${interiorColorDropdown.value}")`);
+      }
+      
+      // Check if the option is marked as selected
+      if (interiorColorOption.getAttribute('aria-selected') === 'true') {
+        verifications.ariaSelected = true;
+        console.log(`[INTERIOR COLOR DEBUG] Aria-selected verification: ${verifications.ariaSelected}`);
+      }
+      
+      const success = Object.values(verifications).some(v => v);
       
       if (success) {
-        this.log(`✅ Successfully filled interior color: ${cleanInteriorColor}`);
+        this.log('✅ Successfully selected interior color:', cleanInteriorColor);
         return true;
       } else {
-        this.log(`⚠️ Interior color selection may have failed - dropdown text: ${dropdownText}`);
+        console.log(`[INTERIOR COLOR DEBUG] Interior color selection may have failed - no evidence of selection found`);
+        this.log('⚠️ Interior color selection verification failed for:', cleanInteriorColor);
         return false;
       }
       
     } catch (error) {
+      console.log(`[INTERIOR COLOR DEBUG] Error in selectInteriorColor:`, error);
       this.log(`⚠️ Could not select interior color: ${interiorColor}`, error);
-      console.log(`[INTERIOR COLOR DEBUG] ❌ Error selecting interior color:`, error);
       return false;
     }
   }
