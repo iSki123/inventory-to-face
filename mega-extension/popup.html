@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Salesonator Mega Extension</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding:12px; width: 320px; }
+      .row{ display:flex; align-items:center; justify-content:space-between; margin:6px 0; }
+      button{ padding:8px 10px; border-radius:6px; border:1px solid #ddd; background:#0B81FF; color:#fff; cursor:pointer; }
+      button.secondary{ background:#f5f5f5; color:#111; }
+      small{ color:#666; }
+      input[type="text"]{ width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; }
+      label{ font-size: 13px; }
+      .muted{ color:#666; font-size:12px; }
+    </style>
+  </head>
+  <body>
+    <h3>Salesonator</h3>
+    <div class="row">
+      <div id="auth-status" class="muted">Checking auth…</div>
+      <button id="sso">Login via Salesonator SSO</button>
+    </div>
+
+    <div class="row">
+      <label><input type="checkbox" id="useReverseEng"/> Use reverseeng helpers</label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="requireAdmin"/> Require Admin (SSO)</label>
+    </div>
+
+    <div style="margin:8px 0;">
+      <label>Web App Origin (optional)</label>
+      <input id="origin" type="text" placeholder="e.g. https://yoursite.lovable.app"/>
+      <small>Used for SSO scanning if multiple environments.</small>
+    </div>
+
+    <div class="row">
+      <button id="fetch">Fetch Pending Vehicles</button>
+      <button id="start" class="secondary">Start Posting</button>
+    </div>
+
+    <pre id="log" style="white-space:pre-wrap; max-height:180px; overflow:auto; background:#fafafa; padding:8px; border:1px solid #eee; border-radius:6px;"></pre>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
