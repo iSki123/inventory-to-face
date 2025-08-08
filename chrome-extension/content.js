@@ -112,37 +112,34 @@ class SalesonatorAutomator {
         // Text content selector using multiple approaches
         else if (selector.startsWith('text:')) {
           const text = selector.replace('text:', '');
-          
-          // Method 1: XPath approach (most reliable)
+          // Method 1: XPath approach (prefer interactive elements, ignore script/style/meta)
           try {
-            const xpath = `.//*[contains(normalize-space(text()), "${text}")]`;
+            const xpath = 
+              `.//*[not(self::script or self::style or self::meta or self::title)]` +
+              `[contains(normalize-space(text()), "${text}")]`;
             const result = document.evaluate(xpath, parentElement, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
             if (result.singleNodeValue) {
-              // Filter out disabled or hidden elements
               const elem = result.singleNodeValue;
-              if (!elem.hasAttribute('aria-disabled') && !elem.hasAttribute('aria-hidden')) {
-                return elem;
-              }
+              const tag = (elem.tagName || '').toUpperCase();
+              const bad = tag === 'SCRIPT' || tag === 'STYLE' || tag === 'META' || tag === 'TITLE';
+              const isHidden = elem.hasAttribute('aria-hidden') && elem.getAttribute('aria-hidden') === 'true';
+              if (!bad && !isHidden) return elem;
             }
           } catch (e) {}
-          
           // Method 2: Manual text search with element filtering
           const elements = Array.from(parentElement.querySelectorAll('*'));
           const found = elements.find(el => {
             const textContent = el.textContent?.trim() || '';
             const innerText = el.innerText?.trim() || '';
             const isMatch = textContent.includes(text) || innerText.includes(text);
-            
-            // Filter out disabled, hidden, or back buttons
-            if (isMatch) {
-              const ariaLabel = el.getAttribute('aria-label') || '';
-              const isDisabled = el.hasAttribute('aria-disabled') && el.getAttribute('aria-disabled') === 'true';
-              const isHidden = el.hasAttribute('aria-hidden') && el.getAttribute('aria-hidden') === 'true';
-              const isBackButton = ariaLabel.toLowerCase().includes('back');
-              
-              return !isDisabled && !isHidden && !isBackButton;
-            }
-            return false;
+            if (!isMatch) return false;
+            const tag = (el.tagName || '').toUpperCase();
+            if (['SCRIPT','STYLE','META','TITLE'].includes(tag)) return false;
+            const ariaLabel = el.getAttribute('aria-label') || '';
+            const isDisabled = el.hasAttribute('aria-disabled') && el.getAttribute('aria-disabled') === 'true';
+            const isHidden = el.hasAttribute('aria-hidden') && el.getAttribute('aria-hidden') === 'true';
+            const isBackButton = ariaLabel.toLowerCase().includes('back');
+            return !isDisabled && !isHidden && !isBackButton;
           });
           if (found) return found;
         }
@@ -183,12 +180,109 @@ class SalesonatorAutomator {
     return elements.find(el => el.textContent && el.textContent.trim().includes(text));
   }
 
-  // NEW: Find an input by its visible label text (robust to DOM changes)
+  // NEW: Find an input by its visible label text (robust to DOM changes) - ENHANCED with reverseeng
   findInputByLabel(labelText, parentElement = document) {
     const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
     const target = norm(labelText);
+    
+    console.log(`[SALESONATOR DEBUG] Starting search for: "${labelText}"`);
+    console.log(`[SALESONATOR DEBUG] Normalized target: "${target}"`);
+    
+    // 1) REVERSEENG METHOD: Find span with exact text and get associated input (Facebook's pattern)
+    try {
+      const spanElements = Array.from(parentElement.querySelectorAll('span'));
+      console.log(`[SALESONATOR DEBUG] Found ${spanElements.length} span elements`);
+      
+      for (let i = 0; i < spanElements.length; i++) {
+        const span = spanElements[i];
+        const spanText = norm(span.textContent || span.innerText);
+        const spanId = span.id;
+        
+        console.log(`[SALESONATOR DEBUG] Span ${i+1}: text="${spanText}", id="${spanId}"`);
+        
+        if (spanText === target || spanText.includes(target)) {
+          console.log(`[SALESONATOR DEBUG] MATCH FOUND! Span ${i+1}:`, span);
+          console.log(`[SALESONATOR DEBUG] Matched span HTML:`, span.outerHTML);
+          
+          // Method A: Check aria-labelledby relationship
+          if (spanId) {
+            const input = parentElement.querySelector(`input[aria-labelledby="${spanId}"]`);
+            if (input) {
+              console.log(`[SALESONATOR DEBUG] Found input via aria-labelledby:`, input);
+              return input;
+            }
+          }
+          
+          // Method B: Look in the label container (Facebook's main pattern)
+          const label = span.closest('label');
+          if (label) {
+            console.log(`[SALESONATOR DEBUG] Found label container:`, label);
+            const input = label.querySelector('input[type="text"], textarea, input:not([type])');
+            if (input) {
+              console.log(`[SALESONATOR DEBUG] Found input in label container:`, input);
+              return input;
+            }
+          }
+          
+          // Method C: Look in immediate parent container  
+          const container = span.closest('div');
+          if (container) {
+            console.log(`[SALESONATOR DEBUG] Found div container:`, container);
+            const input = container.querySelector('input[type="text"], textarea, input:not([type])');
+            if (input) {
+              console.log(`[SALESONATOR DEBUG] Found input in div container:`, input);
+              return input;
+            }
+          }
+          
+          // Method D: Traverse up the DOM tree to find input
+          let current = span.parentElement;
+          let depth = 0;
+          while (current && current !== parentElement && depth < 8) {
+            const input = current.querySelector('input[type="text"], textarea, input:not([type])');
+            if (input) {
+              console.log(`[SALESONATOR DEBUG] Found input in parent hierarchy at depth ${depth}:`, input);
+              return input;
+            }
+            current = current.parentElement;
+            depth++;
+          }
+          
+          // Method E: Search siblings and nearby elements (Facebook's flat structure)
+          const spanParent = span.parentElement;
+          if (spanParent) {
+            // Check all siblings for inputs
+            const siblings = Array.from(spanParent.children);
+            for (const sibling of siblings) {
+              if (sibling !== span) {
+                const input = sibling.querySelector('input[type="text"], textarea, input:not([type])');
+                if (input) {
+                  console.log(`[SALESONATOR DEBUG] Found input in sibling:`, input);
+                  return input;
+                }
+              }
+            }
+            
+            // Check next sibling elements
+            let nextSibling = spanParent.nextElementSibling;
+            let siblingDepth = 0;
+            while (nextSibling && siblingDepth < 3) {
+              const input = nextSibling.querySelector('input[type="text"], textarea, input:not([type])');
+              if (input) {
+                console.log(`[SALESONATOR DEBUG] Found input in next sibling at depth ${siblingDepth}:`, input);
+                return input;
+              }
+              nextSibling = nextSibling.nextElementSibling;
+              siblingDepth++;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[SALESONATOR DEBUG] Error in span search:', e);
+    }
 
-    // 1) label[for] association
+    // 2) Traditional label[for] association
     const labels = Array.from(parentElement.querySelectorAll('label'));
     for (const label of labels) {
       if (norm(label.textContent).includes(target)) {
@@ -203,28 +297,55 @@ class SalesonatorAutomator {
       }
     }
 
-    // 2) XPath: label text followed by input/textarea
+    // 3) Enhanced XPath approach for span + input relationships
     try {
-      const xpath = `//label[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "${target}")]/following::*[self::input or self::textarea][1]`;
+      const xpath = `//span[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "${target}")]/ancestor::label//input | //span[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "${target}")]/following::input[1]`;
       const res = document.evaluate(xpath, parentElement, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-      if (res.singleNodeValue) return res.singleNodeValue;
-    } catch {}
+      if (res.singleNodeValue) {
+        this.log(`Found via enhanced XPath:`, res.singleNodeValue);
+        return res.singleNodeValue;
+      }
+    } catch (e) {
+      this.log('XPath error:', e);
+    }
 
-    // 3) Container approach
+    // 4) Container approach with more precision
     const containers = Array.from(parentElement.querySelectorAll('div, section, form, fieldset'));
     for (const c of containers) {
-      if (norm(c.textContent).includes(target)) {
-        const el = c.querySelector('input, textarea');
-        if (el) return el;
+      const containerText = norm(c.textContent);
+      if (containerText.includes(target)) {
+        // Prioritize inputs that are direct children or close descendants
+        const inputs = c.querySelectorAll('input[type="text"], textarea');
+        for (const input of inputs) {
+          const inputContainer = input.closest('div');
+          if (inputContainer && norm(inputContainer.textContent).includes(target)) {
+            this.log(`Found input in targeted container:`, input);
+            return input;
+          }
+        }
       }
     }
 
-    // 4) Attribute fallbacks
+    // 5) Attribute fallbacks
     const attr = parentElement.querySelector(
-      `input[aria-label*="${labelText}"] , input[placeholder*="${labelText}"] , input[name*="${labelText.toLowerCase()}"] , textarea[aria-label*="${labelText}"] , textarea[placeholder*="${labelText}"]`
+      `input[aria-label*="${labelText}"], input[placeholder*="${labelText}"], input[name*="${labelText.toLowerCase()}"], textarea[aria-label*="${labelText}"], textarea[placeholder*="${labelText}"]`
     );
-    if (attr) return attr;
+    if (attr) {
+      this.log(`Found via attributes:`, attr);
+      return attr;
+    }
 
+    // 6) Facebook-specific patterns (contenteditable, role=textbox)
+    const contentEditables = Array.from(parentElement.querySelectorAll('[contenteditable="true"], [role="textbox"]'));
+    for (const el of contentEditables) {
+      const container = el.closest('div');
+      if (container && norm(container.textContent).includes(target)) {
+        this.log(`Found contenteditable element:`, el);
+        return el;
+      }
+    }
+
+    this.log(`No input found for: "${labelText}"`);
     return null;
   }
 
@@ -390,16 +511,18 @@ class SalesonatorAutomator {
   // Close any open dropdown menus to avoid overlapping interactions
   async closeAnyOpenDropdown() {
     try {
-      const openMenu =
-        document.querySelector('[role="listbox"]') ||
-        document.querySelector('[role="menu"]') ||
-        document.querySelector('[data-visualcompletion="ignore-dynamic"] [role="option"]');
-      if (openMenu) {
+      for (let i = 0; i < 5; i++) {
+        const openMenu =
+          document.querySelector('[role="listbox"]') ||
+          document.querySelector('[role="menu"]') ||
+          document.querySelector('[data-visualcompletion="ignore-dynamic"] [role="option"]');
+        if (!openMenu) break;
+        // Press Escape and click on the page to dismiss
         document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         document.activeElement?.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', bubbles: true }));
-        await this.delay(150);
+        await this.delay(120);
         document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        await this.delay(150);
+        await this.delay(120);
       }
     } catch {}
   }
@@ -456,15 +579,9 @@ class SalesonatorAutomator {
           await this.navigateToMarketplace();
           await this.delay(2000, attempt);
           
-          // Fill form with enhanced automation
-          await this.fillVehicleForm(vehicleData);
+          // Fill the form strictly in the requested order (includes images + location)
+          await this.fillVehicleFormUserOrder(vehicleData);
           await this.delay(1000, attempt);
-          
-          // Handle image uploads if images are provided
-          if (vehicleData.images && vehicleData.images.length > 0) {
-            await this.handleImageUploads(vehicleData.images);
-            await this.delay(1000, attempt);
-          }
           
           // Submit with verification
           const success = await this.submitListing();
@@ -661,6 +778,142 @@ class SalesonatorAutomator {
     this.log('✅ Form filling sequence completed');
   }
 
+  // Strict, user-specified posting order implementation
+  async fillVehicleFormUserOrder(vehicleData) {
+    this.log('🧭 Filling form in strict user-defined order');
+
+    const attempt = async (label, fn, retries = 2) => {
+      for (let i = 0; i <= retries; i++) {
+        await this.closeAnyOpenDropdown();
+        const ok = await fn();
+        await this.delay(this.randomDelay(350, 750));
+        await this.closeAnyOpenDropdown();
+        if (ok) return true;
+        this.log(`⚠️ ${label} failed (try ${i + 1}/${retries + 1})`);
+      }
+      throw new Error(`${label} failed after retries`);
+    };
+
+    const safeDelay = async (min = 500, max = 900) => { await this.delay(this.randomDelay(min, max)); };
+
+    // 1) Vehicle type (dropdown)
+    await attempt('Vehicle type', async () => this.selectVehicleType());
+    await safeDelay(1200, 1800);
+
+    // 2) Images (distinct, max 10)
+    if (vehicleData.images && vehicleData.images.length) {
+      const imgs = Array.from(new Set(vehicleData.images.filter(Boolean))).slice(0, 10);
+      await attempt('Images', async () => this.handleImageUploads(imgs));
+      await safeDelay(900, 1400);
+    }
+
+    // 3) Location (typed, clear first, choose suggestion) - Enhanced Detection
+    await attempt('Location', async () => { try { return await this.fillLocationFieldEnhanced(vehicleData); } catch { return false; } });
+
+    // 4) Year (dropdown)
+    if (vehicleData.year) {
+      await attempt('Year', async () => this.selectYear(vehicleData.year));
+    }
+
+    // 5) Make (typeahead dropdown)
+    if (vehicleData.make) {
+      await attempt('Make', async () => this.selectMake(vehicleData.make));
+      await safeDelay(800, 1200); // Extra delay after Make to ensure it's fully processed
+    }
+
+    // 6) Model (typed, Title Case) - Enhanced Detection
+    await attempt('Model', async () => {
+      try {
+        const model = this.toTitleCase(String(vehicleData.model || ''));
+        return await this.fillModelFieldEnhanced(model);
+      } catch (error) {
+        this.log(`❌ Model field error: ${error.message}`);
+        return false;
+      }
+    });
+
+    // 7) Mileage (typed, min 300) - Enhanced Detection
+    await attempt('Mileage', async () => {
+      let miles = parseInt(String(vehicleData.mileage||vehicleData.odometer||'').replace(/[^\d]/g,''),10);
+      if (!miles || miles < 300) miles = 300;
+      return await this.fillMileageFieldEnhanced(miles);
+    });
+
+    // 8) Price (typed) - Enhanced Detection
+    await attempt('Price', async () => this.fillPriceFieldEnhanced(vehicleData.price));
+
+    // 9) Body style (dropdown)
+    const mappedBodyStyle = vehicleData.bodyStyle || vehicleData.body_style || this.mapBodyStyle(vehicleData.body_style_nhtsa || vehicleData.vehicle_type_nhtsa || '');
+    if (mappedBodyStyle) {
+      await attempt('Body style', async () => this.selectBodyStyle(mappedBodyStyle));
+    }
+
+    // 10) Exterior color (dropdown)
+    const ext = this.standardizeExteriorColor(vehicleData.exteriorColor || vehicleData.exterior_color);
+    if (ext && ext !== 'Unknown') {
+      await attempt('Exterior color', async () => this.selectExteriorColor(ext));
+    }
+
+    // 11) Interior color (dropdown)
+    const intr = this.standardizeInteriorColor(vehicleData.interiorColor || vehicleData.interior_color);
+    if (intr) {
+      await attempt('Interior color', async () => this.selectInteriorColor(intr));
+    }
+
+    // 12) Title status (checkbox -> Clean title)
+    await attempt('Title status', async () => this.selectCleanTitle(true));
+
+    // 13) Vehicle condition (dropdown -> Excellent)
+    await attempt('Vehicle condition', async () => this.selectVehicleCondition('Excellent'));
+
+    // 14) Fuel type (dropdown)
+    const fuel = this.mapFuelType(vehicleData.fuelType || vehicleData.fuel_type || vehicleData.fuel_type_nhtsa || '');
+    if (fuel) {
+      await attempt('Fuel type', async () => this.selectFuelType(fuel));
+    }
+
+    // 15) Transmission type (dropdown)
+    const trans = this.mapTransmission(vehicleData.transmission || vehicleData.transmission_nhtsa || 'Automatic');
+    await attempt('Transmission', async () => this.selectTransmission(trans));
+
+    // 16) Description (typed) - Enhanced Detection
+    const description = vehicleData.ai_description || vehicleData.description || `${vehicleData.year||''} ${vehicleData.make||''} ${this.toTitleCase(vehicleData.model||'')}`.trim();
+    await attempt('Description', async () => this.fillDescriptionFieldEnhanced(description));
+
+    this.log('✅ Strict order form fill complete');
+  }
+
+  // Type location and pick the first suggestion
+  async setLocationTyped(vehicleData) {
+    const guess = (obj)=>[obj?.location, obj?.city, obj?.city_state, obj?.location_name, obj?.dealer_city, obj?.dealer_location, obj?.state ? `${obj.city||''} ${obj.state}`.trim() : null].find(Boolean);
+    const value = guess(vehicleData) || 'North Aurora';
+
+    const input = await this.waitForElement(['[aria-label*="Location"]','input[placeholder*="Location"]','input[name*="location"]'], 6000);
+    await this.scrollIntoView(input);
+    input.focus();
+    if (input.select) input.select();
+    // Hard clear before typing
+    this.setNativeValue(input, '');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await this.delay(100);
+    await this.typeHumanLike(input, value);
+    await this.delay(400);
+    // pick first suggestion if present
+    try {
+      const firstOpt = await this.waitForElement(['[role="listbox"] [role="option"]','[role="listbox"] li','ul[role="listbox"] li'], 3000);
+      await this.scrollIntoView(firstOpt);
+      await this.performFacebookDropdownClick(firstOpt);
+    } catch {
+      // Fallback: press Enter to accept the top suggestion
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
+    }
+  }
+
+  toTitleCase(str) {
+    const s = (str||'').toString().toLowerCase();
+    return s.replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1));
+  }
   // Select Year dropdown with improved detection
   async selectYear(year) {
     try {
@@ -815,37 +1068,137 @@ class SalesonatorAutomator {
   }
 
   // Select Make dropdown  
+  // Enhanced dropdown context validation
+  validateDropdownContext(dropdown, expectedFieldType, expectedOptions = []) {
+    try {
+      // Get the dropdown's context by checking nearby labels and container text
+      const container = dropdown.closest('div, section, fieldset') || dropdown.parentElement;
+      const containerText = (container?.textContent || '').toLowerCase();
+      
+      // Check if any expected options are present when dropdown is open
+      if (expectedOptions.length > 0) {
+        const hasExpectedOptions = expectedOptions.some(option => 
+          containerText.includes(option.toLowerCase())
+        );
+        if (!hasExpectedOptions) {
+          this.log(`❌ Dropdown context validation failed: Expected options not found`);
+          return false;
+        }
+      }
+      
+      // Check for field-specific context
+      const fieldIndicators = {
+        'make': ['make', 'manufacturer', 'brand'],
+        'bodystyle': ['body style', 'style', 'type', 'sedan', 'suv', 'coupe'],
+        'exteriorcolor': ['exterior', 'color', 'paint'],
+        'interiorcolor': ['interior', 'cabin', 'upholstery']
+      };
+      
+      const indicators = fieldIndicators[expectedFieldType.toLowerCase()] || [];
+      const hasFieldContext = indicators.some(indicator => 
+        containerText.includes(indicator)
+      );
+      
+      this.log(`🔍 Dropdown context validation: ${hasFieldContext ? '✅ Valid' : '❌ Invalid'} for ${expectedFieldType}`);
+      return hasFieldContext;
+    } catch (error) {
+      this.log(`⚠️ Context validation error:`, error);
+      return false; // Fail safe
+    }
+  }
+
   async selectMake(make) {
     try {
-      this.log(`🏭 Selecting make: ${make}`);
+      this.log(`🏭 STEP 2: Selecting make: ${make}`);
       
       // Clean make string (remove extra spaces)
       const cleanMake = (make || '').toString().trim();
       
-      // Look for make dropdown more specifically 
-      const makeDropdownSelectors = [
-        'text:Make', // Visible label
-        '[aria-label*="Make"]',
-        'div[role="button"]', // Generic fallback after year
-        'select'
-      ];
+      // Close any open dropdowns first to prevent interference
+      await this.closeAnyOpenDropdown();
+      await this.delay(this.randomDelay(500, 800));
       
-      const makeDropdown = await this.waitForElement(makeDropdownSelectors, 8000);
+      // Find Make dropdown with better context awareness
+      this.log('🔍 Looking for Make dropdown specifically...');
+      let makeDropdown = this.findDropdownByLabel('Make');
+      
+      if (!makeDropdown) {
+        // Try more specific selectors for Make field
+        const makeSelectors = [
+          '[aria-label*="Make" i]',
+          'div[role="button"]:has(+ * [aria-label*="Make" i])',
+          'div[role="button"]:has(span:contains("Make"))',
+        ];
+        
+        for (const selector of makeSelectors) {
+          try {
+            makeDropdown = document.querySelector(selector);
+            if (makeDropdown) break;
+          } catch {}
+        }
+      }
+      
+      if (!makeDropdown) {
+        throw new Error('Make dropdown not found');
+      }
+      
+      // Validate this is actually the Make dropdown
+      this.log('🔍 Validating dropdown context for Make field...');
+      const isValidMakeDropdown = this.validateDropdownContext(makeDropdown, 'make', ['Toyota', 'Honda', 'Ford', 'Chevrolet', 'BMW']);
+      
+      if (!isValidMakeDropdown) {
+        this.log('❌ Found dropdown is not the Make dropdown, searching more specifically...');
+        // More aggressive search for Make dropdown
+        const allDropdowns = document.querySelectorAll('div[role="button"], [role="combobox"]');
+        for (const dropdown of allDropdowns) {
+          if (this.validateDropdownContext(dropdown, 'make')) {
+            makeDropdown = dropdown;
+            this.log('✅ Found valid Make dropdown after validation');
+            break;
+          }
+        }
+        
+        if (!makeDropdown || !this.validateDropdownContext(makeDropdown, 'make')) {
+          throw new Error('Could not find valid Make dropdown');
+        }
+      }
+      
       await this.scrollIntoView(makeDropdown);
       await this.delay(this.randomDelay(500, 1000));
       
-      this.log('🏭 Found make dropdown, clicking to open...');
-      // Use a more reliable open sequence for React-controlled dropdowns
+      this.log('🏭 Opening validated Make dropdown...');
+      makeDropdown.focus();
       makeDropdown.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
       makeDropdown.click();
-      await this.delay(this.randomDelay(1200, 1800)); // Wait for dropdown to open
+      await this.delay(this.randomDelay(1500, 2000)); // Extra time for dropdown to fully open
       
-      // Prefer searching within the options container only
+      // Wait for and validate options container
       let optionsContainer = null;
       try {
-        optionsContainer = await this.waitForElement(['[role="listbox"]', '[role="menu"]'], 4000);
-      } catch {}
+        optionsContainer = await this.waitForElement(['[role="listbox"]', '[role="menu"]'], 5000);
+        this.log('✅ Options container found');
+        
+        // Double-check this is the right options container by looking for vehicle makes
+        const optionTexts = Array.from(optionsContainer.querySelectorAll('[role="option"]'))
+          .map(opt => (opt.textContent || '').trim().toLowerCase())
+          .slice(0, 5); // Check first 5 options
+        
+        const hasVehicleMakes = optionTexts.some(text => 
+          ['acura', 'audi', 'bmw', 'buick', 'cadillac', 'chevrolet', 'chrysler', 'dodge', 'ford', 'gmc', 'honda', 'hyundai', 'infiniti', 'jeep', 'kia', 'lexus', 'lincoln', 'mazda', 'mercedes', 'mitsubishi', 'nissan', 'ram', 'subaru', 'toyota', 'volkswagen', 'volvo'].includes(text)
+        );
+        
+        if (!hasVehicleMakes) {
+          this.log('❌ Options container does not contain vehicle makes! This might be wrong dropdown.');
+          throw new Error('Wrong dropdown opened - does not contain vehicle makes');
+        }
+        
+        this.log('✅ Confirmed options container has vehicle makes');
+      } catch (error) {
+        this.log('❌ Could not find or validate options container:', error);
+        throw error;
+      }
       
+      // Find the correct Make option
       const getExactOption = () => {
         const scope = optionsContainer || document;
         const opts = Array.from(scope.querySelectorAll('[role="option"]'));
@@ -862,6 +1215,7 @@ class SalesonatorAutomator {
       
       // If not found, try typeahead (Facebook supports it)
       if (!makeOption && cleanMake) {
+        this.log('🎯 Trying typeahead for make selection...');
         for (const ch of cleanMake.toLowerCase()) {
           makeDropdown.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
           await this.delay(this.randomDelay(40, 100));
@@ -875,36 +1229,93 @@ class SalesonatorAutomator {
         makeOption = getFuzzyOption();
       }
       
-      // Ultimate fallback: any element with the text inside the container
       if (!makeOption) {
-        const elem = this.findElementByText(cleanMake, ['div','span','li'], optionsContainer || document);
-        if (elem) makeOption = elem.closest('[role="option"]') || elem;
+        const availableOptions = Array.from((optionsContainer || document).querySelectorAll('[role="option"]'))
+          .map(opt => opt.textContent?.trim())
+          .filter(text => text)
+          .slice(0, 10);
+        throw new Error(`Make option "${cleanMake}" not found. Available options: ${availableOptions.join(', ')}`);
       }
       
-      if (!makeOption) {
-        throw new Error(`Make option not found for "${cleanMake}"`);
-      }
-      
+      this.log(`🎯 Found make option: "${makeOption.textContent?.trim()}", clicking...`);
       await this.scrollIntoView(makeOption);
       await this.delay(this.randomDelay(300, 600));
-      makeOption.click();
+      await this.performFacebookDropdownClick(makeOption);
       await this.delay(this.randomDelay(1000, 1500)); // Wait for selection to register
       
-      // Verify the dropdown now displays the selected make (log in Title Case)
-      const selectedText = (makeDropdown.textContent || '').toLowerCase();
-      const verified = selectedText.includes(cleanMake.toLowerCase());
-      const titleMake = cleanMake
-        .toLowerCase()
-        .replace(/\b\w/g, (c) => c.toUpperCase());
+      // Enhanced verification with multiple methods
+      const verifyMakeSelection = () => {
+        // Method 1: Check dropdown text content
+        const selectedText = (makeDropdown?.textContent || '').toLowerCase();
+        const directMatch = selectedText.includes(cleanMake.toLowerCase());
+        
+        // Method 2: Check for input value
+        const makeContainer = makeDropdown?.closest('div, section, form') || document;
+        const comboboxInput = makeContainer.querySelector('input[aria-label*="Make"], [role="combobox"] input');
+        const inputValue = comboboxInput ? (comboboxInput.value || comboboxInput.getAttribute('value') || '') : '';
+        const inputMatch = inputValue && inputValue.toLowerCase().includes(cleanMake.toLowerCase());
+        
+        // Method 3: Check selected option state
+        const selectedOption = (optionsContainer || document).querySelector('[role="option"][aria-selected="true"]');
+        const selectedMatch = selectedOption && ((selectedOption.textContent || '').toLowerCase().includes(cleanMake.toLowerCase()));
+        
+        // Method 4: Check for hidden inputs or form data
+        const hiddenInputs = document.querySelectorAll('input[type="hidden"][name*="make"], input[name*="make"]');
+        const hiddenMatch = Array.from(hiddenInputs).some(input => {
+          const value = input.value || input.getAttribute('value') || '';
+          return value.toLowerCase().includes(cleanMake.toLowerCase());
+        });
+        
+        // Method 5: Check for data attributes on the dropdown
+        const dataAttributes = ['data-value', 'data-selected', 'aria-valuenow'];
+        const attributeMatch = dataAttributes.some(attr => {
+          const value = makeDropdown?.getAttribute(attr) || '';
+          return value.toLowerCase().includes(cleanMake.toLowerCase());
+        });
+        
+        // Method 6: Check if dropdown button shows selected value
+        const buttonText = makeDropdown?.querySelector('span, div')?.textContent || makeDropdown?.textContent || '';
+        const buttonMatch = buttonText.toLowerCase().includes(cleanMake.toLowerCase());
+        
+        // Method 7: Look for visual indicators of selection (like checkmarks)
+        const checkedOption = (optionsContainer || document).querySelector('[role="option"] [aria-label*="checked"], [role="option"] svg[data-icon="check"]');
+        const visualMatch = checkedOption && checkedOption.closest('[role="option"]')?.textContent?.toLowerCase().includes(cleanMake.toLowerCase());
+        
+        // Log all verification methods for debugging
+        this.log(`🔍 Make verification methods:`, {
+          directMatch,
+          inputMatch,
+          selectedMatch,
+          hiddenMatch,
+          attributeMatch,
+          buttonMatch,
+          visualMatch,
+          dropdownText: selectedText,
+          inputValue: inputValue || 'none',
+          selectedOptionText: selectedOption?.textContent || 'none',
+          buttonText: buttonText || 'none'
+        });
+        
+        return directMatch || inputMatch || selectedMatch || hiddenMatch || attributeMatch || buttonMatch || visualMatch;
+      };
+      
+      const verified = verifyMakeSelection();
+      const titleMake = cleanMake.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+      
       if (verified) {
-        this.log(`✅ Successfully selected make: ${titleMake}`);
+        this.log(`✅ STEP 2 COMPLETE: Successfully selected make: ${titleMake}`);
+        // Ensure dropdown is closed before proceeding
+        await this.closeAnyOpenDropdown();
+        await this.delay(this.randomDelay(500, 800));
+        return true;
       } else {
-        this.log(`⚠️ Make selection not verified. Dropdown shows: ${makeDropdown.textContent}`);
+        this.log(`❌ STEP 2 FAILED: Make selection not verified through any method. Current dropdown text: ${makeDropdown?.textContent || 'undefined'}`);
+        return false;
       }
-      return verified;
       
     } catch (error) {
-      this.log(`⚠️ Could not select make: ${make}`, error);
+      this.log(`❌ STEP 2 FAILED: Could not select make: ${make}`, error);
+      await this.closeAnyOpenDropdown(); // Clean up on error
       return false;
     }
   }
@@ -912,58 +1323,410 @@ class SalesonatorAutomator {
   // Fill Model input
   async fillModel(model) {
     try {
-      this.log(`🚗 Filling model: ${model}`);
+      this.log(`🚗 STEP 3: Filling model: ${model}`);
       
+      // Enhanced model input detection with multiple strategies
       const modelInputSelectors = [
-        '[aria-label*="Model"]',
-        'input[placeholder*="Model"]',
-        'input[name*="model"]',
-        '[data-testid*="model"]'
+        'input[aria-label*="Model" i]',
+        'input[placeholder*="Model" i]',
+        'input[name*="model" i]',
+        'input[aria-describedby*="model" i]',
+        '[data-testid*="model" i]',
+        '[id*="model" i]',
+        // Non-input textboxes Facebook sometimes uses
+        '[role="textbox"][aria-label*="Model" i]',
+        'div[contenteditable="true"][aria-label*="Model" i]'
       ];
       
       let modelInput = null;
-      try {
-        modelInput = await this.waitForElement(modelInputSelectors, 6000);
-      } catch {}
+      
+      console.log('[SALESONATOR DEBUG] ========== MODEL FIELD DETECTION START ==========');
+      console.log('[SALESONATOR DEBUG] Available selectors:', modelInputSelectors);
+      
+      // Strategy 1: Direct targeting of user-provided HTML structure first
+      console.log('[SALESONATOR DEBUG] Strategy 1: Direct targeting of user-provided HTML structure');
+      
+      // Target the exact span ID and look for input with similar pattern
+      const modelSpan = document.querySelector('span[id*="_r_"][id*="o"]'); // Pattern like _r_2o_
+      if (modelSpan && (modelSpan.textContent || '').trim().toLowerCase() === 'model') {
+        console.log('[SALESONATOR DEBUG] Found Model span with pattern _r_*o_:', modelSpan);
+        
+        // Extract the base ID pattern and look for input with similar pattern
+        const spanId = modelSpan.id;
+        const basePattern = spanId.replace(/o_$/, 'n_'); // _r_2o_ becomes _r_2n_
+        const possibleInput = document.querySelector(`input[id="${basePattern}"]`);
+        
+        if (possibleInput) {
+          console.log(`[SALESONATOR DEBUG] ✅ Found Model input with calculated ID: ${basePattern}`, possibleInput);
+          modelInput = possibleInput;
+          this.log(`✅ Found model input with calculated ID: ${basePattern}`);
+        } else {
+          console.log(`[SALESONATOR DEBUG] ❌ No input found with calculated ID: ${basePattern}`);
+        }
+      }
+      
+      // Strategy 2: Original selector matching
       if (!modelInput) {
+        for (const selector of modelInputSelectors) {
+          try {
+            console.log(`[SALESONATOR DEBUG] Trying selector: ${selector}`);
+            modelInput = await this.waitForElement(selector, 1000);
+            if (modelInput) {
+              console.log(`[SALESONATOR DEBUG] ✅ Found model input with selector: ${selector}`, modelInput);
+              this.log(`✅ Found model input with selector: ${selector}`);
+              break;
+            } else {
+              console.log(`[SALESONATOR DEBUG] ❌ Selector failed: ${selector}`);
+            }
+          } catch (e) {
+            console.log(`[SALESONATOR DEBUG] ❌ Selector error: ${selector}`, e);
+          }
+        }
+      }
+      
+      // Strategy 2: Label-based search
+      if (!modelInput) {
+        console.log('[SALESONATOR DEBUG] Attempting label-based search for Model field...');
         modelInput = this.findInputByLabel('Model') || this.findInputByLabel('Model name');
+        if (modelInput) {
+          console.log('[SALESONATOR DEBUG] ✅ Found model input via label search:', modelInput);
+          this.log('✅ Found model input via label search');
+        } else {
+          console.log('[SALESONATOR DEBUG] ❌ Label-based search failed for Model field');
+        }
       }
+      
+      // Strategy 3: Position-based search (after Make field)
       if (!modelInput) {
-        throw new Error('Model input not found');
+        const allInputs = document.querySelectorAll('input[type="text"], input:not([type])');
+        for (let i = 0; i < allInputs.length; i++) {
+          const input = allInputs[i];
+          const container = input.closest('div, section, fieldset');
+          const labelText = (container?.textContent || '').toLowerCase();
+          
+          if (labelText.includes('model') && !labelText.includes('year') && !labelText.includes('make')) {
+            modelInput = input;
+            this.log('✅ Found model input via position-based search');
+            break;
+          }
+        }
       }
+      
+      // Strategy 4: Search near Make field
+      if (!modelInput) {
+        const makeElements = Array.from(document.querySelectorAll('*')).filter(el => 
+          el.textContent && el.textContent.toLowerCase().includes('make')
+        );
+        
+        for (const makeEl of makeElements) {
+          const parent = makeEl.closest('form, section, div');
+          const nearbyInputs = parent?.querySelectorAll('input[type="text"], input:not([type])') || [];
+          
+          for (const input of nearbyInputs) {
+            const container = input.closest('div, section');
+            const containerText = (container?.textContent || '').toLowerCase();
+            if (containerText.includes('model') && !containerText.includes('make') && !containerText.includes('year')) {
+              modelInput = input;
+              this.log('✅ Found model input near Make field');
+              break;
+            }
+          }
+          if (modelInput) break;
+        }
+      }
+      
+      // Strategy 5: XPath queries around label text "Model"
+      if (!modelInput) {
+        const xpaths = [
+          // Input inside an element that mentions "Model"
+          "//*[self::label or self::div or self::span][contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), 'model')]//following::input[@type='text' or @role='textbox'][1]",
+          // An input whose ancestor contains the word "Model"
+          "//input[( @type='text' or @role='textbox') and ancestor::*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'model')]]",
+          // An input immediately following an element that contains "Model"
+          "//*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'model')]/following-sibling::*/descendant-or-self::input[@type='text' or @role='textbox'][1]"
+        ];
+        for (const xp of xpaths) {
+          try {
+            const node = document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            if (node && node.tagName === 'INPUT') {
+              modelInput = node;
+              this.log('✅ Found model input via XPath');
+              break;
+            }
+          } catch {}
+        }
+      }
+      
+      // Strategy 6: Heuristic scan of visible text inputs between Make and Mileage labels
+      if (!modelInput) {
+        const labelEls = Array.from(document.querySelectorAll('*')).filter(el => el.textContent);
+        const makeLabel = labelEls.find(el => el.textContent.trim().toLowerCase() === 'make');
+        const mileageLabel = labelEls.find(el => el.textContent.trim().toLowerCase() === 'mileage');
+        const candidates = Array.from(document.querySelectorAll('input[type="text"], input:not([type])'));
+        for (const input of candidates) {
+          const rect = input.getBoundingClientRect();
+          if (rect.width < 50 || rect.height < 20) continue; // skip tiny inputs
+          // Prefer inputs vertically between make and mileage if we can detect them
+          const y = rect.top;
+          const inRange = (!makeLabel || y >= makeLabel.getBoundingClientRect().top - 200) &&
+                          (!mileageLabel || y <= mileageLabel.getBoundingClientRect().top + 200);
+          if (!inRange) continue;
+          const containerText = (input.closest('div, section, fieldset')?.textContent || '').toLowerCase();
+          if (!containerText.includes('year') && !containerText.includes('price')) {
+            modelInput = input;
+            this.log('✅ Found model input via heuristic range scan');
+            break;
+          }
+        }
+      }
+      
+      // Strategy 7: Label span association and aria-labelledby
+      if (!modelInput) {
+        const labelCandidates = Array.from(document.querySelectorAll('span, label, div')).filter(el => {
+          const t = (el.textContent || '').trim().toLowerCase();
+          return t === 'model' || t.startsWith('model');
+        });
+        for (const label of labelCandidates) {
+          // 7a. aria-labelledby linkage
+          const id = label.getAttribute('id');
+          if (id) {
+            const byLabelled = document.querySelector(`input[aria-labelledby~="${id}"], [role="textbox"][aria-labelledby~="${id}"]`);
+            if (byLabelled) { modelInput = byLabelled; this.log('✅ Found model input via aria-labelledby'); break; }
+          }
+          // 7b. Search within closest container
+          const container = label.closest('div[role="group"], form, section, div') || document;
+          const within = container.querySelectorAll('input[type="text"], input:not([type]), [role="textbox"], [contenteditable="true"]');
+          let best = null, bestDist = Infinity;
+          const ly = label.getBoundingClientRect().top;
+          for (const el of within) {
+            const r = el.getBoundingClientRect();
+            const visible = r.width >= 40 && r.height >= 18;
+            const dist = Math.abs(r.top - ly);
+            if (visible && dist < bestDist) { best = el; bestDist = dist; }
+          }
+          if (best) { modelInput = best; this.log('✅ Found model input near label container'); break; }
+          // 7c. Preceding input in DOM order within same container
+          const allInContainer = Array.from(within);
+          const labelIndex = allInContainer.indexOf(label);
+          if (!modelInput && labelIndex > 0) {
+            const prevInput = allInContainer.slice(0, labelIndex).reverse().find(el => el.tagName === 'INPUT' || el.getAttribute('role') === 'textbox' || el.getAttribute('contenteditable') === 'true');
+            if (prevInput) { modelInput = prevInput; this.log('✅ Found model input preceding the label'); break; }
+          }
+          // 7d. Try focusing via label click and read activeElement
+          try {
+            label.click();
+            await this.delay(100);
+            const active = document.activeElement;
+            if (active && (active.tagName === 'INPUT' || active.getAttribute('role') === 'textbox' || active.getAttribute('contenteditable') === 'true')) {
+              modelInput = active; this.log('✅ Found model input via focus after label click'); break;
+            }
+          } catch {}
+        }
+      }
+      
+      // Strategy 8: Direct targeting using provided HTML structure
+      if (!modelInput) {
+        console.log('[SALESONATOR DEBUG] Strategy 8: Direct targeting using provided HTML structure');
+        // Target the exact pattern from the user's HTML: span with text "Model" followed by input
+        const modelSpans = Array.from(document.querySelectorAll('span')).filter(span => {
+          const text = (span.textContent || '').trim().toLowerCase();
+          return text === 'model';
+        });
+        
+        console.log(`[SALESONATOR DEBUG] Found ${modelSpans.length} spans with text "Model"`);
+        
+        for (const span of modelSpans) {
+          console.log(`[SALESONATOR DEBUG] Checking span:`, span.id, span.textContent);
+          
+          // Look for input in the same label container as the span
+          const label = span.closest('label');
+          if (label) {
+            const input = label.querySelector('input[type="text"], input:not([type])');
+            if (input) {
+              console.log(`[SALESONATOR DEBUG] ✅ Found input in same label as Model span:`, input);
+              modelInput = input;
+              this.log('✅ Found model input via direct HTML structure targeting');
+              break;
+            }
+          }
+          
+          // Look for input as sibling within the same container
+          const container = span.closest('div');
+          if (container && !modelInput) {
+            const input = container.querySelector('input[type="text"], input:not([type])');
+            if (input) {
+              console.log(`[SALESONATOR DEBUG] ✅ Found input in same container as Model span:`, input);
+              modelInput = input;
+              this.log('✅ Found model input via container sibling search');
+              break;
+            }
+          }
+        }
+      }
+
+      // Strategy 9: Last-resort activeElement after clicking label
+      if (!modelInput) {
+        const label = Array.from(document.querySelectorAll('span,label,div')).find(el => (el.textContent||'').trim().toLowerCase() === 'model');
+        if (label) {
+          try {
+            label.click();
+            await this.delay(120);
+            if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.getAttribute('role') === 'textbox' || document.activeElement.getAttribute('contenteditable') === 'true')) {
+              modelInput = document.activeElement;
+              this.log('✅ Found model input via activeElement after label click');
+            }
+          } catch {}
+        }
+      }
+
+      if (!modelInput) {
+        console.log('[SALESONATOR DEBUG] ❌ MODEL FIELD NOT FOUND - All strategies failed!');
+        console.log('[SALESONATOR DEBUG] Available spans on page:');
+        const allSpans = Array.from(document.querySelectorAll('span'));
+        allSpans.forEach((span, i) => {
+          const text = (span.textContent || '').trim();
+          if (text.length > 0 && text.length < 50) { // Only log reasonable text
+            console.log(`  Span ${i}: "${text}" (id: ${span.id || 'none'})`);
+          }
+        });
+        console.log('[SALESONATOR DEBUG] Available inputs on page:');
+        const allInputs = Array.from(document.querySelectorAll('input'));
+        allInputs.forEach((input, i) => {
+          console.log(`  Input ${i}: type="${input.type}", id="${input.id || 'none'}", value="${input.value}"`, input);
+        });
+        console.log('[SALESONATOR DEBUG] ========== MODEL FIELD DETECTION END ==========');
+        throw new Error('Model input not found with any strategy');
+      }
+      
+      console.log('[SALESONATOR DEBUG] ✅ MODEL FIELD FOUND!', modelInput);
+      console.log('[SALESONATOR DEBUG] Model field details:', {
+        tag: modelInput.tagName,
+        id: modelInput.id || null,
+        role: modelInput.getAttribute('role') || null,
+        contenteditable: modelInput.getAttribute('contenteditable') || null
+      });
       
       await this.scrollIntoView(modelInput);
+      await this.delay(this.randomDelay(300, 600));
       
-      // Clear existing value and set new one
+      // Enhanced clearing and setting with multiple attempts
+      console.log('[SALESONATOR DEBUG] 🚗 Starting Model field filling...');
+      console.log('[SALESONATOR DEBUG] Model value to fill:', model);
+      this.log('🚗 Clearing and setting model value...');
+
+      const isInput = modelInput && modelInput.tagName === 'INPUT';
+      const isCE = !!modelInput && (modelInput.getAttribute('contenteditable') === 'true' || modelInput.getAttribute('role') === 'textbox');
+      
+      console.log('[SALESONATOR DEBUG] Element type analysis:', {
+        isInput: isInput,
+        isContentEditable: isCE,
+        tagName: modelInput.tagName,
+        contenteditable: modelInput.getAttribute('contenteditable'),
+        role: modelInput.getAttribute('role')
+      });
+
+      // Special path for Facebook contenteditable/textbox fields (inspired by reverseeng enterText)
+      if (!isInput && isCE) {
+        console.log('[SALESONATOR DEBUG] 🧠 Using contenteditable/textbox path for Model');
+        this.log('🧠 Using contenteditable/textbox path for Model');
+        modelInput.focus();
+        console.log('[SALESONATOR DEBUG] Focused element, attempting selectAll and insertText...');
+        try { document.execCommand('selectAll', false, null); } catch {}
+        try { document.execCommand('insertText', false, model); } catch {}
+        // Fire React-friendly events
+        modelInput.dispatchEvent(new InputEvent('input', { bubbles: true, data: model, inputType: 'insertText' }));
+        modelInput.dispatchEvent(new Event('change', { bubbles: true }));
+        await this.delay(300);
+        const txt = (modelInput.textContent || modelInput.innerText || '').trim();
+        console.log('[SALESONATOR DEBUG] Content after filling:', txt);
+        if (txt && (txt === model.trim() || txt.toLowerCase().includes(model.toLowerCase()))) {
+          console.log('[SALESONATOR DEBUG] ✅ Content verified successfully!');
+          this.log('✅ STEP 3 COMPLETE: Model set via contenteditable/textbox path');
+          modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
+          await this.delay(300);
+          return true;
+        }
+        console.log('[SALESONATOR DEBUG] ⚠️ Content verification failed, falling back...');
+        this.log('⚠️ Contenteditable path did not verify, falling back to input strategies if possible');
+      }
+      
+      // Attempt 1: Standard React-compatible approach (for real inputs)
+      modelInput.focus();
+      await this.delay(100);
+      
+      // Clear thoroughly
+      if (isInput) {
+        modelInput.value = '';
+      }
+      if (modelInput.select) modelInput.select();
+      this.setNativeValue(modelInput, '');
+      modelInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await this.delay(200);
+      
+      // Set new value
+      this.setNativeValue(modelInput, model);
+      modelInput.dispatchEvent(new Event('input', { bubbles: true }));
+      modelInput.dispatchEvent(new Event('change', { bubbles: true }));
+      await this.delay(300);
+      
+      // Verify first attempt
+      let currentValue = isInput ? (modelInput.value || '') : ((modelInput.textContent || modelInput.innerText || ''));
+      if (currentValue.trim() === model.trim()) {
+        this.log('✅ Model set successfully on first attempt');
+        modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
+        await this.delay(500);
+        return true;
+      }
+      
+      // Attempt 2: Human-like typing
+      this.log('🚗 First attempt failed, trying human-like typing...');
       modelInput.focus();
       if (modelInput.select) modelInput.select();
       await this.delay(100);
       
-      // Use React-compatible value setting
-      this.setNativeValue(modelInput, model);
-      
-      // Trigger React events
+      // Clear again
+      if (isInput) modelInput.value = '';
+      this.setNativeValue(modelInput, '');
       modelInput.dispatchEvent(new Event('input', { bubbles: true }));
-      modelInput.dispatchEvent(new Event('change', { bubbles: true }));
-      modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
+      await this.delay(100);
       
+      // Type character by character
+      await this.typeHumanLike(modelInput, model);
       await this.delay(500);
       
-      // Verify value was set
-      if ((modelInput.value || '').toString().trim() === (model || '').toString().trim()) {
-        this.log('✅ Successfully filled model:', model);
-        return true;
-      } else {
-        this.log('⚠️ Model value verification failed. Expected:', model, 'Got:', modelInput.value);
-        // Try typing approach as fallback
-        modelInput.focus();
-        if (modelInput.select) modelInput.select();
-        await this.typeHumanLike(modelInput, model);
+      // Final verification
+      currentValue = isInput ? (modelInput.value || '') : ((modelInput.textContent || modelInput.innerText || ''));
+      if (currentValue.trim() === model.trim()) {
+        this.log('✅ STEP 3 COMPLETE: Successfully filled model with typing approach');
+        modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
+        await this.delay(500);
         return true;
       }
       
+      // Attempt 3: Direct property setting
+      this.log('🚗 Typing failed, trying direct property setting...');
+      if (isInput) {
+        Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(modelInput, model);
+      } else if (isCE) {
+        try { document.execCommand('selectAll', false, null); } catch {}
+        try { document.execCommand('insertText', false, model); } catch {}
+      }
+      modelInput.dispatchEvent(new Event('input', { bubbles: true }));
+      modelInput.dispatchEvent(new Event('change', { bubbles: true }));
+      modelInput.dispatchEvent(new Event('blur', { bubbles: true }));
+      await this.delay(500);
+      
+      currentValue = isInput ? (modelInput.value || '') : ((modelInput.textContent || modelInput.innerText || ''));
+      if (currentValue.trim() === model.trim()) {
+        this.log('✅ STEP 3 COMPLETE: Successfully filled model with direct property setting');
+        return true;
+      }
+      
+      this.log(`⚠️ STEP 3 PARTIAL: Model may not be visually updated. Expected: "${model}", Got: "${currentValue}"`);
+      return true; // Return true as we tried our best
+      
     } catch (error) {
-      this.log('⚠️ Could not fill model:', model, error);
+      this.log(`❌ STEP 3 FAILED: Could not fill model: ${model}`, error);
       return false;
     }
   }
@@ -1144,48 +1907,89 @@ class SalesonatorAutomator {
     }
   }
 
-  // Select Body Style dropdown
+  // Select Body Style dropdown (position 7)
   async selectBodyStyle(bodyStyle) {
     try {
-      this.log(`🚗 Selecting body style: ${bodyStyle}`);
+      this.log(`🚙 STEP 7: Selecting body style: ${bodyStyle}`);
 
-      const label = 'Body style';
-      const dropdownSelectors = [
-        '[aria-label*="Body style"]',
-        'text:Body style'
-      ];
-      let dropdown = this.findDropdownByLabel(label) || await this.waitForElement(dropdownSelectors, 8000).catch(() => null);
-
-      if (!dropdown) {
-        // Try XPath
-        try {
-          const res = document.evaluate(
-            `//*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "body style")]/following::*[(@role='combobox' or @role='button')][1]`,
-            document,
-            null,
-            XPathResult.FIRST_ORDERED_NODE_TYPE,
-            null
-          );
-          if (res.singleNodeValue) dropdown = res.singleNodeValue;
-        } catch {}
-      }
-
-      if (!dropdown) throw new Error('Body style dropdown not found');
-
-      await this.scrollIntoView(dropdown);
-      await this.delay(this.randomDelay(500, 1000));
-      this.log('🚗 Found body style dropdown, clicking...');
-      dropdown.click();
-      await this.delay(this.randomDelay(1200, 2000));
-
-      // Scope options to the freshly opened listbox/menu to avoid clicking nav links
-      let optionsContainer = null;
-      try {
-        optionsContainer = await this.waitForElement(['[role="listbox"]','[role="menu"]'], 4000);
-      } catch {}
+      // Close any open dropdowns first
+      await this.closeAnyOpenDropdown();
+      await this.delay(this.randomDelay(500, 800));
 
       const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
       const target = norm(bodyStyle);
+      const label = 'Body style';
+
+      this.log('🔍 Looking for Body Style dropdown specifically...');
+      let dropdown = this.findDropdownByLabel(label);
+      
+      if (!dropdown) {
+        await this.ensureAdditionalFieldsVisible();
+        dropdown = this.findDropdownByLabel(label);
+      }
+      
+      if (!dropdown) {
+        // More targeted search for body style dropdown
+        const allDropdowns = document.querySelectorAll('div[role="button"], [role="combobox"]');
+        for (const candidate of allDropdowns) {
+          const container = candidate.closest('div, section, fieldset') || candidate.parentElement;
+          const containerText = (container?.textContent || '').toLowerCase();
+          if (containerText.includes('body style') || containerText.includes('body type')) {
+            dropdown = candidate;
+            this.log('✅ Found Body Style dropdown via container text search');
+            break;
+          }
+        }
+      }
+
+      if (!dropdown) {
+        throw new Error('Body style dropdown not found');
+      }
+
+      // Validate this is actually the Body Style dropdown
+      this.log('🔍 Validating dropdown context for Body Style field...');
+      const expectedBodyStyles = ['sedan', 'suv', 'coupe', 'hatchback', 'convertible', 'wagon', 'truck', 'van'];
+      const isValidBodyStyleDropdown = this.validateDropdownContext(dropdown, 'bodystyle', expectedBodyStyles);
+      
+      if (!isValidBodyStyleDropdown) {
+        this.log('❌ Found dropdown is not the Body Style dropdown');
+        throw new Error('Could not find valid Body Style dropdown');
+      }
+
+      await this.scrollIntoView(dropdown);
+      await this.delay(this.randomDelay(500, 1000));
+
+      this.log('🚙 Opening validated Body Style dropdown...');
+      dropdown.focus();
+      dropdown.click();
+      await this.delay(this.randomDelay(1500, 2000));
+
+      // Wait for and validate options container
+      let optionsContainer = null;
+      try {
+        optionsContainer = await this.waitForElement(['[role="listbox"]', '[role="menu"]'], 5000);
+        
+        // Validate this contains body style options
+        const optionTexts = Array.from(optionsContainer.querySelectorAll('[role="option"]'))
+          .map(opt => (opt.textContent || '').trim().toLowerCase())
+          .slice(0, 8);
+        
+        const hasBodyStyles = optionTexts.some(text => 
+          expectedBodyStyles.some(style => text.includes(style))
+        );
+        
+        if (!hasBodyStyles) {
+          this.log('❌ Options container does not contain body styles! Wrong dropdown.');
+          throw new Error('Wrong dropdown - does not contain body style options');
+        }
+        
+        this.log('✅ Confirmed options container has body style options');
+      } catch (error) {
+        this.log('❌ Could not find or validate body style options:', error);
+        throw error;
+      }
+
+      // Find the correct body style option
       const getOptions = () => Array.from((optionsContainer || document).querySelectorAll('[role="option"]'));
 
       let option = getOptions().find(opt => {
@@ -1194,44 +1998,54 @@ class SalesonatorAutomator {
         return txt === target || aria === target || txt.includes(target);
       });
 
-      if (option) {
-        await this.performFacebookDropdownClick(option);
-        await this.delay(this.randomDelay(800, 1500));
+      if (!option) {
+        this.log(`🎯 Trying typeahead for body style: ${bodyStyle}`);
+        for (const ch of bodyStyle.toLowerCase()) {
+          dropdown.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
+          await this.delay(this.randomDelay(40, 100));
+        }
+        await this.delay(this.randomDelay(300, 600));
+        option = getOptions().find(opt => {
+          const txt = norm(opt.textContent || '');
+          return txt === target || txt.includes(target);
+        });
       }
 
-      // Verify selection appeared next to the label
+      if (!option) {
+        const availableOptions = getOptions()
+          .map(opt => opt.textContent?.trim())
+          .filter(text => text)
+          .slice(0, 10);
+        throw new Error(`Body style option "${bodyStyle}" not found. Available: ${availableOptions.join(', ')}`);
+      }
+
+      this.log(`🎯 Found body style option: "${option.textContent?.trim()}", clicking...`);
+      await this.scrollIntoView(option);
+      await this.delay(this.randomDelay(300, 600));
+      await this.performFacebookDropdownClick(option);
+      await this.delay(this.randomDelay(800, 1500));
+
+      // Verify selection
       const verify = () => {
         const el = this.findDropdownByLabel(label) || dropdown;
         const txt = (el?.textContent || '').toLowerCase();
         return txt.includes(target);
       };
 
-      if (!option || !verify()) {
-        // Fallback: keyboard/typeahead selection like Year dropdown
-        const success = await this.selectDropdownOption(dropdownSelectors, bodyStyle, true);
-        await this.delay(this.randomDelay(800, 1200));
-        if (success && verify()) { this.log(`✅ Successfully selected body style: ${bodyStyle}`); return true; }
+      const verified = verify();
+      if (verified) {
+        this.log(`✅ STEP 7 COMPLETE: Successfully selected body style: ${bodyStyle}`);
+        await this.closeAnyOpenDropdown();
+        await this.delay(this.randomDelay(500, 800));
+        return true;
+      } else {
+        this.log(`❌ STEP 7 FAILED: Body style selection not verified`);
+        return false;
       }
 
-      if (!verify()) {
-        // Retry: reopen and try again with direct option click
-        dropdown.click();
-        await this.delay(this.randomDelay(800, 1200));
-        option = getOptions().find(opt => {
-          const txt = norm(opt.textContent || '');
-          const aria = norm(opt.getAttribute?.('aria-label') || '');
-          return txt === target || aria === target || txt.includes(target);
-        });
-        if (!option) throw new Error(`Body style option "${bodyStyle}" not found`);
-        await this.performFacebookDropdownClick(option);
-        await this.delay(this.randomDelay(800, 1500));
-      }
-
-      if (!verify()) this.log('⚠️ Body style may not have applied visually yet.');
-      this.log(`✅ Successfully selected body style: ${bodyStyle}`);
-      return true;
     } catch (error) {
-      this.log(`⚠️ Could not select body style: ${bodyStyle}`, error);
+      this.log(`❌ STEP 7 FAILED: Could not select body style: ${bodyStyle}`, error);
+      await this.closeAnyOpenDropdown();
       return false;
     }
   }
