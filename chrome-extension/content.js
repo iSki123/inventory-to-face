@@ -456,9 +456,15 @@ class SalesonatorAutomator {
           await this.navigateToMarketplace();
           await this.delay(2000, attempt);
           
-          // Fill the form strictly in the requested order (includes images + location)
-          await this.fillVehicleFormUserOrder(vehicleData);
+          // Fill form with enhanced automation
+          await this.fillVehicleForm(vehicleData);
           await this.delay(1000, attempt);
+          
+          // Handle image uploads if images are provided
+          if (vehicleData.images && vehicleData.images.length > 0) {
+            await this.handleImageUploads(vehicleData.images);
+            await this.delay(1000, attempt);
+          }
           
           // Submit with verification
           const success = await this.submitListing();
@@ -655,154 +661,6 @@ class SalesonatorAutomator {
     this.log('✅ Form filling sequence completed');
   }
 
-  // Strict, user-specified posting order implementation
-  async fillVehicleFormUserOrder(vehicleData) {
-    this.log('🧭 Filling form in strict user-defined order');
-
-    const safeDelay = async (min=500,max=900)=>{ await this.delay(this.randomDelay(min,max)); };
-
-    // 1) Vehicle type (dropdown)
-    await this.closeAnyOpenDropdown();
-    await safeDelay(700,1200);
-    await this.selectVehicleType();
-    await safeDelay(1500,2200);
-
-    // 2) Images
-    if (vehicleData.images && vehicleData.images.length) {
-      await this.handleImageUploads(vehicleData.images);
-      await safeDelay(1200,1800);
-    }
-
-    // 3) Location (typed)
-    try {
-      await this.setLocationTyped(vehicleData);
-    } catch(e) { this.log('⚠️ Location typing skipped:', e); }
-    await safeDelay();
-
-    // 4) Year (dropdown)
-    if (vehicleData.year) {
-      await this.selectYear(vehicleData.year);
-      await safeDelay(1200,1800);
-    }
-
-    // 5) Make (dropdown)
-    if (vehicleData.make) {
-      await this.selectMake(vehicleData.make);
-      await safeDelay(1200,1800);
-    }
-
-    // 6) Model (typed, Title Case)
-    try {
-      const model = this.toTitleCase(String(vehicleData.model || ''));
-      const modelInput = await this.waitForElement([
-        '[aria-label*="Model"]', 'input[placeholder*="Model"]', 'input[name*="model"]'
-      ], 6000);
-      await this.scrollIntoView(modelInput);
-      if (modelInput.select) modelInput.select();
-      await safeDelay(80,150);
-      await this.typeHumanLike(modelInput, model);
-    } catch(e) { this.log('⚠️ Model typing failed:', e); }
-    await safeDelay(900,1400);
-
-    // 7) Mileage (typed, min 300)
-    try {
-      let miles = parseInt(String(vehicleData.mileage||vehicleData.odometer||'').replace(/[^\d]/g,''),10);
-      if (!miles || miles < 300) miles = 300;
-      const mileageInput = await this.waitForElement([
-        '[aria-label*="Mileage"]','input[placeholder*="Mileage"]','input[name*="mileage"]'
-      ], 6000);
-      await this.scrollIntoView(mileageInput);
-      if (mileageInput.select) mileageInput.select();
-      await safeDelay(80,150);
-      await this.typeHumanLike(mileageInput, miles.toString());
-    } catch(e) { this.log('⚠️ Mileage typing failed:', e); }
-    await safeDelay(900,1400);
-
-    // 8) Price (typed)
-    try {
-      const raw = String(vehicleData.price ?? '').replace(/[^\d]/g,'');
-      let val = raw ? parseInt(raw,10) : '';
-      if (String(val).length >= 6 && String(val).endsWith('00')) {
-        const cents = Math.round(val/100);
-        if (cents>=1000 && cents<=250000) val=cents;
-      }
-      const priceInput = await this.waitForElement([
-        '[aria-label*="Price"]','input[placeholder*="Price"]','input[name*="price"]'
-      ], 6000);
-      await this.scrollIntoView(priceInput);
-      if (priceInput.select) priceInput.select();
-      await safeDelay(80,150);
-      await this.typeHumanLike(priceInput, String(val));
-    } catch(e) { this.log('⚠️ Price typing failed:', e); }
-    await safeDelay(1000,1500);
-
-    // 9) Body style (dropdown)
-    const mappedBodyStyle = vehicleData.bodyStyle || vehicleData.body_style || this.mapBodyStyle(vehicleData.body_style_nhtsa || vehicleData.vehicle_type_nhtsa || '');
-    if (mappedBodyStyle) {
-      await this.selectBodyStyle(mappedBodyStyle);
-      await safeDelay(1200,1800);
-    }
-
-    // 10) Exterior color (dropdown)
-    const ext = this.standardizeExteriorColor(vehicleData.exteriorColor || vehicleData.exterior_color);
-    if (ext && ext !== 'Unknown') { await this.selectExteriorColor(ext); await safeDelay(1200,1800); }
-
-    // 11) Interior color (dropdown)
-    const intr = this.standardizeInteriorColor(vehicleData.interiorColor || vehicleData.interior_color);
-    if (intr) { await this.selectInteriorColor(intr); await safeDelay(1200,1800); }
-
-    // 12) Title status (checkbox -> Clean title)
-    await this.selectCleanTitle(true);
-    await safeDelay(800,1200);
-
-    // 13) Vehicle condition (dropdown -> Excellent)
-    await this.selectVehicleCondition('Excellent');
-    await safeDelay(1200,1800);
-
-    // 14) Fuel type (dropdown)
-    const fuel = this.mapFuelType(vehicleData.fuelType || vehicleData.fuel_type || vehicleData.fuel_type_nhtsa || '');
-    if (fuel) { await this.selectFuelType(fuel); await safeDelay(1200,1800); }
-
-    // 15) Transmission type (dropdown)
-    const trans = this.mapTransmission(vehicleData.transmission || vehicleData.transmission_nhtsa || 'Automatic');
-    await this.selectTransmission(trans);
-    await safeDelay(1200,1800);
-
-    // 16) Description (typed)
-    const description = vehicleData.ai_description || vehicleData.description || `${vehicleData.year||''} ${vehicleData.make||''} ${this.toTitleCase(vehicleData.model||'')}`.trim();
-    try {
-      const descriptionInput = await this.waitForElement(['[aria-label*="Description"]','textarea'], 6000);
-      await this.scrollIntoView(descriptionInput);
-      if (descriptionInput.select) descriptionInput.select();
-      await safeDelay(80,150);
-      await this.typeHumanLike(descriptionInput, description);
-    } catch(e) { this.log('⚠️ Description typing failed:', e); }
-
-    this.log('✅ Strict order form fill complete');
-  }
-
-  // Type location and pick the first suggestion
-  async setLocationTyped(vehicleData) {
-    const guess = (obj)=>[obj?.location, obj?.city, obj?.city_state, obj?.location_name, obj?.dealer_city, obj?.dealer_location, obj?.state ? `${obj.city||''} ${obj.state}`.trim() : null].find(Boolean);
-    const value = guess(vehicleData) || 'North Aurora';
-
-    const input = await this.waitForElement(['[aria-label*="Location"]','input[placeholder*="Location"]','input[name*="location"]'], 6000);
-    await this.scrollIntoView(input);
-    if (input.select) input.select();
-    await this.typeHumanLike(input, value);
-    await this.delay(400);
-    // pick first suggestion if present
-    try {
-      const firstOpt = await this.waitForElement(['[role="listbox"] [role="option"]','[role="listbox"] li','ul[role="listbox"] li'], 3000);
-      await this.scrollIntoView(firstOpt);
-      await this.performFacebookDropdownClick(firstOpt);
-    } catch {}
-  }
-
-  toTitleCase(str) {
-    const s = (str||'').toString().toLowerCase();
-    return s.replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1));
-  }
   // Select Year dropdown with improved detection
   async selectYear(year) {
     try {
