@@ -125,11 +125,11 @@ class SalesonatorExtension {
               console.log('Found authentication data in tab:', tab.url);
               console.log('User ID:', authData.user.id);
               
-              // Check if token is still valid and user has admin role
-              console.log('Starting role verification for user:', authData.user.id);
+              // Check if token is still valid and user has credits
+              console.log('Starting eligibility verification for user:', authData.user.id);
               
               try {
-                const profileUrl = `https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/profiles?select=role&user_id=eq.${authData.user.id}`;
+                const profileUrl = `https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/profiles?select=credits,is_active,role&user_id=eq.${authData.user.id}`;
                 console.log('Checking profile at:', profileUrl);
                 console.log('Using token:', authData.token.substring(0, 20) + '...');
                 
@@ -148,30 +148,30 @@ class SalesonatorExtension {
                   const profileData = await response.json();
                   console.log('✅ Profile data received:', profileData);
                   console.log('Profile data length:', profileData.length);
-                  const userRole = profileData[0]?.role;
-                  console.log('Extracted user role:', userRole);
+                  const profile = profileData[0];
+                  console.log('Extracted profile:', profile);
                   
-                  if (userRole === 'Owner' || userRole === 'Manager' || userRole === 'Admin' || userRole === 'admin') {
-                    console.log('✅ User has admin role:', userRole);
+                  if (profile && profile.is_active && profile.credits > 0) {
+                    console.log('✅ User is eligible with credits:', profile.credits);
                     console.log('Setting up auto-authentication...');
                     this.showWebAppAuthSuccess();
-                    return { token: authData.token, user: authData.user };
+                    return { token: authData.token, user: authData.user, credits: profile.credits };
                   } else {
-                    console.log('❌ User does not have admin role:', userRole);
-                    this.showError('Admin access required for auto-posting extension');
+                    console.log('❌ User is not eligible - Active:', profile?.is_active, 'Credits:', profile?.credits);
+                    this.showError('Active account with credits required for extension');
                     return null;
                   }
                 } else {
                   const errorText = await response.text();
-                  console.log('❌ Failed to verify user role, status:', response.status);
+                  console.log('❌ Failed to verify user eligibility, status:', response.status);
                   console.log('❌ Error response:', errorText);
-                  this.showError('Failed to verify user permissions');
+                  this.showError('Failed to verify user eligibility');
                   return null;
                 }
               } catch (error) {
-                console.error('❌ Error verifying user role:', error);
+                console.error('❌ Error verifying user eligibility:', error);
                 console.error('❌ Error details:', error.message, error.stack);
-                this.showError('Error checking user permissions: ' + error.message);
+                this.showError('Error checking user eligibility: ' + error.message);
                 return null;
               }
             }

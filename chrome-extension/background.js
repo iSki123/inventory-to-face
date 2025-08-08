@@ -70,6 +70,17 @@ class SalesonatorBackground {
           });
         return true; // async
       }
+
+      if (request.action === 'webAppAuthenticated') {
+        // Handle automatic authentication from web app
+        this.handleWebAppAuthentication(request.credentials)
+          .then(sendResponse)
+          .catch(error => {
+            console.error('Web app auth error:', error);
+            sendResponse({ success: false, error: error.message });
+          });
+        return true; // async
+      }
     } catch (error) {
       console.error('Message handler error:', error);
       sendResponse({ success: false, error: error.message });
@@ -378,6 +389,38 @@ class SalesonatorBackground {
     } catch (error) {
       console.error('Error pre-downloading images:', error);
       sendResponse({ success: false, error: error.message });
+    }
+  }
+
+  // Handle web app authentication
+  async handleWebAppAuthentication(credentials) {
+    try {
+      // Verify the token is still valid by checking user eligibility
+      const eligibilityCheck = await this.checkUserEligibility(credentials.token);
+      
+      if (eligibilityCheck.eligible) {
+        // Store the authentication info
+        await chrome.storage.sync.set({
+          userToken: credentials.token,
+          userEmail: credentials.email,
+          userCredits: credentials.credits,
+          userSubscribed: eligibilityCheck.subscribed,
+          webAppAuthenticated: true
+        });
+        
+        console.log('Successfully authenticated via web app for user:', credentials.email);
+        return { 
+          success: true, 
+          message: 'Auto-authenticated via Salesonator web app',
+          credits: credentials.credits,
+          subscribed: eligibilityCheck.subscribed
+        };
+      } else {
+        throw new Error(eligibilityCheck.reason || 'User not eligible for extension access');
+      }
+    } catch (error) {
+      console.error('Web app authentication failed:', error);
+      throw error;
     }
   }
 

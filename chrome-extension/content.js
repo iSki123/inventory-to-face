@@ -9,6 +9,7 @@ class SalesonatorAutomator {
     this.uploadedImages = []; // Track uploaded images to prevent duplicates
     this.setupMessageListener();
     this.installNavigationGuards();
+    this.checkWebAppAuthentication(); // Check for web app auth on load
   }
 
   // Utility function for randomized delays (human-like behavior)
@@ -2974,6 +2975,130 @@ class SalesonatorAutomator {
       } catch (fallbackError) {
         console.error(`[FACEBOOK CLICK] Even simple click failed:`, fallbackError);
       }
+    }
+  }
+
+  // Check for Salesonator web app authentication across all tabs
+  async checkWebAppAuthentication() {
+    try {
+      // Check if we're on the Salesonator domain
+      const salesonatorDomains = [
+        'urdkaedsfnscgtyvcwlf.supabase.co',
+        'salesonator.lovable.app',
+        'preview--inventory-to-face.lovable.app'
+      ];
+      
+      const isOnSalesonatorDomain = salesonatorDomains.some(domain => 
+        window.location.hostname.includes(domain) || 
+        window.location.hostname === domain
+      );
+
+      if (isOnSalesonatorDomain) {
+        // Check localStorage for Supabase session
+        const supabaseSession = localStorage.getItem('sb-urdkaedsfnscgtyvcwlf-auth-token');
+        
+        if (supabaseSession) {
+          try {
+            const sessionData = JSON.parse(supabaseSession);
+            const accessToken = sessionData.access_token;
+            
+            if (accessToken) {
+              // Verify the token and get user info
+              const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/profiles?select=credits,is_active,email', {
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                  'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+                }
+              });
+
+              if (response.ok) {
+                const profileData = await response.json();
+                const profile = profileData[0];
+
+                if (profile && profile.is_active && profile.credits > 0) {
+                  // Store authentication info in extension storage
+                  chrome.runtime.sendMessage({
+                    action: 'webAppAuthenticated',
+                    credentials: {
+                      token: accessToken,
+                      email: profile.email,
+                      credits: profile.credits
+                    }
+                  });
+
+                  this.log('🔐 Auto-authenticated via Salesonator web app!');
+                  this.showAuthenticationBanner(true);
+                }
+              }
+            }
+          } catch (parseError) {
+            console.log('Failed to parse session data:', parseError);
+          }
+        }
+      }
+    } catch (error) {
+      console.log('Web app authentication check failed:', error);
+    }
+  }
+
+  // Show authentication status banner
+  showAuthenticationBanner(isAuthenticated) {
+    // Remove any existing banner
+    const existingBanner = document.getElementById('salesonator-auth-banner');
+    if (existingBanner) {
+      existingBanner.remove();
+    }
+
+    if (isAuthenticated) {
+      const banner = document.createElement('div');
+      banner.id = 'salesonator-auth-banner';
+      banner.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        animation: slideInFromRight 0.3s ease-out;
+      `;
+      
+      banner.innerHTML = `
+        <span style="font-size: 16px;">✅</span>
+        <span>Auto-authenticated via Salesonator web app!</span>
+      `;
+
+      // Add animation keyframes
+      if (!document.getElementById('salesonator-animations')) {
+        const style = document.createElement('style');
+        style.id = 'salesonator-animations';
+        style.textContent = `
+          @keyframes slideInFromRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
+      document.body.appendChild(banner);
+
+      // Auto-hide after 5 seconds
+      setTimeout(() => {
+        if (banner.parentNode) {
+          banner.style.transition = 'opacity 0.3s ease-out';
+          banner.style.opacity = '0';
+          setTimeout(() => banner.remove(), 300);
+        }
+      }, 5000);
     }
   }
 }
