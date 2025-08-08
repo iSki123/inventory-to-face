@@ -1595,48 +1595,71 @@ class SalesonatorAutomator {
       );
       
       let isChecked = getChecked();
+      console.log(`[CLEAN TITLE DEBUG] Current checkbox state: ${isChecked}, should be: ${shouldCheck}`);
       this.log(`📋 Current checkbox state: ${isChecked}, should be: ${shouldCheck}`);
       
+      // Only interact with checkbox if state needs to change
       if (shouldCheck && !isChecked) {
+        console.log(`[CLEAN TITLE DEBUG] Need to CHECK the checkbox`);
         this.log('📋 Checking clean title checkbox...');
+        
         // Try multiple interaction methods for stubborn checkboxes
         checkbox.click();
-        await this.delay(300);
-        if (!getChecked()) {
+        await this.delay(500);
+        
+        // Verify the click worked
+        isChecked = getChecked();
+        console.log(`[CLEAN TITLE DEBUG] After click, checkbox state: ${isChecked}`);
+        
+        if (!isChecked) {
+          console.log(`[CLEAN TITLE DEBUG] Click failed, trying React-style interaction`);
           // Try React-style interaction
           const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked').set;
           nativeInputValueSetter.call(checkbox, true);
           checkbox.dispatchEvent(new Event('input', { bubbles: true }));
           checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-          await this.delay(300);
+          await this.delay(500);
+          
+          isChecked = getChecked();
+          console.log(`[CLEAN TITLE DEBUG] After React-style, checkbox state: ${isChecked}`);
         }
-        if (!getChecked()) {
+        
+        if (!isChecked) {
+          console.log(`[CLEAN TITLE DEBUG] React-style failed, trying keyboard interaction`);
           // Try focus and space key
           checkbox.focus();
           await this.delay(100);
           checkbox.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }));
           checkbox.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', code: 'Space', bubbles: true }));
-          await this.delay(300);
+          await this.delay(500);
+          
+          isChecked = getChecked();
+          console.log(`[CLEAN TITLE DEBUG] After keyboard, checkbox state: ${isChecked}`);
         }
+        
       } else if (!shouldCheck && isChecked) {
+        console.log(`[CLEAN TITLE DEBUG] Need to UNCHECK the checkbox`);
         this.log('📋 Unchecking clean title checkbox...');
         checkbox.click();
-        await this.delay(300);
+        await this.delay(500);
+        
+      } else {
+        console.log(`[CLEAN TITLE DEBUG] Checkbox is already in correct state, no action needed`);
+        this.log(`📋 Clean title checkbox already in correct state: ${isChecked}`);
       }
       
       // Final verification
       const finalState = getChecked();
+      console.log(`[CLEAN TITLE DEBUG] Final checkbox state: ${finalState} (expected: ${shouldCheck})`);
       this.log(`📋 Final checkbox state: ${finalState} (expected: ${shouldCheck})`);
-      if (shouldCheck && !isChecked) {
-        await this.performFacebookDropdownClick(checkbox);
-        await this.delay(300);
-      } else if (!shouldCheck && isChecked) {
-        await this.performFacebookDropdownClick(checkbox);
-        await this.delay(300);
-      }
       
-      this.log(`✅ Successfully set clean title: ${shouldCheck}`);
-      return true;
+      if (finalState === shouldCheck) {
+        this.log(`✅ Successfully set clean title: ${shouldCheck}`);
+        return true;
+      } else {
+        this.log(`⚠️ Clean title checkbox state mismatch - expected: ${shouldCheck}, actual: ${finalState}`);
+        return false;
+      }
       
     } catch (error) {
       this.log(`⚠️ Could not set clean title checkbox`, error);
