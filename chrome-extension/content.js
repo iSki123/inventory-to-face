@@ -542,32 +542,40 @@ class SalesonatorAutomator {
   // Check if currently on the vehicle posting dashboard
   isOnVehiclePostingDashboard() {
     try {
-      // Check for key elements that indicate we're on the vehicle posting form using proper CSS selectors
+      const currentUrl = window.location.href;
+      
+      // First check URL - if we're on the vehicle creation page, we're likely ready
+      if (currentUrl.includes('/marketplace/create/vehicle')) {
+        this.log('✅ On vehicle creation page via URL');
+        return true;
+      }
+      
+      // Check for key elements that indicate we're on the vehicle posting form
       const indicators = [
-        // Check for "Vehicle for sale" text in h1
+        // Check for "Vehicle for sale" text in h1 or main headings
         document.querySelector('h1')?.textContent?.includes('Vehicle for sale'),
         document.querySelector('h1')?.textContent?.includes('vehicle'),
-        // Check for vehicle-specific form elements
-        document.querySelector('[aria-label*="Vehicle type"]'),
-        document.querySelector('[aria-label*="vehicle type"]'),
-        document.querySelector('[placeholder*="Year"]'),
-        document.querySelector('[placeholder*="Make"]'),
-        document.querySelector('[placeholder*="Model"]'),
+        // Check for vehicle-specific form elements with more specific selectors
+        document.querySelector('text:Vehicle type') !== null,
+        document.querySelector('text:About this vehicle') !== null,
+        document.querySelector('text:Add photos') !== null,
         // Check for photo upload sections
-        document.querySelector('input[type="file"]'),
+        document.querySelector('input[type="file"]') !== null,
         // Check if URL contains marketplace create
-        window.location.href.includes('/marketplace/create'),
-        // Look for common text patterns
+        currentUrl.includes('/marketplace/create'),
+        // More specific text patterns
         document.body.textContent.includes('About this vehicle'),
         document.body.textContent.includes('Add photos'),
-        document.body.textContent.includes('Vehicle type')
+        document.body.textContent.includes('Vehicle type'),
+        // Check for form structure
+        document.querySelector('form') !== null
       ];
       
       const foundIndicators = indicators.filter(Boolean).length;
       this.log(`📊 Found ${foundIndicators} vehicle posting indicators`);
       
-      // Consider it the vehicle posting dashboard if we find at least 3 indicators
-      return foundIndicators >= 3;
+      // Consider it the vehicle posting dashboard if we find at least 4 indicators
+      return foundIndicators >= 4;
     } catch (error) {
       this.log('❌ Error checking vehicle posting dashboard:', error);
       return false;
@@ -596,20 +604,42 @@ class SalesonatorAutomator {
       if (vehicleOption) {
         this.log('✅ Found vehicle category option, clicking...');
         await this.scrollIntoView(vehicleOption);
-        await this.delay(this.randomDelay(300, 600));
+        await this.delay(500);
         
         // Click the vehicle option
         vehicleOption.click();
-        await this.delay(this.randomDelay(1500, 2500));
+        this.log('⏳ Waiting for vehicle form to load completely...');
         
-        // Wait for the vehicle form to load
-        await this.waitForElement([
-          '[aria-label*="Vehicle type"]',
-          'text:About this vehicle',
-          '[placeholder*="Year"]'
-        ], 10000);
+        // Wait longer and use more specific selectors for the form
+        await this.delay(3000); // Give page time to load
         
-        this.log('✅ Vehicle category selected, form loaded');
+        // Wait for multiple indicators that the form is ready
+        const formLoadedSelectors = [
+          'text:Vehicle type',
+          'text:About this vehicle', 
+          'input[type="file"]', // Photo upload
+          'text:Add photos',
+          '[role="button"]' // Vehicle type dropdown
+        ];
+        
+        // Check for form readiness with longer timeout
+        let formReady = false;
+        for (let i = 0; i < 3; i++) {
+          try {
+            await this.waitForElement(formLoadedSelectors, 5000);
+            formReady = true;
+            break;
+          } catch (e) {
+            this.log(`⏳ Form not ready yet, attempt ${i + 1}/3...`);
+            await this.delay(2000);
+          }
+        }
+        
+        if (formReady) {
+          this.log('✅ Vehicle category selected, form loaded and ready');
+        } else {
+          this.log('⚠️ Vehicle form may not be fully loaded, but continuing...');
+        }
       }
     } catch (error) {
       this.log('❌ Failed to select vehicle category:', error);
