@@ -28,6 +28,9 @@ export interface Vehicle {
   ai_description?: string;
   features?: string[];
   images?: string[];
+  ai_images_generated?: boolean;
+  ai_image_generation_requested_at?: string;
+  ai_image_generation_completed_at?: string;
   facebook_post_id?: string;
   facebook_post_status?: 'draft' | 'posted' | 'sold' | 'expired' | 'error';
   last_posted_at?: string;
@@ -72,6 +75,8 @@ export const useVehicles = () => {
         },
         (payload) => {
           console.log('Real-time vehicle update:', payload);
+          console.log('Update type:', payload.eventType);
+          console.log('Vehicle data:', payload.new);
           
           if (payload.eventType === 'INSERT') {
             const newVehicle = payload.new as Vehicle;
@@ -91,6 +96,14 @@ export const useVehicles = () => {
             setVehicles(prev => prev.map(v => 
               v.id === updatedVehicle.id ? updatedVehicle : v
             ));
+            
+            // Show toast for image generation completion
+            if (updatedVehicle.ai_images_generated && updatedVehicle.images && updatedVehicle.images.length > 0) {
+              toast({
+                title: "AI Images Generated",
+                description: `Generated ${updatedVehicle.images.length} images for ${updatedVehicle.year} ${updatedVehicle.make} ${updatedVehicle.model}`,
+              });
+            }
           } else if (payload.eventType === 'DELETE') {
             const deletedVehicle = payload.old as Vehicle;
             setVehicles(prev => prev.filter(v => v.id !== deletedVehicle.id));
