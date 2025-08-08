@@ -1256,9 +1256,13 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
               }).catch(err => console.warn('AI description generation failed:', err));
             }
             
-            // Generate AI images asynchronously if no images exist OR if images array is empty
-            if (!vehicle.images || vehicle.images.length === 0) {
-              console.log(`Vehicle ${inserted.id} has ${vehicle.images?.length || 0} images, generating AI images`);
+            // Generate AI images asynchronously if no images exist OR if images array has less than 3 images
+            console.log(`Checking AI image generation for vehicle ${inserted.id}: images = ${JSON.stringify(vehicle.images)}, length = ${vehicle.images?.length || 0}`);
+            
+            if (!vehicle.images || vehicle.images.length < 3) {
+              console.log(`Vehicle ${inserted.id} has ${vehicle.images?.length || 0} images (less than 3), generating AI images`);
+              console.log('Calling generate-vehicle-images function...');
+              
               supabaseClient.functions.invoke('generate-vehicle-images', {
                 body: {
                   vehicleId: inserted.id,
@@ -1273,16 +1277,17 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
                   dealershipName: userProfile?.dealership_name || 'Auto Dealer'
                 }
               }).then(({ data, error }) => {
+                console.log('AI image generation response:', { data, error });
                 if (!error && data?.success) {
                   console.log(`AI image generation completed for vehicle ${inserted.id}: ${data.imagesGenerated} images created`);
                 } else {
-                  console.warn(`AI image generation failed for vehicle ${inserted.id}:`, error?.message || 'Unknown error');
+                  console.warn(`AI image generation failed for vehicle ${inserted.id}:`, error?.message || 'Unknown error', data);
                 }
               }).catch(err => {
                 console.warn('AI image generation request failed:', err?.message || err);
               });
             } else {
-              console.log(`Vehicle ${inserted.id} already has ${vehicle.images.length} images, skipping AI generation`);
+              console.log(`Vehicle ${inserted.id} already has ${vehicle.images.length} images (3 or more), skipping AI generation`);
             }
 
             return inserted;
