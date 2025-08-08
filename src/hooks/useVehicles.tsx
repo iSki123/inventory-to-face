@@ -370,6 +370,18 @@ export const useVehicles = () => {
           console.error(`Error auto-decoding VIN for new vehicle:`, error);
         }
       }
+
+      // Auto-generate AI images if vehicle has fewer than 3 images
+      const imageCount = newVehicle.images?.length || 0;
+      if (imageCount < 3) {
+        console.log(`Vehicle ${newVehicle.year} ${newVehicle.make} ${newVehicle.model} has only ${imageCount} images, triggering AI generation`);
+        try {
+          // Don't await this - let it run in background
+          generateAIImages([newVehicle.id]);
+        } catch (error) {
+          console.error('Failed to trigger AI image generation for new vehicle:', error);
+        }
+      }
       
       toast({
         title: "Success",

@@ -82,6 +82,24 @@ serve(async (req) => {
             .maybeSingle();
           if (error) throw error;
           updated.push(data);
+          
+          // Check if AI image generation is needed for updated vehicle
+          const imageCount = payload.images?.length || 0;
+          if (imageCount < 3) {
+            console.log(`Updated vehicle ${payload.year} ${payload.make} ${payload.model} has only ${imageCount} images, triggering AI generation`);
+            try {
+              // Trigger AI image generation in background
+              await supabase.functions.invoke('generate-vehicle-images', {
+                body: { 
+                  vehicleId: data.id,
+                  vehicleData: data,
+                  dealershipName: 'DEALER'
+                }
+              });
+            } catch (error) {
+              console.error('Failed to trigger AI image generation for updated vehicle:', error);
+            }
+          }
         } else {
           // Ensure user_id exists when inserting
           if (!payload.user_id) throw new Error('Missing user; please authenticate extension');
@@ -93,6 +111,24 @@ serve(async (req) => {
             .single();
           if (error) throw error;
           inserted.push(data);
+          
+          // Check if AI image generation is needed for new vehicle
+          const imageCount = payload.images?.length || 0;
+          if (imageCount < 3) {
+            console.log(`New vehicle ${payload.year} ${payload.make} ${payload.model} has only ${imageCount} images, triggering AI generation`);
+            try {
+              // Trigger AI image generation in background
+              await supabase.functions.invoke('generate-vehicle-images', {
+                body: { 
+                  vehicleId: data.id,
+                  vehicleData: data,
+                  dealershipName: 'DEALER'
+                }
+              });
+            } catch (error) {
+              console.error('Failed to trigger AI image generation for new vehicle:', error);
+            }
+          }
         }
       } catch (e) {
         errors.push({ vin: v?.vin, error: e.message });

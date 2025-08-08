@@ -16,7 +16,7 @@ import { VehicleForm } from "@/components/VehicleForm";
 import { VehicleSourceForm } from "@/components/VehicleSourceForm";
 
 export default function Inventory() {
-  const { vehicles, loading, addVehicle, updateVehicle, deleteVehicle, bulkDeleteVehicles, postToFacebook, generateAIDescriptions, refetch } = useVehicles();
+  const { vehicles, loading, addVehicle, updateVehicle, deleteVehicle, bulkDeleteVehicles, postToFacebook, generateAIDescriptions, generateAIImages, refetch } = useVehicles();
   const { sources, loading: sourcesLoading, addSource, startScraping, importSpecificTask, listAvailableTasks } = useVehicleSources();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -245,6 +245,14 @@ export default function Inventory() {
                 >
                   <Sparkles className="mr-2 h-4 w-4" />
                   AI Descriptions ({selectedVehicles.length})
+                </Button>
+                <Button 
+                  onClick={() => generateAIImages(selectedVehicles)} 
+                  variant="outline"
+                  disabled={loading}
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  AI Images ({selectedVehicles.length})
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
