@@ -90,51 +90,109 @@ serve(async (req) => {
     const generatedImages: string[] = [];
     const imageGenerationErrors: string[] = [];
 
-    // Generate each image sequentially to avoid rate limits
+    // Helper function to wait for a specific amount of time
+    const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // Helper function to make API request with retry logic
+    const generateImageWithRetry = async (imageConfig: any, maxRetries = 3): Promise<string | null> => {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`Generating ${imageConfig.angle} image (attempt ${attempt}/${maxRetries})...`);
+          
+          const response = await fetch('https://api.openai.com/v1/images/generations', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${openAIApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'gpt-image-1',
+              prompt: imageConfig.prompt,
+              n: 1,
+              size: '1024x1024',
+              quality: 'high',
+              output_format: 'png'
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.text();
+            console.error(`OpenAI API error for ${imageConfig.angle}:`, response.status, errorData);
+            
+            // Handle rate limit specifically
+            if (response.status === 429) {
+              try {
+                const errorJson = JSON.parse(errorData);
+                const retryAfter = errorJson.error?.message?.match(/(\d+\.?\d*) seconds/);
+                const waitTime = retryAfter ? Math.ceil(parseFloat(retryAfter[1])) * 1000 : 30000; // Default 30s
+                
+                if (attempt < maxRetries) {
+                  console.log(`Rate limited. Waiting ${waitTime/1000} seconds before retry...`);
+                  await wait(waitTime);
+                  continue;
+                }
+              } catch (parseError) {
+                console.error('Error parsing rate limit response:', parseError);
+              }
+            }
+            
+            // Handle organization verification error
+            if (response.status === 403) {
+              const errorMsg = `Organization verification required for gpt-image-1 model`;
+              console.error(errorMsg);
+              imageGenerationErrors.push(`${imageConfig.angle}: ${errorMsg}`);
+              return null;
+            }
+            
+            imageGenerationErrors.push(`${imageConfig.angle}: ${response.status} ${response.statusText}`);
+            if (attempt < maxRetries && response.status >= 500) {
+              // Retry on server errors with exponential backoff
+              const backoffTime = Math.pow(2, attempt) * 1000;
+              console.log(`Server error. Retrying in ${backoffTime/1000} seconds...`);
+              await wait(backoffTime);
+              continue;
+            }
+            return null;
+          }
+
+          const data = await response.json();
+          if (data.data && data.data[0] && data.data[0].b64_json) {
+            // Convert base64 to data URL
+            const imageUrl = `data:image/png;base64,${data.data[0].b64_json}`;
+            console.log(`Successfully generated ${imageConfig.angle} image`);
+            return imageUrl;
+          } else {
+            console.error(`No image data returned for ${imageConfig.angle}`);
+            imageGenerationErrors.push(`${imageConfig.angle}: No image data returned`);
+            return null;
+          }
+
+        } catch (error) {
+          console.error(`Error generating ${imageConfig.angle} image (attempt ${attempt}):`, error);
+          if (attempt < maxRetries) {
+            const backoffTime = Math.pow(2, attempt) * 1000;
+            console.log(`Retrying in ${backoffTime/1000} seconds...`);
+            await wait(backoffTime);
+            continue;
+          }
+          imageGenerationErrors.push(`${imageConfig.angle}: ${error.message}`);
+          return null;
+        }
+      }
+      return null;
+    };
+
+    // Generate each image sequentially with proper rate limiting
     for (const imageConfig of imagePrompts) {
-      try {
-        console.log(`Generating ${imageConfig.angle} image...`);
-        
-        const response = await fetch('https://api.openai.com/v1/images/generations', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openAIApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'gpt-image-1',
-            prompt: imageConfig.prompt,
-            n: 1,
-            size: '1024x1024',
-            quality: 'high',
-            output_format: 'png'
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.text();
-          console.error(`OpenAI API error for ${imageConfig.angle}:`, response.status, errorData);
-          imageGenerationErrors.push(`${imageConfig.angle}: ${response.status} ${response.statusText}`);
-          continue;
-        }
-
-        const data = await response.json();
-        if (data.data && data.data[0] && data.data[0].b64_json) {
-          // Convert base64 to data URL
-          const imageUrl = `data:image/png;base64,${data.data[0].b64_json}`;
-          generatedImages.push(imageUrl);
-          console.log(`Successfully generated ${imageConfig.angle} image`);
-        } else {
-          console.error(`No image data returned for ${imageConfig.angle}`);
-          imageGenerationErrors.push(`${imageConfig.angle}: No image data returned`);
-        }
-
-        // Small delay between requests to respect rate limits
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-      } catch (error) {
-        console.error(`Error generating ${imageConfig.angle} image:`, error);
-        imageGenerationErrors.push(`${imageConfig.angle}: ${error.message}`);
+      const imageUrl = await generateImageWithRetry(imageConfig);
+      if (imageUrl) {
+        generatedImages.push(imageUrl);
+      }
+      
+      // Add delay between requests to prevent rate limiting
+      if (imageConfig !== imagePrompts[imagePrompts.length - 1]) {
+        console.log('Waiting 3 seconds before next image generation...');
+        await wait(3000);
       }
     }
 
