@@ -872,14 +872,16 @@ function parseOctoparseData(rawData: any[]): any[] {
     const hasMakeModel = Boolean(vehicle.make && String(vehicle.make).trim()) && Boolean(vehicle.model && String(vehicle.model).trim());
 
     if (!hasMakeModel) {
-      console.log(`Skipping vehicle due to missing make/model: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, {
+      console.log(`⚠️  FILTERING OUT vehicle due to missing make/model: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, {
         hasMake: Boolean(vehicle.make),
         hasModel: Boolean(vehicle.model),
         price: vehicle.price,
-        images: vehicle.images.length
+        images: vehicle.images.length,
+        rawMake: vehicle.make,
+        rawModel: vehicle.model
       });
     } else {
-      console.log(`Including vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} - Price: $${(vehicle.price || 0)/100}, Images: ${vehicle.images.length}`);
+      console.log(`✅ INCLUDING vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} - Price: $${(vehicle.price || 0)/100}, Images: ${vehicle.images.length}`);
     }
 
     return hasMakeModel;
@@ -1092,6 +1094,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
         const pageJson = await pageResp.json();
         const pageList = pageJson.data?.dataList || pageJson.dataList || pageJson.data || [];
         console.log(`Fetched ${pageList.length} rows at offset ${offset} (page ${totalPages + 1})`);
+        console.log(`Sample row structure:`, pageList.length > 0 ? Object.keys(pageList[0]) : 'No data');
 
         if (pageList.length === 0) {
           console.log('No more data available, ending pagination');
@@ -1111,8 +1114,8 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
         offset += pageSize;
         
         // Safety check to prevent infinite loops and edge function timeouts
-        if (totalPages > 30) { // Limit to prevent timeouts
-          console.warn('Reached maximum page limit (30), stopping pagination');
+        if (totalPages > 50) { // Increased limit to handle more vehicles
+          console.warn('Reached maximum page limit (50), stopping pagination');
           break;
         }
 
@@ -1133,10 +1136,16 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
       }
     }
 
-    console.log(`Total raw data fetched: ${allRawData.length} records from ${totalPages} pages`);
+    console.log(`📊 IMPORT SUMMARY: Total raw data fetched: ${allRawData.length} records from ${totalPages} pages`);
 
     let vehicleData = parseOctoparseData(allRawData);
-    console.log(`Parsed ${vehicleData.length} vehicles from task ${taskId} (raw rows: ${allRawData.length})`);
+    console.log(`📊 PARSING SUMMARY: Parsed ${vehicleData.length} vehicles from task ${taskId} (raw rows: ${allRawData.length})`);
+    
+    // Log detailed parsing statistics
+    const skippedCount = allRawData.length - vehicleData.length;
+    if (skippedCount > 0) {
+      console.log(`⚠️  ${skippedCount} vehicles were filtered out during parsing (missing make/model data)`);
+    }
 
     // Build diagnostics if requested
     const diagEnabled = Boolean(diagnostics && (diagnostics === true || diagnostics.enabled));
