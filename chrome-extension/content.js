@@ -536,24 +536,37 @@ class SalesonatorAutomator {
 
   // Check if currently on the vehicle posting dashboard
   isOnVehiclePostingDashboard() {
-    // Check for key elements that indicate we're on the vehicle posting form
-    const indicators = [
-      document.querySelector('h1')?.textContent?.includes('Vehicle for sale'),
-      document.querySelector('[aria-label*="Vehicle type"]'),
-      document.querySelector('text:About this vehicle'),
-      document.querySelector('[placeholder*="Year"]'),
-      document.querySelector('[placeholder*="Make"]'),
-      document.querySelector('[placeholder*="Model"]'),
-      document.querySelector('text:Add photos'),
-      document.querySelector('text:Add video'),
-      window.location.href.includes('/marketplace/create')
-    ];
-    
-    const foundIndicators = indicators.filter(Boolean).length;
-    this.log(`📊 Found ${foundIndicators} vehicle posting indicators`);
-    
-    // Consider it the vehicle posting dashboard if we find at least 3 indicators
-    return foundIndicators >= 3;
+    try {
+      // Check for key elements that indicate we're on the vehicle posting form using proper CSS selectors
+      const indicators = [
+        // Check for "Vehicle for sale" text in h1
+        document.querySelector('h1')?.textContent?.includes('Vehicle for sale'),
+        document.querySelector('h1')?.textContent?.includes('vehicle'),
+        // Check for vehicle-specific form elements
+        document.querySelector('[aria-label*="Vehicle type"]'),
+        document.querySelector('[aria-label*="vehicle type"]'),
+        document.querySelector('[placeholder*="Year"]'),
+        document.querySelector('[placeholder*="Make"]'),
+        document.querySelector('[placeholder*="Model"]'),
+        // Check for photo upload sections
+        document.querySelector('input[type="file"]'),
+        // Check if URL contains marketplace create
+        window.location.href.includes('/marketplace/create'),
+        // Look for common text patterns
+        document.body.textContent.includes('About this vehicle'),
+        document.body.textContent.includes('Add photos'),
+        document.body.textContent.includes('Vehicle type')
+      ];
+      
+      const foundIndicators = indicators.filter(Boolean).length;
+      this.log(`📊 Found ${foundIndicators} vehicle posting indicators`);
+      
+      // Consider it the vehicle posting dashboard if we find at least 3 indicators
+      return foundIndicators >= 3;
+    } catch (error) {
+      this.log('❌ Error checking vehicle posting dashboard:', error);
+      return false;
+    }
   }
 
   // Select vehicle category from the listing type page
@@ -604,65 +617,79 @@ class SalesonatorAutomator {
     try {
       this.log('🧭 Navigating to marketplace...');
       
-      // First, try to find and click the Marketplace link in the sidebar
-      const marketplaceSelectors = [
-        'a[href*="/marketplace"]',
-        'text:Marketplace',
-        'aria:Marketplace',
-        '[aria-label*="Marketplace"]'
-      ];
-      
-      const marketplaceLink = await this.waitForElement(marketplaceSelectors, 5000);
-      
-      if (marketplaceLink) {
-        this.log('✅ Found marketplace link, clicking...');
-        await this.scrollIntoView(marketplaceLink);
-        await this.delay(this.randomDelay(300, 600));
-        marketplaceLink.click();
-        await this.delay(this.randomDelay(2000, 3000));
-      } else {
-        // Fallback: navigate directly using the URL
-        this.log('🔄 Marketplace link not found, navigating directly...');
-        window.location.href = 'https://www.facebook.com/marketplace/?ref=bookmark';
-        await this.delay(3000);
+      // First check if we're already on the right page
+      if (window.location.href.includes('/marketplace/create')) {
+        this.log('✅ Already on marketplace create page');
+        await this.selectVehicleCategory();
+        return;
       }
       
-      // Now look for "Create new listing" or "Sell" button
+      // Navigate to marketplace bookmark URL directly since we're on Facebook homepage
+      this.log('🔄 Navigating to marketplace via direct URL...');
+      window.location.href = 'https://www.facebook.com/marketplace/?ref=bookmark';
+      
+      // Wait for page to load
+      await this.delay(4000);
+      
+      // Now look for "Create new listing", "Sell something", or similar button
       const createListingSelectors = [
-        'text:Create new listing',
-        'text:Sell',
-        'aria:Create new listing',
-        'aria:Sell',
-        '[aria-label*="Create"]',
-        '[aria-label*="Sell"]',
-        'a[href*="/marketplace/create"]'
+        'a[href*="/marketplace/create"]',
+        '[aria-label*="Create new listing"]',
+        '[aria-label*="Sell something"]',
+        '[aria-label*="Create listing"]',
+        '[data-testid*="create"]'
       ];
       
       this.log('🔍 Looking for create listing button...');
-      const createButton = await this.waitForElement(createListingSelectors, 10000);
+      
+      // Try to find create button with different selectors
+      let createButton = null;
+      
+      for (const selector of createListingSelectors) {
+        try {
+          createButton = await this.waitForElement([selector], 3000);
+          if (createButton) break;
+        } catch (e) {
+          // Continue to next selector
+        }
+      }
+      
+      // Fallback: look for any button/link containing "sell" or "create"
+      if (!createButton) {
+        this.log('🔍 Searching for create button with text content...');
+        const allButtons = document.querySelectorAll('button, a');
+        for (const btn of allButtons) {
+          const text = btn.textContent?.toLowerCase() || '';
+          const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+          if ((text.includes('sell') || text.includes('create') || 
+               ariaLabel.includes('sell') || ariaLabel.includes('create')) &&
+              (text.includes('listing') || ariaLabel.includes('listing') || 
+               btn.href?.includes('/marketplace/create'))) {
+            createButton = btn;
+            this.log('✅ Found create button via text search:', text || ariaLabel);
+            break;
+          }
+        }
+      }
       
       if (createButton) {
         this.log('✅ Found create listing button, clicking...');
         await this.scrollIntoView(createButton);
-        await this.delay(this.randomDelay(300, 600));
+        await this.delay(this.randomDelay(500, 1000));
         createButton.click();
-        await this.delay(this.randomDelay(2000, 3000));
+        await this.delay(this.randomDelay(3000, 4000));
         
         // Now we should be on the listing type selection page
-        // Automatically select vehicle category
         await this.selectVehicleCategory();
       } else {
-        throw new Error('Could not find create listing button');
+        throw new Error('Could not find create listing button on marketplace page');
       }
       
     } catch (error) {
       this.log('❌ Navigation to marketplace failed:', error);
-      throw new Error('Failed to navigate to marketplace creation page');
+      throw new Error(`Failed to navigate to marketplace: ${error.message}`);
     }
-    if (currentUrl.includes('facebook.com') && !currentUrl.includes('marketplace')) {
-      this.log('⚠️ On Facebook but not Marketplace - manual navigation required to prevent redirects');
-      throw new Error('Please navigate to Facebook Marketplace manually - extension will NOT auto-navigate to prevent redirects');
-    }
+  }
   }
 
   // Enhanced form filling with React-native value setting
