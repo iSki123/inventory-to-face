@@ -299,28 +299,6 @@ export default function AdminPanel() {
         </Card>
       </div>
 
-      {/* Cron Job Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Automated Cron Job Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span className="text-sm">Business Hours: Every 30 minutes, 5 VINs per batch</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span className="text-sm">Off Hours: Every 10 minutes, 10 VINs per batch</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span className="text-sm">Rate Limited: 1-2 second delays between requests</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Results Display */}
       {result && (
