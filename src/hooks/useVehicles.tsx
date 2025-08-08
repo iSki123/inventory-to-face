@@ -56,6 +56,54 @@ export const useVehicles = () => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
 
+  // Set up real-time subscription for vehicles table
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('vehicles-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'vehicles',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Real-time vehicle update:', payload);
+          
+          if (payload.eventType === 'INSERT') {
+            const newVehicle = payload.new as Vehicle;
+            setVehicles(prev => {
+              // Check if vehicle already exists to avoid duplicates
+              const exists = prev.some(v => v.id === newVehicle.id);
+              if (exists) return prev;
+              return [newVehicle, ...prev];
+            });
+            
+            toast({
+              title: "New Vehicle Added",
+              description: `${newVehicle.year} ${newVehicle.make} ${newVehicle.model} has been imported`,
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedVehicle = payload.new as Vehicle;
+            setVehicles(prev => prev.map(v => 
+              v.id === updatedVehicle.id ? updatedVehicle : v
+            ));
+          } else if (payload.eventType === 'DELETE') {
+            const deletedVehicle = payload.old as Vehicle;
+            setVehicles(prev => prev.filter(v => v.id !== deletedVehicle.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, toast]);
+
   // Remove undefined keys to avoid nulling existing DB values on update
   const pruneUndefined = <T extends Record<string, any>>(obj: T): Partial<T> => {
     const cleaned: Record<string, any> = {};
