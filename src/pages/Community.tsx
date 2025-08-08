@@ -110,141 +110,147 @@ export default function Community() {
   const selectedChannel = channels?.find(c => c.id === selectedChannelId);
 
   return (
-    <div className="h-full flex">
-      {/* Channel Sidebar */}
-      <div className="w-64 border-r border-border bg-muted/50">
-        <div className="p-4 border-b border-border">
-          <h2 className="font-semibold text-lg flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Community
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {isConnected ? 'Connected' : 'Connecting...'}
-          </p>
-        </div>
-        
-        <ScrollArea className="h-[calc(100vh-12rem)]">
-          <div className="p-2">
-            {channelsLoading ? (
-              <div className="space-y-2">
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="h-8 bg-muted animate-pulse rounded" />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {channels?.map((channel) => (
-                  <Button
-                    key={channel.id}
-                    variant={selectedChannelId === channel.id ? "secondary" : "ghost"}
-                    className="w-full justify-start text-left"
-                    onClick={() => setSelectedChannelId(channel.id)}
-                  >
-                    <Hash className="h-4 w-4 mr-2" />
-                    <span className="truncate">{channel.display_name}</span>
-                  </Button>
-                ))}
-              </div>
-            )}
-          </div>
-        </ScrollArea>
-      </div>
-
-      {/* Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Channel Header */}
-        <div className="p-4 border-b border-border bg-background">
-          <div className="flex items-center gap-2">
-            <Hash className="h-5 w-5 text-muted-foreground" />
-            <h3 className="font-semibold">{selectedChannel?.display_name}</h3>
-            {selectedChannel?.name === 'sales-wins' && (
-              <Trophy className="h-4 w-4 text-yellow-500" />
-            )}
-          </div>
-          {selectedChannel?.description && (
-            <p className="text-sm text-muted-foreground mt-1">
-              {selectedChannel.description}
+    <div className="h-screen flex flex-col">
+      <div className="flex flex-1 min-h-0">
+        {/* Channel Sidebar */}
+        <div className="w-64 border-r border-border bg-muted/50 flex flex-col">
+          <div className="p-4 border-b border-border">
+            <h2 className="font-semibold text-lg flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Community
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {isConnected ? 'Connected' : 'Connecting...'}
             </p>
-          )}
+          </div>
+          
+          <ScrollArea className="flex-1">
+            <div className="p-2">
+              {channelsLoading ? (
+                <div className="space-y-2">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="h-8 bg-muted animate-pulse rounded" />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {channels?.map((channel) => (
+                    <Button
+                      key={channel.id}
+                      variant={selectedChannelId === channel.id ? "secondary" : "ghost"}
+                      className="w-full justify-start text-left"
+                      onClick={() => setSelectedChannelId(channel.id)}
+                    >
+                      <Hash className="h-4 w-4 mr-2" />
+                      <span className="truncate">{channel.display_name}</span>
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
         </div>
 
-        {/* Messages Area */}
-        <ScrollArea className="flex-1 p-4">
-          <div className="space-y-4">
-            {messagesLoading ? (
-              <div className="space-y-4">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="flex gap-3">
-                    <div className="w-8 h-8 bg-muted animate-pulse rounded-full" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 bg-muted animate-pulse rounded w-24" />
-                      <div className="h-4 bg-muted animate-pulse rounded w-full" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : messages && messages.length > 0 ? (
-              messages.map((message) => (
-                <div key={message.id} className="flex gap-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="text-xs">
-                      {getUserInitials(message.profiles?.first_name, message.profiles?.last_name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-sm font-medium ${getRoleColor(message.profiles?.role)}`}>
-                        {getUserDisplayName(
-                          message.user_id, 
-                          message.profiles?.first_name, 
-                          message.profiles?.last_name
-                        )}
-                      </span>
-                      {getRoleBadge(message.profiles?.role)}
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(message.created_at).toLocaleTimeString([], { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
-                        })}
-                      </span>
-                    </div>
-                    <div className={`text-sm ${
-                      message.message_type === 'achievement' 
-                        ? 'bg-yellow-50 border-l-4 border-yellow-400 pl-3 py-2 rounded-r' 
-                        : ''
-                    }`}>
-                      {message.message_content}
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center text-muted-foreground py-8">
-                <Hash className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No messages yet. Be the first to start the conversation!</p>
-              </div>
+        {/* Chat Area */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Channel Header */}
+          <div className="p-4 border-b border-border bg-background flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <Hash className="h-5 w-5 text-muted-foreground" />
+              <h3 className="font-semibold">{selectedChannel?.display_name}</h3>
+              {selectedChannel?.name === 'sales-wins' && (
+                <Trophy className="h-4 w-4 text-yellow-500" />
+              )}
+            </div>
+            {selectedChannel?.description && (
+              <p className="text-sm text-muted-foreground mt-1">
+                {selectedChannel.description}
+              </p>
             )}
-            <div ref={messagesEndRef} />
           </div>
-        </ScrollArea>
 
-        {/* Message Input */}
-        <div className="p-4 border-t border-border">
-          <div className="flex gap-2">
-            <Input
-              placeholder={`Message ${selectedChannel?.display_name}...`}
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              disabled={!isConnected}
-            />
-            <Button 
-              onClick={handleSendMessage} 
-              disabled={!newMessage.trim() || !isConnected}
-              size="icon"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
+          {/* Messages Area - Fixed height with internal scrolling */}
+          <div className="flex-1 min-h-0 flex flex-col">
+            <ScrollArea className="flex-1 px-4">
+              <div className="py-4 space-y-4">
+                {messagesLoading ? (
+                  <div className="space-y-4">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="flex gap-3">
+                        <div className="w-8 h-8 bg-muted animate-pulse rounded-full" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 bg-muted animate-pulse rounded w-24" />
+                          <div className="h-4 bg-muted animate-pulse rounded w-full" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : messages && messages.length > 0 ? (
+                  messages.map((message) => (
+                    <div key={message.id} className="flex gap-3">
+                      <Avatar className="h-8 w-8 flex-shrink-0">
+                        <AvatarFallback className="text-xs">
+                          {getUserInitials(message.profiles?.first_name, message.profiles?.last_name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 space-y-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-sm font-medium ${getRoleColor(message.profiles?.role)}`}>
+                            {getUserDisplayName(
+                              message.user_id, 
+                              message.profiles?.first_name, 
+                              message.profiles?.last_name
+                            )}
+                          </span>
+                          {getRoleBadge(message.profiles?.role)}
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(message.created_at).toLocaleTimeString([], { 
+                              hour: '2-digit', 
+                              minute: '2-digit' 
+                            })}
+                          </span>
+                        </div>
+                        <div className={`text-sm break-words ${
+                          message.message_type === 'achievement' 
+                            ? 'bg-yellow-50 border-l-4 border-yellow-400 pl-3 py-2 rounded-r' 
+                            : ''
+                        }`}>
+                          {message.message_content}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-muted-foreground py-8">
+                    <Hash className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No messages yet. Be the first to start the conversation!</p>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            </ScrollArea>
+          </div>
+
+          {/* Message Input - Fixed at bottom */}
+          <div className="p-4 border-t border-border flex-shrink-0 bg-background">
+            <div className="flex gap-2">
+              <Input
+                placeholder={`Message ${selectedChannel?.display_name}...`}
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                disabled={!isConnected}
+                className="flex-1"
+              />
+              <Button 
+                onClick={handleSendMessage} 
+                disabled={!newMessage.trim() || !isConnected}
+                size="icon"
+                className="flex-shrink-0"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
