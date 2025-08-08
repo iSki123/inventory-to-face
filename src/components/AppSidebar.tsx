@@ -30,10 +30,15 @@ const mainItems = [
   { title: "Billing", url: "/billing", icon: CreditCard },
 ];
 
+const communityItems = [
+  { title: "Community", url: "/community", icon: MessageSquare },
+];
+
 const adminItems = [
   { title: "User Management", url: "/users", icon: Users },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
   { title: "Admin Panel", url: "/admin", icon: Shield },
+  { title: "Chat Moderation", url: "/chat-moderation", icon: MessageSquare },
 ];
 
 const secondaryItems = [
@@ -62,6 +67,25 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {mainItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <NavLink to={item.url} className={getNavCls}>
+                      <item.icon className="mr-2 h-4 w-4" />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Community Navigation */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Community</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {communityItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink to={item.url} className={getNavCls}>

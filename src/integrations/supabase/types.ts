@@ -14,6 +14,168 @@ export type Database = {
   }
   public: {
     Tables: {
+      chat_channels: {
+        Row: {
+          created_at: string
+          description: string | null
+          display_name: string
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          display_name: string
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          display_name?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      chat_messages: {
+        Row: {
+          attachments: Json | null
+          channel_id: string
+          created_at: string
+          id: string
+          is_deleted: boolean | null
+          is_pinned: boolean | null
+          message_content: string
+          message_type: string
+          parent_message_id: string | null
+          reactions: Json | null
+          updated_at: string
+          user_id: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          attachments?: Json | null
+          channel_id: string
+          created_at?: string
+          id?: string
+          is_deleted?: boolean | null
+          is_pinned?: boolean | null
+          message_content: string
+          message_type?: string
+          parent_message_id?: string | null
+          reactions?: Json | null
+          updated_at?: string
+          user_id: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          attachments?: Json | null
+          channel_id?: string
+          created_at?: string
+          id?: string
+          is_deleted?: boolean | null
+          is_pinned?: boolean | null
+          message_content?: string
+          message_type?: string
+          parent_message_id?: string | null
+          reactions?: Json | null
+          updated_at?: string
+          user_id?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_parent_message_id_fkey"
+            columns: ["parent_message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_moderation: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: string
+          message_id: string | null
+          moderator_id: string
+          reason: string | null
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          moderator_id: string
+          reason?: string | null
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          moderator_id?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_moderation_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_user_status: {
+        Row: {
+          is_muted: boolean | null
+          is_online: boolean | null
+          last_seen: string | null
+          muted_until: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          is_muted?: boolean | null
+          is_online?: boolean | null
+          last_seen?: string | null
+          muted_until?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          is_muted?: boolean | null
+          is_online?: boolean | null
+          last_seen?: string | null
+          muted_until?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       facebook_posting_jobs: {
         Row: {
           completed_at: string | null
@@ -364,6 +526,33 @@ export type Database = {
           id?: number
           state_id?: string
           state_name?: string
+        }
+        Relationships: []
+      }
+      user_achievements: {
+        Row: {
+          achievement_data: Json | null
+          achievement_type: string
+          earned_at: string
+          id: string
+          is_announced: boolean | null
+          user_id: string
+        }
+        Insert: {
+          achievement_data?: Json | null
+          achievement_type: string
+          earned_at?: string
+          id?: string
+          is_announced?: boolean | null
+          user_id: string
+        }
+        Update: {
+          achievement_data?: Json | null
+          achievement_type?: string
+          earned_at?: string
+          id?: string
+          is_announced?: boolean | null
+          user_id?: string
         }
         Relationships: []
       }

@@ -10,9 +10,11 @@ import Dashboard from "./pages/Dashboard";
 import Inventory from "./pages/Inventory";
 import Leads from "./pages/Leads";
 import Billing from "./pages/Billing";
+import Community from "./pages/Community";
 import UserManagement from "./pages/UserManagement";
 import Analytics from "./pages/Analytics";
 import AdminPanel from "./pages/AdminPanel";
+import ChatModerationPanel from "./pages/ChatModerationPanel";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -37,9 +39,11 @@ function AppRoutes() {
           <Route path="/inventory" element={<DashboardLayout><Inventory /></DashboardLayout>} />
           <Route path="/leads" element={<DashboardLayout><Leads /></DashboardLayout>} />
           <Route path="/billing" element={<DashboardLayout><Billing /></DashboardLayout>} />
+          <Route path="/community" element={<DashboardLayout><Community /></DashboardLayout>} />
           <Route path="/users" element={<DashboardLayout><UserManagement /></DashboardLayout>} />
           <Route path="/analytics" element={<DashboardLayout><Analytics /></DashboardLayout>} />
           <Route path="/admin" element={<DashboardLayout><AdminPanel /></DashboardLayout>} />
+          <Route path="/chat-moderation" element={<DashboardLayout><ChatModerationPanel /></DashboardLayout>} />
           <Route path="/settings" element={<DashboardLayout><Settings /></DashboardLayout>} />
         </>
       ) : (
