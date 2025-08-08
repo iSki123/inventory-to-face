@@ -87,6 +87,9 @@ export default function Billing() {
     },
   });
 
+  // Temporarily disable subscription functionality until Stripe is set up
+  const isStripeConfigured = false;
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -126,7 +129,7 @@ export default function Billing() {
             </div>
           )}
           <div className="flex gap-2 pt-4">
-            {subscription?.subscribed ? (
+            {subscription?.subscribed && isStripeConfigured ? (
               <Button 
                 variant="outline"
                 onClick={() => manageSubscriptionMutation.mutate()}
@@ -135,17 +138,22 @@ export default function Billing() {
                 <ExternalLink className="w-4 h-4 mr-2" />
                 Manage Subscription
               </Button>
-            ) : (
+            ) : isStripeConfigured ? (
               <Button 
                 onClick={() => createCheckoutMutation.mutate('price_basic')}
                 disabled={createCheckoutMutation.isPending}
               >
                 Subscribe Now
               </Button>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                Stripe integration not configured yet
+              </div>
             )}
             <Button 
               variant="outline"
               onClick={() => refetchSubscription()}
+              disabled={!isStripeConfigured}
             >
               Refresh Status
             </Button>
