@@ -19,13 +19,15 @@ function sendBG(action, payload={}){
 }
 
 async function refreshAuth(){
-  const { ok } = await sendBG('isAuthenticated');
+  const resp = await sendBG('isAuthenticated').catch(()=>null);
+  const ok = !!(resp && resp.ok);
   authEl.textContent = ok ? 'Authenticated' : 'Not authenticated';
   authEl.style.color = ok ? '#0a0' : '#a00';
 }
 
 async function loadSettings(){
-  const { settings } = await sendBG('getSettings');
+  const resp = await sendBG('getSettings').catch(()=>null);
+  const settings = resp?.settings || { useReverseEng:false, requireAdmin:false, webAppOrigin:'' };
   chkReverseEng.checked = !!settings.useReverseEng;
   chkRequireAdmin.checked = !!settings.requireAdmin;
   originInput.value = settings.webAppOrigin || '';
