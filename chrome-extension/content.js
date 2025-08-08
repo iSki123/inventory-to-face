@@ -821,19 +821,15 @@ class SalesonatorAutomator {
       await safeDelay(800, 1200); // Extra delay after Make to ensure it's fully processed
     }
 
-    // 6) Model (typed, Title Case)
+    // 6) Model (typed, Title Case) - Enhanced Detection
     await attempt('Model', async () => {
       try {
         const model = this.toTitleCase(String(vehicleData.model || ''));
-        const el = await this.waitForElement(['[aria-label*="Model"]','input[placeholder*="Model"]','input[name*="model"]'], 6000);
-        await this.scrollIntoView(el);
-        if (el.select) el.select();
-        this.setNativeValue(el, '');
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        await this.delay(80);
-        await this.typeHumanLike(el, model);
-        return (el.value || '').trim().length > 0;
-      } catch { return false; }
+        return await this.fillModelFieldEnhanced(model);
+      } catch (error) {
+        this.log(`❌ Model field error: ${error.message}`);
+        return false;
+      }
     });
 
     // 7) Mileage (typed, min 300)
