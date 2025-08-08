@@ -43,7 +43,7 @@ export const useChatMessages = (channelId: string) => {
         .eq("channel_id", channelId)
         .eq("is_deleted", false)
         .order("created_at", { ascending: true })
-        .limit(100);
+        .limit(50); // Reduced limit for better performance
 
       if (messagesError) {
         console.error("Error fetching chat messages:", messagesError);
@@ -75,6 +75,8 @@ export const useChatMessages = (channelId: string) => {
       return messagesWithProfiles;
     },
     enabled: !!channelId,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
   });
 
   // Real-time subscription
@@ -115,9 +117,19 @@ export const useChatMessages = (channelId: string) => {
             (oldData: ChatMessage[] | undefined) => {
               if (!oldData) return [newMessage];
               
-              // Check if message already exists (avoid duplicates)
-              const messageExists = oldData.some(msg => msg.id === newMessage.id);
-              if (messageExists) return oldData;
+              // Check if message already exists (avoid duplicates) - including temp messages
+              const messageExists = oldData.some(msg => 
+                msg.id === newMessage.id || 
+                (msg.id.startsWith('temp-') && msg.user_id === newMessage.user_id && msg.message_content === newMessage.message_content)
+              );
+              if (messageExists) {
+                // Replace temp message with real message
+                return oldData.map(msg => 
+                  (msg.id.startsWith('temp-') && msg.user_id === newMessage.user_id && msg.message_content === newMessage.message_content)
+                    ? newMessage 
+                    : msg
+                );
+              }
               
               // Add the new message to the end of the list
               return [...oldData, newMessage];
@@ -291,18 +303,9 @@ export const useChatMessages = (channelId: string) => {
       }
     },
     onSuccess: (data, variables, context) => {
-      // Replace the optimistic message with the real one from the server
-      queryClient.setQueryData<ChatMessage[]>(
-        ["chat-messages", channelId],
-        (old) => {
-          if (!old) return [data];
-          
-          // Remove the optimistic message and add the real one
-          const filtered = old.filter(msg => msg.id !== context?.optimisticMessage?.id);
-          return [...filtered];
-          // Note: The real message will be added by the real-time subscription
-        }
-      );
+      // Don't remove the optimistic message here - let the real-time subscription handle it
+      // This prevents the message from disappearing before the real-time update arrives
+      console.log('Message sent successfully:', data);
     },
   });
 
