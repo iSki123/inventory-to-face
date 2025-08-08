@@ -11,6 +11,7 @@ import { Vehicle } from "@/hooks/useVehicles";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Eye, X } from "lucide-react";
 
 interface VehicleFormProps {
   open: boolean;
@@ -45,6 +46,7 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDecodingVin, setIsDecodingVin] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
 
   const decodeVinAutomatically = async (vin: string) => {
     if (!vin || vin.length !== 17) return;
@@ -614,7 +616,86 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
                   </p>
                 </div>
               )}
+             </div>
+           )}
+
+          {/* Vehicle Images Gallery */}
+          {formData.images && formData.images.length > 0 && (
+            <div className="space-y-3">
+              <Label>Vehicle Images ({formData.images.length})</Label>
+              <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                {formData.images.map((image, index) => (
+                  <div
+                    key={index}
+                    className="relative aspect-square bg-muted rounded-md overflow-hidden cursor-pointer hover:opacity-75 transition-opacity group"
+                    onClick={() => setSelectedImageIndex(index)}
+                  >
+                    <img
+                      src={image}
+                      alt={`Vehicle image ${index + 1}`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Eye className="w-4 h-4 text-white" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
+          )}
+
+          {/* Image Viewer Modal */}
+          {selectedImageIndex !== null && formData.images && (
+            <Dialog open={selectedImageIndex !== null} onOpenChange={() => setSelectedImageIndex(null)}>
+              <DialogContent className="max-w-4xl max-h-[90vh] p-2">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center justify-between">
+                    <span>Vehicle Image {selectedImageIndex + 1} of {formData.images.length}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedImageIndex(null)}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="flex items-center justify-center min-h-[400px]">
+                  <img
+                    src={formData.images[selectedImageIndex]}
+                    alt={`Vehicle image ${selectedImageIndex + 1}`}
+                    className="max-w-full max-h-[70vh] object-contain rounded-md"
+                    onError={(e) => {
+                      e.currentTarget.src = '/placeholder.svg';
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between items-center pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedImageIndex(Math.max(0, selectedImageIndex - 1))}
+                    disabled={selectedImageIndex === 0}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    {selectedImageIndex + 1} / {formData.images.length}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedImageIndex(Math.min(formData.images.length - 1, selectedImageIndex + 1))}
+                    disabled={selectedImageIndex === formData.images.length - 1}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           )}
 
           {/* Status */}
