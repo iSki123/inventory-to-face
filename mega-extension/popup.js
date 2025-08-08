@@ -21,6 +21,7 @@ function sendBG(action, payload={}){
 async function refreshAuth(){
   const { ok } = await sendBG('isAuthenticated');
   authEl.textContent = ok ? 'Authenticated' : 'Not authenticated';
+  authEl.style.color = ok ? '#0a0' : '#a00';
 }
 
 async function loadSettings(){
@@ -44,6 +45,8 @@ btnSSO.addEventListener('click', async ()=>{
   const res = await sendBG('ssoLogin');
   if(res?.ok){
     log('SSO success');
+  } else if (res?.error === 'admin_required') {
+    log('SSO failed: Admin required. Log into Salesonator as an admin.');
   } else {
     log('SSO failed: ' + (res?.error||'unknown'));
   }

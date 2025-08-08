@@ -7,6 +7,7 @@ const EDGE_FN = {
   SCRAPE_VEHICLE: `${SUPABASE_BASE_URL}/functions/v1/scrape-vehicle`,
   FACEBOOK_POSTER: `${SUPABASE_BASE_URL}/functions/v1/facebook-poster`,
   IMAGE_PROXY: `${SUPABASE_BASE_URL}/functions/v1/image-proxy`,
+  VERIFY_ADMIN: `${SUPABASE_BASE_URL}/functions/v1/verify-admin`,
 };
 
 class SalesonatorMegaBackground {
@@ -139,7 +140,21 @@ class SalesonatorMegaBackground {
         });
 
         if(result?.ok && result?.token){
-          // Optional: verify admin role (best-effort, non-blocking)
+          const { settings } = await chrome.storage.sync.get({ settings: this.settings });
+          if (settings.requireAdmin) {
+            try {
+              const res = await fetch(EDGE_FN.VERIFY_ADMIN, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${result.token}` },
+              });
+              const data = await res.json().catch(()=>({}));
+              if (!res.ok || !data?.is_admin) {
+                return { ok:false, error: 'admin_required' };
+              }
+            } catch (e) {
+              return { ok:false, error: 'admin_check_failed' };
+            }
+          }
           let userInfo = result.user || null;
           await chrome.storage.local.set({ userToken: result.token, userInfo });
           return { ok:true, user: userInfo };
