@@ -426,7 +426,14 @@ class SalesonatorExtension {
 
     const vehicle = this.vehicles[this.currentVehicleIndex];
     const statusEl = document.getElementById('status');
-    statusEl.textContent = `Posting vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}: ${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+    
+    // Helper function to convert to title case
+    const toTitleCase = (str) => {
+      if (!str) return str;
+      return str.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+    };
+    
+    statusEl.textContent = `Posting vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}: ${vehicle.year} ${vehicle.make} ${toTitleCase(vehicle.model)}`;
 
     try {
       // Send vehicle data to content script
