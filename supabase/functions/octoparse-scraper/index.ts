@@ -865,27 +865,110 @@ function parseOctoparseData(rawData: any[]): any[] {
     return vehicle;
   });
 
-  console.log(`Parsed ${parsedVehicles.length} raw vehicles before filtering`);
+  console.log(`Parsed ${parsedVehicles.length} raw vehicles before filtering/VIN decoding`);
   
-  return parsedVehicles.filter(vehicle => {
-    // Only require make and model; price can be 0 or missing (we'll default to 0)
+  // First pass: identify vehicles that need VIN decoding
+  const vehiclesNeedingVinDecoding = [];
+  const validVehicles = [];
+  
+  for (const vehicle of parsedVehicles) {
     const hasMakeModel = Boolean(vehicle.make && String(vehicle.make).trim()) && Boolean(vehicle.model && String(vehicle.model).trim());
-
-    if (!hasMakeModel) {
-      console.log(`⚠️  FILTERING OUT vehicle due to missing make/model: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, {
+    const hasVin = Boolean(vehicle.vin && String(vehicle.vin).trim().length >= 17);
+    
+    if (!hasMakeModel && hasVin) {
+      console.log(`🔍 Vehicle needs VIN decoding: VIN ${vehicle.vin} (missing make/model: ${vehicle.make}/${vehicle.model})`);
+      vehiclesNeedingVinDecoding.push(vehicle);
+    } else if (hasMakeModel) {
+      console.log(`✅ INCLUDING vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} - Price: $${(vehicle.price || 0)/100}, Images: ${vehicle.images.length}`);
+      validVehicles.push(vehicle);
+    } else {
+      console.log(`⚠️  FILTERING OUT vehicle: no make/model and no VIN for decoding: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, {
         hasMake: Boolean(vehicle.make),
         hasModel: Boolean(vehicle.model),
+        hasVin: hasVin,
+        vin: vehicle.vin,
         price: vehicle.price,
-        images: vehicle.images.length,
-        rawMake: vehicle.make,
-        rawModel: vehicle.model
+        images: vehicle.images.length
       });
-    } else {
-      console.log(`✅ INCLUDING vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} - Price: $${(vehicle.price || 0)/100}, Images: ${vehicle.images.length}`);
     }
+  }
+  
+  return { validVehicles, vehiclesNeedingVinDecoding };
+}
 
-    return hasMakeModel;
-  });
+// VIN decoding helper function
+async function processVinDecoding(supabaseClient: any, vehiclesNeedingDecoding: any[]): Promise<any[]> {
+  const decodedVehicles = [];
+  const batchSize = 5; // Process VIN decoding in small batches to avoid timeouts
+  
+  console.log(`🔍 Processing ${vehiclesNeedingDecoding.length} vehicles for VIN decoding in batches of ${batchSize}`);
+  
+  for (let i = 0; i < vehiclesNeedingDecoding.length; i += batchSize) {
+    const batch = vehiclesNeedingDecoding.slice(i, i + batchSize);
+    console.log(`🔍 VIN decoding batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(vehiclesNeedingDecoding.length/batchSize)}`);
+    
+    const batchPromises = batch.map(async (vehicle) => {
+      try {
+        console.log(`🔍 Decoding VIN: ${vehicle.vin}`);
+        
+        // Call VIN decoder API
+        const vinResponse = await fetch('https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/' + vehicle.vin + '?format=json');
+        
+        if (!vinResponse.ok) {
+          console.warn(`VIN decode API failed for ${vehicle.vin}: ${vinResponse.status}`);
+          return null;
+        }
+        
+        const vinData = await vinResponse.json();
+        const results = vinData.Results || [];
+        
+        // Extract make, model, year from VIN decode results
+        const makeResult = results.find((r: any) => r.Variable === 'Make');
+        const modelResult = results.find((r: any) => r.Variable === 'Model');
+        const yearResult = results.find((r: any) => r.Variable === 'Model Year');
+        
+        const decodedMake = makeResult?.Value;
+        const decodedModel = modelResult?.Value;
+        const decodedYear = yearResult?.Value ? parseInt(yearResult.Value) : null;
+        
+        if (decodedMake && decodedModel) {
+          console.log(`✅ VIN decoded successfully: ${vehicle.vin} -> ${decodedYear} ${decodedMake} ${decodedModel}`);
+          
+          // Update vehicle with decoded information
+          const updatedVehicle = {
+            ...vehicle,
+            make: decodedMake,
+            model: decodedModel,
+            year: decodedYear || vehicle.year
+          };
+          
+          return updatedVehicle;
+        } else {
+          console.warn(`⚠️  VIN decode incomplete for ${vehicle.vin}: make=${decodedMake}, model=${decodedModel}, year=${decodedYear}`);
+          return null;
+        }
+        
+      } catch (error) {
+        console.error(`❌ VIN decoding failed for ${vehicle.vin}:`, error);
+        return null;
+      }
+    });
+    
+    const batchResults = await Promise.allSettled(batchPromises);
+    const batchDecoded = batchResults
+      .filter(result => result.status === 'fulfilled' && result.value)
+      .map(result => (result as PromiseFulfilledResult<any>).value);
+    
+    decodedVehicles.push(...batchDecoded);
+    
+    // Small delay between batches to avoid overwhelming the VIN API
+    if (i + batchSize < vehiclesNeedingDecoding.length) {
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  }
+  
+  console.log(`🔍 VIN decoding completed: ${decodedVehicles.length}/${vehiclesNeedingDecoding.length} vehicles successfully decoded`);
+  return decodedVehicles;
 }
 
 // Diagnostics helpers
@@ -1138,13 +1221,24 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
 
     console.log(`📊 IMPORT SUMMARY: Total raw data fetched: ${allRawData.length} records from ${totalPages} pages`);
 
-    let vehicleData = parseOctoparseData(allRawData);
-    console.log(`📊 PARSING SUMMARY: Parsed ${vehicleData.length} vehicles from task ${taskId} (raw rows: ${allRawData.length})`);
+    const parseResult = parseOctoparseData(allRawData);
+    let vehicleData = parseResult.validVehicles;
+    const vehiclesNeedingVinDecoding = parseResult.vehiclesNeedingVinDecoding;
+    
+    console.log(`📊 PARSING SUMMARY: ${vehicleData.length} vehicles ready for import, ${vehiclesNeedingVinDecoding.length} vehicles need VIN decoding`);
+    
+    // Process VIN decoding for vehicles missing make/model data
+    if (vehiclesNeedingVinDecoding.length > 0) {
+      console.log(`🔍 Starting VIN decoding for ${vehiclesNeedingVinDecoding.length} vehicles...`);
+      const decodedVehicles = await processVinDecoding(supabaseClient, vehiclesNeedingVinDecoding);
+      vehicleData = vehicleData.concat(decodedVehicles);
+      console.log(`🔍 VIN decoding completed. Total vehicles for import: ${vehicleData.length}`);
+    }
     
     // Log detailed parsing statistics
     const skippedCount = allRawData.length - vehicleData.length;
     if (skippedCount > 0) {
-      console.log(`⚠️  ${skippedCount} vehicles were filtered out during parsing (missing make/model data)`);
+      console.log(`⚠️  ${skippedCount} vehicles were filtered out (no make/model/VIN data or VIN decoding failed)`);
     }
 
     // Build diagnostics if requested
