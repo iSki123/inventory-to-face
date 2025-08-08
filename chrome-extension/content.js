@@ -1347,20 +1347,44 @@ class SalesonatorAutomator {
       console.log('[SALESONATOR DEBUG] ========== MODEL FIELD DETECTION START ==========');
       console.log('[SALESONATOR DEBUG] Available selectors:', modelInputSelectors);
       
-      // Strategy 1: Direct selector matching
-      for (const selector of modelInputSelectors) {
-        try {
-          console.log(`[SALESONATOR DEBUG] Trying selector: ${selector}`);
-          modelInput = await this.waitForElement(selector, 1000);
-          if (modelInput) {
-            console.log(`[SALESONATOR DEBUG] ✅ Found model input with selector: ${selector}`, modelInput);
-            this.log(`✅ Found model input with selector: ${selector}`);
-            break;
-          } else {
-            console.log(`[SALESONATOR DEBUG] ❌ Selector failed: ${selector}`);
+      // Strategy 1: Direct targeting of user-provided HTML structure first
+      console.log('[SALESONATOR DEBUG] Strategy 1: Direct targeting of user-provided HTML structure');
+      
+      // Target the exact span ID and look for input with similar pattern
+      const modelSpan = document.querySelector('span[id*="_r_"][id*="o"]'); // Pattern like _r_2o_
+      if (modelSpan && (modelSpan.textContent || '').trim().toLowerCase() === 'model') {
+        console.log('[SALESONATOR DEBUG] Found Model span with pattern _r_*o_:', modelSpan);
+        
+        // Extract the base ID pattern and look for input with similar pattern
+        const spanId = modelSpan.id;
+        const basePattern = spanId.replace(/o_$/, 'n_'); // _r_2o_ becomes _r_2n_
+        const possibleInput = document.querySelector(`input[id="${basePattern}"]`);
+        
+        if (possibleInput) {
+          console.log(`[SALESONATOR DEBUG] ✅ Found Model input with calculated ID: ${basePattern}`, possibleInput);
+          modelInput = possibleInput;
+          this.log(`✅ Found model input with calculated ID: ${basePattern}`);
+        } else {
+          console.log(`[SALESONATOR DEBUG] ❌ No input found with calculated ID: ${basePattern}`);
+        }
+      }
+      
+      // Strategy 2: Original selector matching
+      if (!modelInput) {
+        for (const selector of modelInputSelectors) {
+          try {
+            console.log(`[SALESONATOR DEBUG] Trying selector: ${selector}`);
+            modelInput = await this.waitForElement(selector, 1000);
+            if (modelInput) {
+              console.log(`[SALESONATOR DEBUG] ✅ Found model input with selector: ${selector}`, modelInput);
+              this.log(`✅ Found model input with selector: ${selector}`);
+              break;
+            } else {
+              console.log(`[SALESONATOR DEBUG] ❌ Selector failed: ${selector}`);
+            }
+          } catch (e) {
+            console.log(`[SALESONATOR DEBUG] ❌ Selector error: ${selector}`, e);
           }
-        } catch (e) {
-          console.log(`[SALESONATOR DEBUG] ❌ Selector error: ${selector}`, e);
         }
       }
       
@@ -1504,23 +1528,42 @@ class SalesonatorAutomator {
         }
       }
       
-      // Strategy 8: Geometry-based search relative to the visible "Model" label
+      // Strategy 8: Direct targeting using provided HTML structure
       if (!modelInput) {
-        const label = document.querySelector('span#_r_2f_, span[dir="auto"]:not([role])'); // user-provided example id and common FB label spans
-        if (label && (label.textContent || '').trim().toLowerCase().startsWith('model')) {
-          const lr = label.getBoundingClientRect();
-          const candidates = Array.from(document.querySelectorAll('input[type="text"], input:not([type]), [role="textbox"], [contenteditable="true"]'))
-            .filter(el => {
-              const r = el.getBoundingClientRect();
-              const sameRow = Math.abs(r.top - lr.top) < 80 || (r.top > lr.top && r.top < lr.bottom + 140);
-              const rightOf = r.left >= lr.left - 20; // usually to the right or aligned
-              const visible = r.width >= 40 && r.height >= 18;
-              return visible && rightOf && sameRow;
-            })
-            .sort((a,b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-          if (candidates.length) {
-            modelInput = candidates[0];
-            this.log('✅ Found model input via geometry-based search');
+        console.log('[SALESONATOR DEBUG] Strategy 8: Direct targeting using provided HTML structure');
+        // Target the exact pattern from the user's HTML: span with text "Model" followed by input
+        const modelSpans = Array.from(document.querySelectorAll('span')).filter(span => {
+          const text = (span.textContent || '').trim().toLowerCase();
+          return text === 'model';
+        });
+        
+        console.log(`[SALESONATOR DEBUG] Found ${modelSpans.length} spans with text "Model"`);
+        
+        for (const span of modelSpans) {
+          console.log(`[SALESONATOR DEBUG] Checking span:`, span.id, span.textContent);
+          
+          // Look for input in the same label container as the span
+          const label = span.closest('label');
+          if (label) {
+            const input = label.querySelector('input[type="text"], input:not([type])');
+            if (input) {
+              console.log(`[SALESONATOR DEBUG] ✅ Found input in same label as Model span:`, input);
+              modelInput = input;
+              this.log('✅ Found model input via direct HTML structure targeting');
+              break;
+            }
+          }
+          
+          // Look for input as sibling within the same container
+          const container = span.closest('div');
+          if (container && !modelInput) {
+            const input = container.querySelector('input[type="text"], input:not([type])');
+            if (input) {
+              console.log(`[SALESONATOR DEBUG] ✅ Found input in same container as Model span:`, input);
+              modelInput = input;
+              this.log('✅ Found model input via container sibling search');
+              break;
+            }
           }
         }
       }
