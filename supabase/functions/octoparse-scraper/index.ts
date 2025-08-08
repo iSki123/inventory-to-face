@@ -874,15 +874,28 @@ function parseOctoparseData(rawData: any[]): any[] {
   for (const vehicle of parsedVehicles) {
     const hasMakeModel = Boolean(vehicle.make && String(vehicle.make).trim()) && Boolean(vehicle.model && String(vehicle.model).trim());
     const hasVin = Boolean(vehicle.vin && String(vehicle.vin).trim().length >= 17);
+    const hasValidPrice = Boolean(vehicle.price && vehicle.price > 0);
+    
+    // Skip vehicles without valid VIN (must be at least 17 characters)
+    if (!hasVin) {
+      console.log(`❌ FILTERING OUT vehicle (invalid VIN): ${vehicle.year} ${vehicle.make} ${vehicle.model} - VIN: "${vehicle.vin}" (length: ${String(vehicle.vin || '').length})`);
+      continue;
+    }
+    
+    // Skip vehicles without valid price
+    if (!hasValidPrice) {
+      console.log(`❌ FILTERING OUT vehicle (no valid price): ${vehicle.year} ${vehicle.make} ${vehicle.model} - Price: ${vehicle.price}`);
+      continue;
+    }
     
     if (!hasMakeModel && hasVin) {
-      console.log(`🔍 Vehicle needs VIN decoding: VIN ${vehicle.vin} (missing make/model: ${vehicle.make}/${vehicle.model})`);
+      console.log(`🔍 Vehicle needs VIN decoding: VIN ${vehicle.vin} (missing make/model: ${vehicle.make}/${vehicle.model}) - Price: $${vehicle.price/100}`);
       vehiclesNeedingVinDecoding.push(vehicle);
     } else if (hasMakeModel) {
-      console.log(`✅ INCLUDING vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} - Price: $${(vehicle.price || 0)/100}, Images: ${vehicle.images.length}`);
+      console.log(`✅ INCLUDING vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} - Price: $${vehicle.price/100}, VIN: ${vehicle.vin}, Images: ${vehicle.images.length}`);
       validVehicles.push(vehicle);
     } else {
-      console.log(`⚠️  FILTERING OUT vehicle: no make/model and no VIN for decoding: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, {
+      console.log(`⚠️  FILTERING OUT vehicle: no make/model and VIN too short for decoding: ${vehicle.year} ${vehicle.make} ${vehicle.model}`, {
         hasMake: Boolean(vehicle.make),
         hasModel: Boolean(vehicle.model),
         hasVin: hasVin,
