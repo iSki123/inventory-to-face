@@ -317,6 +317,12 @@ class SalesonatorExtension {
     }
   }
 
+  // Helper function to convert text to title case
+  toTitleCase(str) {
+    const s = (str||'').toString().toLowerCase();
+    return s.replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1));
+  }
+
   async fetchVehicles() {
     const statusEl = document.getElementById('status');
     const countEl = document.getElementById('vehicleCount');
@@ -426,7 +432,7 @@ class SalesonatorExtension {
 
     const vehicle = this.vehicles[this.currentVehicleIndex];
     const statusEl = document.getElementById('status');
-    statusEl.textContent = `Posting vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}: ${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+    statusEl.textContent = `Posting vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}: ${vehicle.year} ${vehicle.make} ${this.toTitleCase(vehicle.model)}`;
 
     try {
       // Send vehicle data to content script
