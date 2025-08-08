@@ -16,7 +16,7 @@ export interface VehicleSource {
   updated_at: string;
 }
 
-export const useVehicleSources = () => {
+export const useVehicleSources = (onVehiclesChanged?: () => void) => {
   const [sources, setSources] = useState<VehicleSource[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
@@ -295,6 +295,12 @@ export const useVehicleSources = () => {
           title: "Import Successful",
           description: result.message,
         });
+        
+        // Trigger vehicles refresh callback if provided
+        if (onVehiclesChanged) {
+          onVehiclesChanged();
+        }
+        
         return result;
       } else {
         console.error('Import failed with result:', result);

@@ -17,7 +17,7 @@ import { VehicleSourceForm } from "@/components/VehicleSourceForm";
 
 export default function Inventory() {
   const { vehicles, loading, addVehicle, updateVehicle, deleteVehicle, bulkDeleteVehicles, postToFacebook, generateAIDescriptions, generateAIImages, refetch } = useVehicles();
-  const { sources, loading: sourcesLoading, addSource, startScraping, importSpecificTask, listAvailableTasks } = useVehicleSources();
+  const { sources, loading: sourcesLoading, addSource, startScraping, importSpecificTask, listAvailableTasks } = useVehicleSources(refetch);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [conditionFilter, setConditionFilter] = useState("all");
@@ -72,8 +72,7 @@ export default function Inventory() {
     try {
       const result = await importSpecificTask(taskIdInput.trim(), aiDescriptionPrompt);
       if (result) {
-        // Refresh vehicles after successful import
-        await refetch();
+        // Real-time updates will handle refreshing, but we still manually refresh as backup
         setTaskIdInput("");
       }
     } finally {
