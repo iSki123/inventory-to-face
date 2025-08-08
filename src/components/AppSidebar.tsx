@@ -55,8 +55,7 @@ export function AppSidebar() {
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
     isActive ? "bg-muted text-primary font-medium" : "hover:bg-muted/50";
 
-  const isAdmin = profile?.role === 'owner' || profile?.role === 'admin';
-  const canAccessAdmin = profile?.role === 'owner' || profile?.role === 'manager' || profile?.role === 'admin';
+  const isAdmin = profile?.role === 'admin';
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">
@@ -100,7 +99,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* Admin Navigation */}
-        {canAccessAdmin && (
+        {isAdmin && (
           <SidebarGroup>
             <SidebarGroupLabel>Admin</SidebarGroupLabel>
             <SidebarGroupContent>
