@@ -190,10 +190,9 @@ export default function Inventory() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="vehicles">Vehicles ({vehicles.length})</TabsTrigger>
           <TabsTrigger value="sources">Data Sources ({sources.length})</TabsTrigger>
-          <TabsTrigger value="posting">Posting Queue</TabsTrigger>
         </TabsList>
 
         <TabsContent value="vehicles" className="space-y-6">
@@ -638,21 +637,6 @@ export default function Inventory() {
           )}
         </TabsContent>
 
-        <TabsContent value="posting" className="space-y-6">
-          <div>
-            <h3 className="text-lg font-medium">Facebook Posting Queue</h3>
-            <p className="text-sm text-muted-foreground">
-              Monitor and manage Facebook Marketplace posting jobs
-            </p>
-          </div>
-
-          <Card className="p-12 text-center">
-            <div className="text-muted-foreground">
-              <p className="text-lg mb-2">Posting Queue</p>
-              <p className="text-sm">Vehicle posting jobs will appear here</p>
-            </div>
-          </Card>
-        </TabsContent>
       </Tabs>
 
       {/* Vehicle Form */}
