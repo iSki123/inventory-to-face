@@ -585,61 +585,34 @@ class SalesonatorAutomator {
   // Select vehicle category from the listing type page
   async selectVehicleCategory() {
     try {
-      // Look for "Vehicle for sale" option based on the screenshot
-      const vehicleCategorySelectors = [
-        'text:Vehicle for sale',
-        'aria:Vehicle for sale',
-        '[aria-label*="Vehicle for sale"]',
-        'text:Sell a car, truck or other type of vehicle',
-        // Fallback selectors
-        'text:Vehicle',
-        'text:Car',
-        'text:Truck',
-        '[data-testid*="vehicle"]'
-      ];
-      
       this.log('🔍 Looking for vehicle category option...');
-      const vehicleOption = await this.waitForElement(vehicleCategorySelectors, 5000);
+      
+      // Wait for and click "Vehicle for sale" option
+      const vehicleOption = await this.waitForElement([
+        'text:Vehicle for sale'
+      ], 10000);
       
       if (vehicleOption) {
         this.log('✅ Found vehicle category option, clicking...');
         await this.scrollIntoView(vehicleOption);
-        await this.delay(500);
+        await this.delay(this.randomDelay(300, 600));
         
         // Click the vehicle option
         vehicleOption.click();
-        this.log('⏳ Waiting for vehicle form to load completely...');
+        await this.delay(this.randomDelay(1500, 2500));
         
-        // Wait longer and use more specific selectors for the form
-        await this.delay(3000); // Give page time to load
+        // Add extra wait for page to fully load before looking for form elements
+        this.log('⏳ Waiting for vehicle form to load...');
+        await this.delay(3000);
         
-        // Wait for multiple indicators that the form is ready
-        const formLoadedSelectors = [
-          'text:Vehicle type',
-          'text:About this vehicle', 
-          'input[type="file"]', // Photo upload
-          'text:Add photos',
-          '[role="button"]' // Vehicle type dropdown
-        ];
+        // Wait for the vehicle form to load with original working selectors
+        await this.waitForElement([
+          '[aria-label*="Vehicle type"]',
+          'text:About this vehicle',
+          '[placeholder*="Year"]'
+        ], 15000);
         
-        // Check for form readiness with longer timeout
-        let formReady = false;
-        for (let i = 0; i < 3; i++) {
-          try {
-            await this.waitForElement(formLoadedSelectors, 5000);
-            formReady = true;
-            break;
-          } catch (e) {
-            this.log(`⏳ Form not ready yet, attempt ${i + 1}/3...`);
-            await this.delay(2000);
-          }
-        }
-        
-        if (formReady) {
-          this.log('✅ Vehicle category selected, form loaded and ready');
-        } else {
-          this.log('⚠️ Vehicle form may not be fully loaded, but continuing...');
-        }
+        this.log('✅ Vehicle category selected, form loaded');
       }
     } catch (error) {
       this.log('❌ Failed to select vehicle category:', error);
