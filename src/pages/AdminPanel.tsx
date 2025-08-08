@@ -7,13 +7,43 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { RefreshCw, Database, Car, Zap, Clock, CheckCircle2, Image } from "lucide-react";
+import { RefreshCw, Database, Car, Zap, Clock, CheckCircle2, Image, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function AdminPanel() {
+  const { profile, loading: authLoading } = useAuth();
+
+  // Check if user is admin/owner
+  if (authLoading) {
+    return (
+      <div className="container mx-auto p-6 flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!profile || (profile.role !== 'admin' && profile.role !== 'owner')) {
+    return (
+      <div className="container mx-auto p-6 flex items-center justify-center min-h-96">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <Shield className="h-12 w-12 mx-auto mb-4 text-destructive" />
+            <CardTitle>Access Denied</CardTitle>
+            <CardDescription>
+              You don't have permission to access the admin dashboard. Only administrators and owners can access this area.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
   const [isForceDecoding, setIsForceDecoding] = useState(false);
   const [isBatchDecoding, setIsBatchDecoding] = useState(false);
   const [singleVin, setSingleVin] = useState("");
