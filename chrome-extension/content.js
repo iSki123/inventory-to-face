@@ -2282,9 +2282,20 @@ class SalesonatorAutomator {
       this.log('📸 Starting enhanced image upload process...');
       this.log('📸 Processing image uploads for Facebook Marketplace...');
       
+      // Enhanced session-based duplicate prevention
+      const sessionKey = `upload_session_${Date.now()}`;
+      if (this.currentUploadSession) {
+        this.log('📸 Upload already in progress, preventing duplicate session');
+        return true;
+      }
+      
+      // Mark upload session as active
+      this.currentUploadSession = sessionKey;
+      
       // Check if we've already uploaded images for this session to prevent duplicates
       if (this.uploadedImages && this.uploadedImages.length > 0) {
         this.log('📸 Images already uploaded in this session, skipping duplicate upload');
+        this.currentUploadSession = null;
         return true;
       }
       
@@ -2337,22 +2348,30 @@ class SalesonatorAutomator {
       }
       
       if (!fileInput) {
+        this.currentUploadSession = null;
         throw new Error('No file input found on page');
       }
       
-      // Check if file input already has files to prevent duplicates
+      // Enhanced file input duplicate checking
       if (fileInput.files && fileInput.files.length > 0) {
         this.log(`📸 File input already contains ${fileInput.files.length} files, checking for duplicates...`);
         
-        // Create set of existing file names for comparison
-        const existingFileNames = Array.from(fileInput.files).map(f => f.name);
-        this.log('📸 Existing files:', existingFileNames);
+        // Create detailed comparison of existing files
+        const existingFiles = Array.from(fileInput.files);
+        const existingFileInfo = existingFiles.map(f => ({
+          name: f.name,
+          size: f.size,
+          type: f.type,
+          lastModified: f.lastModified
+        }));
+        this.log('📸 Existing files:', existingFileInfo);
         
-        // If we already have the expected number of files, skip upload
+        // If we already have files and they seem to be our target files, skip upload
         const uniqueImages = Array.from(new Set((images || []).filter(Boolean)));
         if (fileInput.files.length >= uniqueImages.length) {
           this.log('📸 File input already contains sufficient images, skipping duplicate upload');
           this.uploadedImages = uniqueImages; // Track uploaded images
+          this.currentUploadSession = null;
           return true;
         }
       }
@@ -2373,50 +2392,91 @@ class SalesonatorAutomator {
       
       const validFiles = files.filter(file => file !== null);
       
-      // Additional deduplication by file content size and name
+      // Enhanced deduplication by file content, size, name, and hash
       const deduplicatedFiles = [];
-      const seenSizes = new Set();
+      const seenFiles = new Map();
       
       for (const file of validFiles) {
-        const sizeKey = `${file.size}_${file.name}`;
-        if (!seenSizes.has(sizeKey)) {
-          seenSizes.add(sizeKey);
+        // Create unique signature combining multiple attributes
+        const fileSignature = `${file.size}_${file.name}_${file.type}_${file.lastModified || 'nomod'}`;
+        
+        // Additional content-based hashing for same-size files
+        let contentHash = null;
+        if (file.size > 0) {
+          // Create a simple content hash based on first and last few bytes if possible
+          try {
+            const buffer = await file.slice(0, Math.min(1024, file.size)).arrayBuffer();
+            const bytes = new Uint8Array(buffer);
+            contentHash = Array.from(bytes.slice(0, 16)).join('');
+          } catch (e) {
+            contentHash = `fallback_${file.size}`;
+          }
+        }
+        
+        const uniqueKey = `${fileSignature}_${contentHash}`;
+        
+        if (!seenFiles.has(uniqueKey)) {
+          seenFiles.set(uniqueKey, true);
           deduplicatedFiles.push(file);
+          this.log(`📸 Adding unique file: ${file.name} (${file.size} bytes, sig: ${uniqueKey.slice(0, 50)}...)`);
         } else {
-          this.log(`📸 Skipping duplicate file: ${file.name} (${file.size} bytes)`);
+          this.log(`📸 Skipping exact duplicate file: ${file.name} (${file.size} bytes, sig: ${uniqueKey.slice(0, 50)}...)`);
         }
       }
       
-      this.log(`📸 After content deduplication: ${deduplicatedFiles.length} unique files`);
+      this.log(`📸 After enhanced content deduplication: ${deduplicatedFiles.length} unique files from ${validFiles.length} total`);
       
       if (deduplicatedFiles.length === 0) {
         this.log('❌ No valid images to upload after deduplication');
+        this.currentUploadSession = null;
         return false;
       }
       
-      // Use advanced React-compatible file setting
+      // Use advanced React-compatible file setting with additional safeguards
       await this.setFilesWithReactCompatibility(fileInput, deduplicatedFiles);
       
       // Track uploaded images to prevent future duplicates
       this.uploadedImages = uniqueImages;
+      this.uploadedFileCount = deduplicatedFiles.length;
+      this.lastUploadTime = Date.now();
+      
+      // Final verification that files were set correctly
+      await this.delay(500);
+      if (fileInput.files) {
+        this.log(`📸 Final verification: file input now contains ${fileInput.files.length} files`);
+        if (fileInput.files.length !== deduplicatedFiles.length) {
+          this.log(`⚠️ File count mismatch: expected ${deduplicatedFiles.length}, got ${fileInput.files.length}`);
+        }
+      }
       
       this.log(`✅ Successfully uploaded ${deduplicatedFiles.length} unique images`);
+      this.currentUploadSession = null;
       return true;
       
     } catch (error) {
       this.log('⚠️ Image upload failed:', error);
+      this.currentUploadSession = null;
       return false;
     }
   }
 
-  // Advanced React-compatible file setting
+  // Advanced React-compatible file setting with enhanced safeguards
   async setFilesWithReactCompatibility(fileInput, files) {
     try {
       this.log('📸 Setting files with React compatibility...');
+      this.log(`📸 About to set ${files.length} files on input element`);
+      
+      // Clear any existing files first to prevent accumulation
+      const emptyDataTransfer = new DataTransfer();
+      fileInput.files = emptyDataTransfer.files;
+      
+      // Brief delay to ensure clearing takes effect
+      await this.delay(100);
       
       // Method 1: Direct file list assignment with React value setter
       const dataTransfer = new DataTransfer();
-      files.forEach(file => {
+      files.forEach((file, index) => {
+        this.log(`📸 Adding file ${index + 1}: ${file.name} (${file.size} bytes)`);
         dataTransfer.items.add(file);
       });
       
