@@ -457,18 +457,26 @@ class SalesonatorAutomator {
       
       for (let attempt = 0; attempt < this.retryAttempts; attempt++) {
         try {
-          // Navigate to marketplace with retry logic
+          // Navigate to marketplace with faster retry logic
           await this.navigateToMarketplace();
-          await this.delay(2000, attempt);
+          await this.delay(1000); // Reduced delay
+          
+          // Check if we're already on the form page and continue
+          if (this.isOnVehiclePostingDashboard()) {
+            this.log('✅ Already on vehicle form, proceeding with auto-listing...');
+          } else {
+            this.log('⚠️ Not on vehicle form yet, navigation may have failed');
+            if (attempt < this.retryAttempts - 1) continue;
+          }
           
           // Fill form with enhanced automation
           await this.fillVehicleForm(vehicleData);
-          await this.delay(1000, attempt);
+          await this.delay(500);
           
           // Handle image uploads if images are provided
           if (vehicleData.images && vehicleData.images.length > 0) {
             await this.handleImageUploads(vehicleData.images);
-            await this.delay(1000, attempt);
+            await this.delay(500);
           }
           
           // Submit with verification
@@ -485,14 +493,9 @@ class SalesonatorAutomator {
           this.log(`❌ Attempt ${attempt + 1} failed:`, error);
           
           if (attempt < this.retryAttempts - 1) {
-            this.log(`🔄 Retrying in ${2 ** attempt} seconds...`);
-            await this.delay(2000 * (2 ** attempt));
-            
-            // Try to recover without refreshing the page
-            if (attempt > 0) {
-              this.log('⚠️ Retrying without page reload to stay on Facebook');
-              await this.delay(5000);
-            }
+            const retryDelay = Math.min(1000 * (attempt + 1), 3000); // Max 3 seconds
+            this.log(`🔄 Retrying in ${retryDelay/1000} seconds...`);
+            await this.delay(retryDelay);
           }
         }
       }
@@ -638,7 +641,7 @@ class SalesonatorAutomator {
       let marketplaceLink = null;
       for (const selector of marketplaceLinks) {
         try {
-          marketplaceLink = await this.waitForElement([selector], 2000);
+          marketplaceLink = await this.waitForElement([selector], 1000); // Reduced timeout
           if (marketplaceLink) break;
         } catch (e) {}
       }
@@ -646,14 +649,14 @@ class SalesonatorAutomator {
       if (marketplaceLink) {
         this.log('✅ Found marketplace link, clicking...');
         await this.scrollIntoView(marketplaceLink);
-        await this.delay(500);
+        await this.delay(200); // Faster
         marketplaceLink.click();
-        await this.delay(3000);
+        await this.delay(2000); // Reduced wait time
       } else {
         // Fallback to direct navigation
         this.log('🔄 Fallback: Navigating to marketplace via direct URL...');
         window.location.href = 'https://www.facebook.com/marketplace/?ref=bookmark';
-        await this.delay(4000);
+        await this.delay(2000); // Reduced wait time
       }
       
       // Now look for "Create new listing", "Sell something", or similar button
@@ -672,7 +675,7 @@ class SalesonatorAutomator {
       
       for (const selector of createListingSelectors) {
         try {
-          createButton = await this.waitForElement([selector], 3000);
+          createButton = await this.waitForElement([selector], 2000); // Reduced timeout
           if (createButton) break;
         } catch (e) {
           // Continue to next selector
@@ -700,9 +703,9 @@ class SalesonatorAutomator {
       if (createButton) {
         this.log('✅ Found create listing button, clicking...');
         await this.scrollIntoView(createButton);
-        await this.delay(this.randomDelay(500, 1000));
+        await this.delay(200); // Faster
         createButton.click();
-        await this.delay(this.randomDelay(3000, 4000));
+        await this.delay(2000); // Reduced wait time
         
         // Now we should be on the listing type selection page
         await this.selectVehicleCategory();
