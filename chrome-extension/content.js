@@ -912,7 +912,14 @@ class SalesonatorAutomator {
   // Fill Model input
   async fillModel(model) {
     try {
-      this.log(`🚗 Filling model: ${model}`);
+      // Helper function to convert to title case
+      const toTitleCase = (str) => {
+        if (!str) return str;
+        return str.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+      };
+      
+      const titleCaseModel = toTitleCase(model);
+      this.log(`🚗 Filling model: ${model} (formatted as: ${titleCaseModel})`);
       
       const modelInputSelectors = [
         '[aria-label*="Model"]',
@@ -939,8 +946,8 @@ class SalesonatorAutomator {
       if (modelInput.select) modelInput.select();
       await this.delay(100);
       
-      // Use React-compatible value setting
-      this.setNativeValue(modelInput, model);
+      // Use React-compatible value setting with title case
+      this.setNativeValue(modelInput, titleCaseModel);
       
       // Trigger React events
       modelInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -950,11 +957,11 @@ class SalesonatorAutomator {
       await this.delay(500);
       
       // Verify value was set
-      if ((modelInput.value || '').toString().trim() === (model || '').toString().trim()) {
-        this.log('✅ Successfully filled model:', model);
+      if ((modelInput.value || '').toString().trim() === (titleCaseModel || '').toString().trim()) {
+        this.log('✅ Successfully filled model:', titleCaseModel);
         return true;
       } else {
-        this.log('⚠️ Model value verification failed. Expected:', model, 'Got:', modelInput.value);
+        this.log('⚠️ Model value verification failed. Expected:', titleCaseModel, 'Got:', modelInput.value);
         // Try typing approach as fallback
         modelInput.focus();
         if (modelInput.select) modelInput.select();
