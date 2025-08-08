@@ -35,8 +35,8 @@ export default function UserManagement() {
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [creditAmount, setCreditAmount] = useState("");
 
-  // Check if user can access admin
-  const canAccessAdmin = profile?.role === 'owner';
+  // Check if user can access admin - both owners and admins can access
+  const canAccessAdmin = profile?.role === 'owner' || profile?.role === 'admin';
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users'],
