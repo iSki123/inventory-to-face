@@ -111,38 +111,40 @@ class SalesonatorAutomator {
           if (element) return element;
         }
         
-        // Text content selector using multiple approaches
+        // Text content selector using more React-friendly approaches
         else if (selector.startsWith('text:')) {
           const text = selector.replace('text:', '');
           
-          // Method 1: XPath approach (most reliable)
+          // Method 1: Use XPath but with more caution for React
           try {
-            const xpath = `.//*[contains(normalize-space(text()), "${text}")]`;
+            const xpath = `.//*[contains(text(), "${text}") and not(ancestor-or-self::*[@aria-hidden="true"]) and not(ancestor-or-self::*[@style*="display: none"])]`;
             const result = document.evaluate(xpath, parentElement, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
             if (result.singleNodeValue) {
-              // Filter out disabled or hidden elements
               const elem = result.singleNodeValue;
-              if (!elem.hasAttribute('aria-disabled') && !elem.hasAttribute('aria-hidden')) {
+              // More careful filtering for React elements
+              if (!elem.hasAttribute('aria-disabled') && 
+                  !elem.hasAttribute('aria-hidden') &&
+                  elem.offsetParent !== null) { // visible check
                 return elem;
               }
             }
           } catch (e) {}
           
-          // Method 2: Manual text search with element filtering
-          const elements = Array.from(parentElement.querySelectorAll('*'));
+          // Method 2: Manual search with React-aware filtering
+          const elements = Array.from(parentElement.querySelectorAll('button, a, div[role="button"], [role="menuitem"]'));
           const found = elements.find(el => {
             const textContent = el.textContent?.trim() || '';
-            const innerText = el.innerText?.trim() || '';
-            const isMatch = textContent.includes(text) || innerText.includes(text);
+            const ariaLabel = el.getAttribute('aria-label') || '';
+            const isMatch = textContent.includes(text) || ariaLabel.includes(text);
             
-            // Filter out disabled, hidden, or back buttons
             if (isMatch) {
-              const ariaLabel = el.getAttribute('aria-label') || '';
+              // React-friendly filtering
               const isDisabled = el.hasAttribute('aria-disabled') && el.getAttribute('aria-disabled') === 'true';
               const isHidden = el.hasAttribute('aria-hidden') && el.getAttribute('aria-hidden') === 'true';
               const isBackButton = ariaLabel.toLowerCase().includes('back');
+              const hasClickHandler = el.onclick || el.getAttribute('href') || el.getAttribute('role') === 'button';
               
-              return !isDisabled && !isHidden && !isBackButton;
+              return !isDisabled && !isHidden && !isBackButton && hasClickHandler && el.offsetParent !== null;
             }
             return false;
           });
@@ -624,12 +626,35 @@ class SalesonatorAutomator {
         return;
       }
       
-      // Navigate to marketplace bookmark URL directly since we're on Facebook homepage
-      this.log('🔄 Navigating to marketplace via direct URL...');
-      window.location.href = 'https://www.facebook.com/marketplace/?ref=bookmark';
+      // Try React-friendly navigation first - click the marketplace link instead of direct navigation
+      this.log('🔄 Looking for marketplace navigation link...');
       
-      // Wait for page to load
-      await this.delay(4000);
+      const marketplaceLinks = [
+        'a[href*="/marketplace"]',
+        '[aria-label*="Marketplace"]',
+        '[data-testid*="marketplace"]'
+      ];
+      
+      let marketplaceLink = null;
+      for (const selector of marketplaceLinks) {
+        try {
+          marketplaceLink = await this.waitForElement([selector], 2000);
+          if (marketplaceLink) break;
+        } catch (e) {}
+      }
+      
+      if (marketplaceLink) {
+        this.log('✅ Found marketplace link, clicking...');
+        await this.scrollIntoView(marketplaceLink);
+        await this.delay(500);
+        marketplaceLink.click();
+        await this.delay(3000);
+      } else {
+        // Fallback to direct navigation
+        this.log('🔄 Fallback: Navigating to marketplace via direct URL...');
+        window.location.href = 'https://www.facebook.com/marketplace/?ref=bookmark';
+        await this.delay(4000);
+      }
       
       // Now look for "Create new listing", "Sell something", or similar button
       const createListingSelectors = [
@@ -688,7 +713,6 @@ class SalesonatorAutomator {
     } catch (error) {
       this.log('❌ Navigation to marketplace failed:', error);
       throw new Error(`Failed to navigate to marketplace: ${error.message}`);
-    }
     }
 
   // Enhanced form filling with React-native value setting
