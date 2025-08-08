@@ -1158,89 +1158,130 @@ class SalesonatorAutomator {
   async selectBodyStyle(bodyStyle) {
     try {
       this.log(`🚗 Selecting body style: ${bodyStyle}`);
-
-      const label = 'Body style';
-      const dropdownSelectors = [
+      console.log(`[BODY STYLE DEBUG] Starting body style selection for: ${bodyStyle}`);
+      
+      // Clean body style string (remove extra spaces)
+      const cleanBodyStyle = (bodyStyle || '').toString().trim();
+      
+      // Find body style dropdown using the same proven selectors as year/make
+      const bodyStyleDropdownSelectors = [
+        'text:Body style',
         '[aria-label*="Body style"]',
-        'text:Body style'
+        'div[role="button"]:has-text("Body style")',
+        'span:has-text("Body style")',
+        '[data-testid*="body"]'
       ];
-      let dropdown = this.findDropdownByLabel(label) || await this.waitForElement(dropdownSelectors, 8000).catch(() => null);
-
-      if (!dropdown) {
-        // Try XPath
-        try {
-          const res = document.evaluate(
-            `//*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "body style")]/following::*[(@role='combobox' or @role='button')][1]`,
-            document,
-            null,
-            XPathResult.FIRST_ORDERED_NODE_TYPE,
-            null
-          );
-          if (res.singleNodeValue) dropdown = res.singleNodeValue;
-        } catch {}
+      
+      console.log(`[BODY STYLE DEBUG] Searching for body style dropdown with selectors:`, bodyStyleDropdownSelectors);
+      
+      const bodyStyleDropdown = await this.waitForElement(bodyStyleDropdownSelectors, 8000);
+      if (!bodyStyleDropdown) {
+        throw new Error('Body style dropdown not found');
       }
-
-      if (!dropdown) throw new Error('Body style dropdown not found');
-
-      await this.scrollIntoView(dropdown);
-      await this.delay(this.randomDelay(500, 1000));
-      this.log('🚗 Found body style dropdown, clicking...');
-      dropdown.click();
-      await this.delay(this.randomDelay(1200, 2000));
-
-      // Scope options to the freshly opened listbox/menu to avoid clicking nav links
+      
+      console.log(`[BODY STYLE DEBUG] Found body style dropdown:`, bodyStyleDropdown);
+      console.log(`[BODY STYLE DEBUG] Dropdown tagName:`, bodyStyleDropdown.tagName);
+      console.log(`[BODY STYLE DEBUG] Dropdown textContent:`, bodyStyleDropdown.textContent);
+      
+      await this.scrollIntoView(bodyStyleDropdown);
+      this.log('🚗 Found body style dropdown, clicking to open...');
+      
+      console.log(`[BODY STYLE DEBUG] Clicking body style dropdown...`);
+      // Use the same reliable open sequence as make dropdown
+      bodyStyleDropdown.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      bodyStyleDropdown.click();
+      await this.delay(this.randomDelay(1200, 1800)); // Wait for dropdown to open
+      
+      console.log(`[BODY STYLE DEBUG] Checking if dropdown opened...`);
+      const optionsAfterClick = document.querySelectorAll('[role="option"]');
+      console.log(`[BODY STYLE DEBUG] Found options after click:`, optionsAfterClick.length);
+      
+      // Log first 20 options to debug
+      Array.from(optionsAfterClick).slice(0, 20).forEach((opt, idx) => {
+        console.log(`[BODY STYLE DEBUG] Option ${idx}: ${opt.textContent?.trim()}`, opt);
+      });
+      
+      // Prefer searching within the options container only
       let optionsContainer = null;
       try {
-        optionsContainer = await this.waitForElement(['[role="listbox"]','[role="menu"]'], 4000);
-      } catch {}
-
-      const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-      const target = norm(bodyStyle);
-      const getOptions = () => Array.from((optionsContainer || document).querySelectorAll('[role="option"]'));
-
-      let option = getOptions().find(opt => {
-        const txt = norm(opt.textContent || '');
-        const aria = norm(opt.getAttribute?.('aria-label') || '');
-        return txt === target || aria === target || txt.includes(target);
-      });
-
-      if (option) {
-        await this.performFacebookDropdownClick(option);
-        await this.delay(this.randomDelay(800, 1500));
+        optionsContainer = await this.waitForElement(['[role="listbox"]', '[role="menu"]'], 4000);
+        console.log(`[BODY STYLE DEBUG] Found options container:`, optionsContainer);
+      } catch {
+        console.log(`[BODY STYLE DEBUG] No options container found, using document`);
       }
-
-      // Verify selection appeared next to the label
-      const verify = () => {
-        const el = this.findDropdownByLabel(label) || dropdown;
-        const txt = (el?.textContent || '').toLowerCase();
-        return txt.includes(target);
+      
+      const getExactOption = () => {
+        const scope = optionsContainer || document;
+        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
+        console.log(`[BODY STYLE DEBUG] Searching for exact match: "${cleanBodyStyle}" in ${opts.length} options`);
+        const found = opts.find(o => ((o.textContent || '').trim().toLowerCase() === cleanBodyStyle.toLowerCase()));
+        console.log(`[BODY STYLE DEBUG] Exact match found:`, found?.textContent?.trim());
+        return found;
       };
-
-      if (!option || !verify()) {
-        // Fallback: keyboard/typeahead selection like Year dropdown
-        const success = await this.selectDropdownOption(dropdownSelectors, bodyStyle, true);
-        await this.delay(this.randomDelay(800, 1200));
-        if (success && verify()) { this.log(`✅ Successfully selected body style: ${bodyStyle}`); return true; }
+      
+      const getFuzzyOption = () => {
+        const scope = optionsContainer || document;
+        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
+        console.log(`[BODY STYLE DEBUG] Searching for fuzzy match: "${cleanBodyStyle}" in ${opts.length} options`);
+        const found = opts.find(o => (o.textContent || '').toLowerCase().includes(cleanBodyStyle.toLowerCase()));
+        console.log(`[BODY STYLE DEBUG] Fuzzy match found:`, found?.textContent?.trim());
+        return found;
+      };
+      
+      let bodyStyleOption = getExactOption();
+      
+      // If not found, try typeahead (Facebook supports it)
+      if (!bodyStyleOption && cleanBodyStyle) {
+        console.log(`[BODY STYLE DEBUG] Trying typeahead approach...`);
+        for (const ch of cleanBodyStyle.toLowerCase()) {
+          bodyStyleDropdown.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
+          await this.delay(this.randomDelay(40, 100));
+        }
+        await this.delay(this.randomDelay(300, 600));
+        bodyStyleOption = getExactOption();
       }
-
-      if (!verify()) {
-        // Retry: reopen and try again with direct option click
-        dropdown.click();
-        await this.delay(this.randomDelay(800, 1200));
-        option = getOptions().find(opt => {
-          const txt = norm(opt.textContent || '');
-          const aria = norm(opt.getAttribute?.('aria-label') || '');
-          return txt === target || aria === target || txt.includes(target);
-        });
-        if (!option) throw new Error(`Body style option "${bodyStyle}" not found`);
-        await this.performFacebookDropdownClick(option);
-        await this.delay(this.randomDelay(800, 1500));
+      
+      // Fallback to fuzzy match
+      if (!bodyStyleOption) {
+        console.log(`[BODY STYLE DEBUG] Falling back to fuzzy match...`);
+        bodyStyleOption = getFuzzyOption();
       }
-
-      if (!verify()) this.log('⚠️ Body style may not have applied visually yet.');
-      this.log(`✅ Successfully selected body style: ${bodyStyle}`);
-      return true;
+      
+      // Ultimate fallback: any element with the text inside the container
+      if (!bodyStyleOption) {
+        console.log(`[BODY STYLE DEBUG] Trying ultimate fallback...`);
+        const elem = this.findElementByText(cleanBodyStyle, ['div','span','li'], optionsContainer || document);
+        if (elem) bodyStyleOption = elem.closest('[role="option"]') || elem;
+      }
+      
+      if (!bodyStyleOption) {
+        console.log(`[BODY STYLE DEBUG] ❌ No body style option found for "${cleanBodyStyle}"`);
+        throw new Error(`Body style option not found for "${cleanBodyStyle}"`);
+      }
+      
+      console.log(`[BODY STYLE DEBUG] 🚗 Found body style option, clicking: ${bodyStyleOption.textContent?.trim()}`);
+      await this.scrollIntoView(bodyStyleOption);
+      await this.delay(this.randomDelay(300, 600));
+      bodyStyleOption.click();
+      await this.delay(this.randomDelay(1000, 1500)); // Wait for selection to register
+      
+      // Verify the dropdown now displays the selected body style
+      console.log(`[BODY STYLE DEBUG] Verifying body style selection...`);
+      const selectedText = (bodyStyleDropdown.textContent || '').toLowerCase();
+      const verified = selectedText.includes(cleanBodyStyle.toLowerCase());
+      console.log(`[BODY STYLE DEBUG] Dropdown text after selection:`, bodyStyleDropdown.textContent);
+      console.log(`[BODY STYLE DEBUG] Verification successful:`, verified);
+      
+      if (verified) {
+        this.log(`✅ Successfully selected body style: ${cleanBodyStyle}`);
+      } else {
+        this.log(`⚠️ Body style selection not verified. Dropdown shows: ${bodyStyleDropdown.textContent}`);
+      }
+      
+      return verified;
+      
     } catch (error) {
+      console.log(`[BODY STYLE DEBUG] ❌ Body style selection failed:`, error);
       this.log(`⚠️ Could not select body style: ${bodyStyle}`, error);
       return false;
     }
