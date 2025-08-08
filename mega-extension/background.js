@@ -34,9 +34,13 @@ class SalesonatorMegaBackground {
   async onTabUpdated(tabId, changeInfo, tab){
     try{
       if(!changeInfo.status || changeInfo.status !== 'complete') return;
-      const isFB = (tab?.url||'').includes('facebook.com/marketplace');
+      const url = (tab?.url||'');
+      const isFB = url.includes('facebook.com/marketplace');
       chrome.action.setBadgeText({ tabId, text: isFB ? 'FB' : '' });
       chrome.action.setBadgeBackgroundColor({ tabId, color: isFB ? '#0B81FF' : '#999' });
+
+      const { settings } = await chrome.storage.sync.get({ settings: this.settings });
+      await this.injectReverseEng(tabId, url, !!settings.useReverseEng);
     }catch(e){ /* noop */ }
   }
 
@@ -235,6 +239,42 @@ class SalesonatorMegaBackground {
     }catch(e){
       console.error('[MEGA BG] fetchImageViaProxy error', e);
       return { ok:false, error: String(e) };
+    }
+  }
+
+  async injectReverseEng(tabId, url, use){
+    try{
+      if (!use) return;
+      const isFacebook = /https?:\/\/(www\.|web\.)?facebook\.com\//.test(url||'');
+      if (!isFacebook) return;
+
+      const insertCss = async (file) => {
+        try { await chrome.scripting.insertCSS({ target: { tabId }, files: [file] }); } catch (e) { /* noop */ }
+      };
+      const exec = async (file) => {
+        try { await chrome.scripting.executeScript({ target: { tabId }, files: [file] }); } catch (e) { /* noop */ }
+      };
+
+      const base = 'reverseeng/';
+      await insertCss(base + 'sidepanel.df89bfed.css');
+
+      const common = [
+        base + 'SiteDetails.f06f1b91.js',
+        base + 'contents.04ff201a.js',
+        base + 'dataScript.a2ba678e.js',
+        base + 'facebook.40dee27c.js',
+        base + 'group.2c67bb9f.js',
+        base + 'GroupButton.b5166602.js',
+        base + 'ProfileButton.24b749fa.js',
+      ];
+      for (const f of common) await exec(f);
+
+      const isCreate = /facebook\.com\/marketplace\/create\//.test(url||'');
+      if (!isCreate) {
+        await exec(base + 'Marketplace.3864bf7a.js');
+      }
+    }catch(e){
+      // best effort only
     }
   }
 }
