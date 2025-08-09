@@ -371,10 +371,11 @@ class SalesonatorBackground {
       for (const result of data.results || []) {
         if (result.success) {
           const storageKey = `img_${this.hashString(result.url)}`;
-          const base64Data = (result.base64 || '').split(',')[1] || result.base64 || '';
+          // Store the full base64 data URL (not just the base64 part)
+          const base64Data = result.base64 || '';
           if (base64Data) {
             await chrome.storage.local.set({ [storageKey]: base64Data });
-            console.log(`Stored image with key: ${storageKey}`);
+            console.log(`Stored image with key: ${storageKey}, size: ${result.size || 'unknown'} bytes`);
           }
         }
       }
