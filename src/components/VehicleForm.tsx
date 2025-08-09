@@ -370,7 +370,7 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
               <Input
                 id="trim"
                 value={formData.trim || ''}
-                onChange={(e) => updateField('trim', e.target.value)}
+                onChange={(e) => updateField('trim', e.target.value.trim())}
                 placeholder="LX, EX, Limited..."
               />
             </div>

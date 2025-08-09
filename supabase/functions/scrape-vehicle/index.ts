@@ -41,7 +41,7 @@ serve(async (req) => {
           year: v.year ?? null,
           make: v.make ?? '',
           model: v.model ?? '',
-          trim: v.trim ?? null,
+          trim: v.trim ? String(v.trim).trim() : null, // Trim whitespace from trim field
           vin: v.vin ? String(v.vin).trim() : null, // Trim whitespace from VIN
           mileage: typeof v.mileage === 'number' ? v.mileage : parseInt(String(v.mileage || '').replace(/[^0-9]/g,'')) || null,
           price: typeof v.price === 'number' ? v.price : ((parseFloat(String(v.price||'').replace(/[^0-9.]/g,''))||0) * 100) || null,
