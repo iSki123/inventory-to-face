@@ -544,15 +544,17 @@ class SalesonatorExtension {
       console.log('Vehicle posting response:', response);
 
       if (response && response.success) {
-        console.log(`Successfully posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}`);
+        console.log(`✅ Successfully posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}`);
+        console.log('📊 Response details:', response);
         
         // Handle credit updates if available
         if (response.credits !== undefined) {
+          console.log(`💰 Credits updated: ${this.credits} → ${response.credits}`);
           this.credits = response.credits;
           this.updateCreditDisplay();
         }
         
-        statusEl.textContent = `Posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}`;
+        statusEl.textContent = `✅ Posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length} - Credits: ${this.credits}`;
         
         this.currentVehicleIndex++;
         const delay = parseInt(document.getElementById('delay').value) * 1000;
@@ -567,16 +569,19 @@ class SalesonatorExtension {
             return;
           }
           
-          statusEl.textContent = `Waiting ${delay/1000}s before next vehicle...`;
+          console.log(`⏳ Waiting ${delay/1000}s before posting next vehicle (${this.currentVehicleIndex + 1}/${this.vehicles.length})`);
+          statusEl.textContent = `Waiting ${delay/1000}s before next vehicle... (${this.currentVehicleIndex + 1}/${this.vehicles.length})`;
           
           // Wait before posting next vehicle
           setTimeout(() => {
             if (this.isPosting) {
+              console.log(`🚗 Starting next vehicle posting: ${this.currentVehicleIndex + 1}/${this.vehicles.length}`);
               this.postNextVehicle();
             }
           }, delay);
         } else {
           // All vehicles posted
+          console.log('🎉 All vehicles posted successfully!');
           statusEl.textContent = 'All vehicles posted successfully!';
           this.stopPosting();
         }

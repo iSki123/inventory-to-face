@@ -477,8 +477,13 @@ class SalesonatorAutomator {
             
             // Record the posting in backend and deduct credits
             try {
+              this.log('📝 Recording vehicle posting in backend...');
               const recordResult = await this.recordVehiclePosting(vehicleData.id);
               this.log('✅ Vehicle posting recorded in backend', recordResult);
+              
+              // Navigate back to create vehicle page for next posting
+              this.log('🔄 Navigating back to create page for next vehicle...');
+              await this.navigateToCreateVehiclePage();
               
               this.isPosting = false;
               this.uploadedImages = []; // Reset for next posting session
@@ -489,6 +494,12 @@ class SalesonatorAutomator {
               };
             } catch (backendError) {
               this.log('⚠️ Vehicle posted but failed to record in backend:', backendError);
+              console.error('Backend recording error:', backendError);
+              
+              // Still navigate back for next vehicle even if recording failed
+              this.log('🔄 Navigating back to create page despite recording error...');
+              await this.navigateToCreateVehiclePage();
+              
               this.isPosting = false;
               this.uploadedImages = []; // Reset for next posting session
               return { 
@@ -3029,6 +3040,7 @@ class SalesonatorAutomator {
   // Record vehicle posting in backend and deduct credits
   async recordVehiclePosting(vehicleId) {
     try {
+      this.log('📝 Getting user token for backend recording...');
       // Get user token from extension storage
       const result = await new Promise((resolve) => {
         chrome.runtime.sendMessage({ action: 'getStorageData', key: 'userToken' }, resolve);
@@ -3036,11 +3048,17 @@ class SalesonatorAutomator {
       
       const userToken = result?.value;
       if (!userToken) {
-        throw new Error('User not authenticated');
+        throw new Error('User not authenticated - no token found');
       }
       
+      this.log('🔑 Token found, generating Facebook post ID...');
       // Generate a fake Facebook post ID (since we can't easily extract the real one)
       const facebookPostId = `fb_${Date.now()}_${vehicleId.substring(0, 8)}`;
+      
+      this.log('📤 Sending record request to backend...', {
+        vehicleId: vehicleId.substring(0, 8) + '...',
+        facebookPostId: facebookPostId
+      });
       
       const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster', {
         method: 'POST',
@@ -3056,16 +3074,22 @@ class SalesonatorAutomator {
         })
       });
       
+      this.log('📨 Backend response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text();
+        this.log('❌ Backend error response:', errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
       }
       
       const data = await response.json();
+      this.log('📋 Backend response data:', data);
       
       if (!data.success) {
         throw new Error(data.error || 'Failed to record posting');
       }
       
+      this.log('✅ Successfully recorded posting, credits remaining:', data.credits);
       return {
         success: true,
         credits: data.credits,
@@ -3074,7 +3098,30 @@ class SalesonatorAutomator {
       
     } catch (error) {
       this.log('❌ Error recording vehicle posting:', error);
+      console.error('Full recording error:', error);
       throw error;
+    }
+  }
+
+  // Navigate back to create vehicle page for next posting
+  async navigateToCreateVehiclePage() {
+    try {
+      this.log('🔄 Navigating to Facebook Marketplace create vehicle page...');
+      
+      // Navigate directly to the create vehicle URL
+      const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
+      
+      // Use window.location for reliable navigation
+      window.location.href = createVehicleUrl;
+      
+      // Wait for page to load
+      await this.delay(3000);
+      
+      this.log('✅ Navigation to create vehicle page completed');
+      
+    } catch (error) {
+      this.log('⚠️ Error navigating to create vehicle page:', error);
+      console.error('Navigation error:', error);
     }
   }
 
