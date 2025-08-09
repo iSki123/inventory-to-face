@@ -1211,11 +1211,9 @@ async function processPostInsertionVinDecoding(supabaseClient: any, insertedVehi
         console.error(`❌ vin-decoder edge function HTTP error for vehicle ${vehicle.id}: ${response.status} ${response.statusText} - ${errorText}`);
       }
       
-      // Rate limiting - NHTSA recommends being conservative
-      if (i < vehiclesNeedingDecoding.length - 1) {
-        console.log(`⏱️ Waiting 6 seconds before next VIN decode (NHTSA rate limiting)`);
-        await new Promise(resolve => setTimeout(resolve, 6000));
-      }
+      // VIN decoding will happen immediately without rate limiting
+      console.log(`✅ VIN decode completed for vehicle ${i + 1}/${vehiclesNeedingDecoding.length}`);
+      
       
     } catch (error) {
       failureCount++;
