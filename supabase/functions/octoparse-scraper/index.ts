@@ -1179,17 +1179,36 @@ async function processPostInsertionVinDecoding(supabaseClient: any, insertedVehi
     const vehicle = vehiclesNeedingDecoding[i];
     
     try {
-      console.log(`🔍 [${i + 1}/${vehiclesNeedingDecoding.length}] Decoding VIN for ${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicle.vin})`);
+      console.log(`🔍 [${i + 1}/${vehiclesNeedingDecoding.length}] Calling vin-decoder edge function for ${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicle.vin})`);
       
-      // Use the vin-decoder function directly with supabase client
-      const vinDecoded = await decodeVinInternal(vehicle.vin.trim(), vehicle.id, supabaseClient);
+      // Call the actual vin-decoder edge function
+      const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/vin-decoder`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+        },
+        body: JSON.stringify({
+          vin: vehicle.vin.trim(),
+          vehicleId: vehicle.id
+        })
+      });
       
-      if (vinDecoded) {
-        successCount++;
-        console.log(`✅ VIN successfully decoded for vehicle ${vehicle.id}`);
+      console.log(`📡 vin-decoder response status: ${response.status}`);
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          successCount++;
+          console.log(`✅ VIN successfully decoded for vehicle ${vehicle.id} via vin-decoder edge function`);
+        } else {
+          failureCount++;
+          console.log(`❌ vin-decoder returned error for vehicle ${vehicle.id}: ${result.error || 'Unknown error'}`);
+        }
       } else {
         failureCount++;
-        console.log(`❌ VIN decoding failed for vehicle ${vehicle.id}`);
+        const errorText = await response.text();
+        console.error(`❌ vin-decoder edge function HTTP error for vehicle ${vehicle.id}: ${response.status} ${response.statusText} - ${errorText}`);
       }
       
       // Rate limiting - NHTSA recommends being conservative
@@ -1200,141 +1219,11 @@ async function processPostInsertionVinDecoding(supabaseClient: any, insertedVehi
       
     } catch (error) {
       failureCount++;
-      console.error(`❌ Error decoding VIN for vehicle ${vehicle.id}:`, error);
+      console.error(`❌ Error calling vin-decoder edge function for vehicle ${vehicle.id}:`, error);
     }
   }
   
   console.log(`🎯 Post-insertion VIN decoding completed: ${successCount} successful, ${failureCount} failed`);
-}
-
-// Internal VIN decoding function that replicates vin-decoder edge function logic
-async function decodeVinInternal(vin: string, vehicleId: string, supabaseClient: any): Promise<boolean> {
-  try {
-    console.log(`🔍 Internal VIN decode for: ${vin}`);
-    
-    // First check if this VIN has already been decoded by any user
-    const { data: existingVinData, error: vinCheckError } = await supabaseClient
-      .from('vehicles')
-      .select('body_style_nhtsa, drivetrain_nhtsa, engine_nhtsa, fuel_type_nhtsa, transmission_nhtsa, vehicle_type_nhtsa')
-      .eq('vin', vin)
-      .not('vin_decoded_at', 'is', null)
-      .limit(1)
-      .single();
-
-    if (!vinCheckError && existingVinData) {
-      console.log(`📋 Using existing VIN data for ${vin} from previous decode`);
-      
-      const nowIso = new Date().toISOString();
-      const vinData = {
-        ...existingVinData,
-        vin_decoded_at: nowIso
-      };
-
-      // Derive UI-friendly fields from NHTSA values
-      let mappedFuelType: string | undefined;
-      let mappedTransmission: string | undefined;
-      const ft = (existingVinData.fuel_type_nhtsa || '').toLowerCase();
-      if (ft) {
-        if (ft.includes('electric')) mappedFuelType = 'Electric';
-        else if (ft.includes('hybrid') && ft.includes('plug')) mappedFuelType = 'Plug-in hybrid';
-        else if (ft.includes('hybrid')) mappedFuelType = 'Hybrid';
-        else if (ft.includes('diesel')) mappedFuelType = 'Diesel';
-        else if (ft.includes('flex')) mappedFuelType = 'Flex';
-        else mappedFuelType = 'Gasoline';
-      }
-      const tr = (existingVinData.transmission_nhtsa || '').toLowerCase();
-      if (tr) {
-        mappedTransmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
-      }
-
-      const updatePayload: Record<string, any> = { ...vinData };
-      if (typeof mappedFuelType !== 'undefined') updatePayload.fuel_type = mappedFuelType;
-      if (typeof mappedTransmission !== 'undefined') updatePayload.transmission = mappedTransmission;
-
-      // Update vehicle with existing decoded VIN data and mapped UI fields
-      const { error: updateError } = await supabaseClient
-        .from('vehicles')
-        .update(updatePayload)
-        .eq('id', vehicleId);
-
-      if (updateError) {
-        console.error('Error updating vehicle with existing VIN data:', updateError);
-        return false;
-      }
-
-      console.log(`✅ Successfully updated vehicle ${vehicleId} with existing VIN data`);
-      return true;
-    }
-    
-    // If no existing data found, call NHTSA VIN decoding API
-    console.log(`🌐 Making fresh NHTSA API call for VIN: ${vin}`);
-    const response = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/${vin}?format=json`);
-    
-    if (!response.ok) {
-      console.error(`NHTSA API error for VIN ${vin}: ${response.status}`);
-      return false;
-    }
-
-    const data = await response.json();
-    const results = data.Results || [];
-
-    // Extract relevant fields from NHTSA response
-    const getVariableValue = (variableName: string) => {
-      const result = results.find((r: any) => r.Variable === variableName);
-      return result?.Value || null;
-    };
-
-    const vinData = {
-      body_style_nhtsa: getVariableValue('Body Class'),
-      drivetrain_nhtsa: getVariableValue('Drive Type'),
-      engine_nhtsa: getVariableValue('Engine Model') || getVariableValue('Engine Configuration'),
-      fuel_type_nhtsa: getVariableValue('Fuel Type - Primary'),
-      transmission_nhtsa: getVariableValue('Transmission Style'),
-      vehicle_type_nhtsa: getVariableValue('Vehicle Type'),
-      vin_decoded_at: new Date().toISOString()
-    };
-
-    console.log('Extracted VIN data:', vinData);
-
-    // Derive UI-friendly fields from NHTSA values
-    let mappedFuelType: string | undefined;
-    let mappedTransmission: string | undefined;
-    const ft = (vinData.fuel_type_nhtsa || '').toLowerCase();
-    if (ft) {
-      if (ft.includes('electric')) mappedFuelType = 'Electric';
-      else if (ft.includes('hybrid') && ft.includes('plug')) mappedFuelType = 'Plug-in hybrid';
-      else if (ft.includes('hybrid')) mappedFuelType = 'Hybrid';
-      else if (ft.includes('diesel')) mappedFuelType = 'Diesel';
-      else if (ft.includes('flex')) mappedFuelType = 'Flex';
-      else mappedFuelType = 'Gasoline';
-    }
-    const tr = (vinData.transmission_nhtsa || '').toLowerCase();
-    if (tr) {
-      mappedTransmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
-    }
-
-    const updatePayload: Record<string, any> = { ...vinData };
-    if (typeof mappedFuelType !== 'undefined') updatePayload.fuel_type = mappedFuelType;
-    if (typeof mappedTransmission !== 'undefined') updatePayload.transmission = mappedTransmission;
-
-    // Update vehicle with decoded VIN data + mapped UI fields
-    const { error: updateError } = await supabaseClient
-      .from('vehicles')
-      .update(updatePayload)
-      .eq('id', vehicleId);
-
-    if (updateError) {
-      console.error('Error updating vehicle with VIN data:', updateError);
-      return false;
-    }
-
-    console.log(`✅ Successfully updated vehicle ${vehicleId} with fresh VIN data`);
-    return true;
-    
-  } catch (error) {
-    console.error(`❌ Error decoding VIN ${vin}:`, error);
-    return false;
-  }
 }
 
 // Diagnostics helpers
