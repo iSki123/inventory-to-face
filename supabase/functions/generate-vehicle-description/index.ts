@@ -50,18 +50,16 @@ ${vehicle.contact_phone ? `Contact: ${vehicle.contact_phone}` : ''}`;
 ${vehicleDetails}
 
 Write a description that:
-1. Highlights the vehicle's key selling points and unique features
-2. Is engaging, professional, and conversion-focused
-3. Includes relevant details that buyers care about most
-4. Is 200-400 words long for optimal engagement
-5. Ends with a strong call to action for interested buyers
+1. Highlights the vehicle's key selling points
+2. Is engaging and professional
+3. Includes relevant details that buyers care about
+4. Is 150-300 words long
+5. Ends with a call to action for interested buyers
 6. Avoids excessive capitalization or spammy language
-7. Uses natural formatting without dashes (-) or asterisks (*)
-8. May include appropriate emojis for visual appeal
-9. Emphasizes value proposition and reliability
-10. Creates urgency and desire to contact immediately
+7. Does not use dashes (-) or asterisks (*) for formatting
+8. May use emojis occasionally for emphasis
 
-Focus on what makes this vehicle special and why a buyer should choose it over similar options. Make the description feel personal and trustworthy.`;
+Keep it conversational but professional, focusing on value and reliability.`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -70,15 +68,15 @@ Focus on what makes this vehicle special and why a buyer should choose it over s
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-2025-04-14',
         messages: [
           { 
             role: 'system', 
-            content: 'You are an expert automotive copywriter who creates compelling vehicle listings that attract buyers and highlight value propositions. Always write descriptions that prioritize the AI-generated content over basic vehicle information.' 
+            content: 'You are an expert automotive copywriter who creates compelling vehicle listings that attract buyers and highlight value propositions.' 
           },
           { role: 'user', content: prompt }
         ],
-        max_tokens: 600,
+        max_tokens: 500,
         temperature: 0.7,
       }),
     });
