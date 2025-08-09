@@ -14,6 +14,7 @@ import { useVehicles, Vehicle } from "@/hooks/useVehicles";
 import { useVehicleSources } from "@/hooks/useVehicleSources";
 import { VehicleForm } from "@/components/VehicleForm";
 import { VehicleSourceForm } from "@/components/VehicleSourceForm";
+import { VehicleImageWithBlur } from "@/components/VehicleImageWithBlur";
 
 export default function Inventory() {
   const { vehicles, loading, addVehicle, updateVehicle, deleteVehicle, bulkDeleteVehicles, postToFacebook, generateAIDescriptions, generateAIImages, refetch } = useVehicles();
@@ -384,10 +385,9 @@ export default function Inventory() {
                         className="absolute top-2 left-2 z-10"
                       />
                       {vehicle.images && vehicle.images.length > 0 ? (
-                        <img 
+                        <VehicleImageWithBlur
                           src={vehicle.images[0]} 
                           alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-                          className="w-full h-full object-cover"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
                           }}
