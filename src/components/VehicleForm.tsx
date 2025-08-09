@@ -134,16 +134,20 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
     }
   };
 
-  // Auto-decode VIN when it changes and is 17 characters
+  // Auto-decode VIN when it changes and is 17 characters (only for new vehicles or VINs that haven't been decoded)
   useEffect(() => {
-    if (formData.vin && formData.vin.length === 17 && !formData.vin_decoded_at) {
+    // Only auto-decode if:
+    // 1. We have a 17-character VIN
+    // 2. No existing decoded data for this VIN
+    // 3. This is not an existing vehicle being edited (unless the VIN changed)
+    if (formData.vin && formData.vin.length === 17 && !formData.vin_decoded_at && !isEditing) {
       const timeoutId = setTimeout(() => {
         decodeVinAutomatically(formData.vin!);
       }, 1000); // Debounce for 1 second
 
       return () => clearTimeout(timeoutId);
     }
-  }, [formData.vin, formData.vin_decoded_at]);
+  }, [formData.vin, formData.vin_decoded_at, isEditing]);
 
   const handleDecodeVin = async () => {
     if (!formData.vin || formData.vin.length !== 17) {
