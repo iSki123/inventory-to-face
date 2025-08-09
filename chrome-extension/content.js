@@ -474,9 +474,28 @@ class SalesonatorAutomator {
           
           if (success) {
             this.log('✅ Vehicle posted successfully');
-            this.isPosting = false;
-            this.uploadedImages = []; // Reset for next posting session
-            return { success: true };
+            
+            // Record the posting in backend and deduct credits
+            try {
+              const recordResult = await this.recordVehiclePosting(vehicleData.id);
+              this.log('✅ Vehicle posting recorded in backend', recordResult);
+              
+              this.isPosting = false;
+              this.uploadedImages = []; // Reset for next posting session
+              return { 
+                success: true, 
+                credits: recordResult.credits,
+                message: recordResult.message 
+              };
+            } catch (backendError) {
+              this.log('⚠️ Vehicle posted but failed to record in backend:', backendError);
+              this.isPosting = false;
+              this.uploadedImages = []; // Reset for next posting session
+              return { 
+                success: true, 
+                warning: 'Posted but failed to record: ' + backendError.message 
+              };
+            }
           }
           
         } catch (error) {
@@ -3004,6 +3023,58 @@ class SalesonatorAutomator {
       } catch (fallbackError) {
         console.error(`[FACEBOOK CLICK] Even simple click failed:`, fallbackError);
       }
+    }
+  }
+
+  // Record vehicle posting in backend and deduct credits
+  async recordVehiclePosting(vehicleId) {
+    try {
+      // Get user token from extension storage
+      const result = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: 'getStorageData', key: 'userToken' }, resolve);
+      });
+      
+      const userToken = result?.value;
+      if (!userToken) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Generate a fake Facebook post ID (since we can't easily extract the real one)
+      const facebookPostId = `fb_${Date.now()}_${vehicleId.substring(0, 8)}`;
+      
+      const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userToken}`
+        },
+        body: JSON.stringify({
+          action: 'update_vehicle_status',
+          vehicleId: vehicleId,
+          status: 'posted',
+          facebookPostId: facebookPostId
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to record posting');
+      }
+      
+      return {
+        success: true,
+        credits: data.credits,
+        message: data.message || 'Vehicle posted and recorded successfully'
+      };
+      
+    } catch (error) {
+      this.log('❌ Error recording vehicle posting:', error);
+      throw error;
     }
   }
 

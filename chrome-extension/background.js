@@ -50,7 +50,7 @@ class SalesonatorBackground {
       }
       
       if (request.action === 'preDownloadImages') {
-        this.preDownloadImagesViaProxy(request.imageUrls, sendResponse);
+        this.preDownloadImagesViaProxy(request.images, sendResponse);
         return true; // Keep message channel open for async response
       }
       
@@ -78,6 +78,19 @@ class SalesonatorBackground {
           .catch(error => {
             console.error('Web app auth error:', error);
             sendResponse({ success: false, error: error.message });
+          });
+        return true; // async
+      }
+      
+      if (request.action === 'getStorageData') {
+        // Handle storage data requests from content script
+        chrome.storage.sync.get([request.key])
+          .then(result => {
+            sendResponse({ value: result[request.key] });
+          })
+          .catch(error => {
+            console.error('Storage access error:', error);
+            sendResponse({ value: null, error: error.message });
           });
         return true; // async
       }
@@ -232,74 +245,6 @@ class SalesonatorBackground {
     }
   }
 
-  // Pre-download images and store them in extension storage
-  async preDownloadImages(imageUrls) {
-    try {
-      console.log('Starting pre-download of', imageUrls.length, 'images');
-      const results = [];
-      
-      for (let i = 0; i < imageUrls.length; i++) {
-        const imageUrl = imageUrls[i];
-        // Use same key generation as content script
-        const storageKey = `img_${this.hashString(imageUrl)}`;
-        
-        try {
-          console.log(`Pre-downloading image ${i + 1}:`, imageUrl, 'Key:', storageKey);
-          
-          const response = await fetch(imageUrl, {
-            method: 'GET',
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-              'Accept': 'image/*',
-              'Cache-Control': 'no-cache',
-              'Referer': 'https://www.facebook.com/'
-            }
-          });
-          
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-          
-          const blob = await response.blob();
-          const base64 = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-          
-          // Store in chrome storage
-          await chrome.storage.local.set({
-            [storageKey]: base64
-          });
-          
-          console.log(`Successfully pre-downloaded and stored image ${i + 1}`);
-          results.push({ index: i, success: true, storageKey });
-          
-        } catch (error) {
-          console.error(`Failed to pre-download image ${i + 1}:`, error);
-          results.push({ index: i, success: false, error: error.message });
-        }
-      }
-      
-      const successCount = results.filter(r => r.success).length;
-      console.log(`Pre-download completed: ${successCount}/${imageUrls.length} images successful`);
-      
-      return {
-        success: true,
-        results,
-        successCount,
-        totalCount: imageUrls.length
-      };
-      
-    } catch (error) {
-      console.error('Pre-download process failed:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
 
   // Fetch single image via Supabase proxy
   async fetchImageViaProxy(url, sendResponse) {
