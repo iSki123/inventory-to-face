@@ -4,6 +4,7 @@ class SalesonatorExtension {
     this.isPosting = false;
     this.vehicles = [];
     this.currentVehicleIndex = 0;
+    this.credits = 0;
     this.init();
   }
 
@@ -158,6 +159,8 @@ class SalesonatorExtension {
                   if (profile && profile.is_active && profile.credits > 0) {
                     console.log('✅ User is eligible with credits:', profile.credits);
                     console.log('Setting up auto-authentication...');
+                    this.credits = profile.credits;
+                    this.updateCreditDisplay();
                     this.showWebAppAuthSuccess();
                     return { token: authData.token, user: authData.user, credits: profile.credits };
                   } else {
@@ -198,6 +201,7 @@ class SalesonatorExtension {
     const statusEl = document.getElementById('status');
     statusEl.className = 'status connected';
     statusEl.textContent = '✅ Auto-authenticated via Salesonator web app!';
+    document.getElementById('creditBalance').style.display = 'block';
   }
 
   showError(message) {
@@ -271,6 +275,8 @@ class SalesonatorExtension {
         clearInterval(this.authCheckInterval);
         console.log('✅ Auto-authentication detected!');
         await chrome.storage.sync.set({ userToken: webAppAuth.token });
+        this.credits = webAppAuth.credits || 0;
+        this.updateCreditDisplay();
         this.showWebAppAuthSuccess();
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('mainSection').style.display = 'block';
@@ -539,6 +545,13 @@ class SalesonatorExtension {
 
       if (response && response.success) {
         console.log(`Successfully posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}`);
+        
+        // Handle credit updates if available
+        if (response.credits !== undefined) {
+          this.credits = response.credits;
+          this.updateCreditDisplay();
+        }
+        
         statusEl.textContent = `Posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}`;
         
         this.currentVehicleIndex++;
@@ -546,6 +559,14 @@ class SalesonatorExtension {
         
         // Check if there are more vehicles to post
         if (this.currentVehicleIndex < this.vehicles.length) {
+          // Check if we have enough credits to continue
+          if (this.credits <= 0) {
+            statusEl.className = 'status disconnected';
+            statusEl.textContent = 'Insufficient credits to continue posting';
+            this.stopPosting();
+            return;
+          }
+          
           statusEl.textContent = `Waiting ${delay/1000}s before next vehicle...`;
           
           // Wait before posting next vehicle
@@ -561,7 +582,17 @@ class SalesonatorExtension {
         }
       } else {
         console.error('Failed to post vehicle:', response?.error || 'Unknown error');
-        statusEl.textContent = `Failed: ${response?.error || 'Unknown error'}`;
+        
+        // Handle insufficient credits error
+        if (response?.error?.includes('Insufficient credits')) {
+          statusEl.className = 'status disconnected';
+          statusEl.textContent = 'Insufficient credits to post vehicle';
+          this.credits = 0;
+          this.updateCreditDisplay();
+        } else {
+          statusEl.textContent = `Failed: ${response?.error || 'Unknown error'}`;
+        }
+        
         this.stopPosting();
       }
     });
@@ -615,6 +646,29 @@ class SalesonatorExtension {
       
     } catch (error) {
       console.error('Error pre-downloading images:', error);
+    }
+  }
+
+  updateCreditDisplay() {
+    const creditCountEl = document.getElementById('creditCount');
+    const creditBalanceEl = document.getElementById('creditBalance');
+    
+    if (creditCountEl) {
+      creditCountEl.textContent = this.credits;
+    }
+    
+    // Show credit balance when we have credit info
+    if (creditBalanceEl && this.credits >= 0) {
+      creditBalanceEl.style.display = 'block';
+      
+      // Change color based on credit level
+      if (this.credits === 0) {
+        creditBalanceEl.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+      } else if (this.credits <= 5) {
+        creditBalanceEl.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+      } else {
+        creditBalanceEl.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+      }
     }
   }
 }
