@@ -1511,6 +1511,11 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
       console.log(`🔍 VIN decoding completed. Total vehicles for import: ${vehicleData.length}`);
     }
     
+    // ALWAYS decode VIN for ALL vehicles to get NHTSA data for ChatGPT descriptions
+    console.log(`🔍 Starting NHTSA enrichment for all ${vehicleData.length} vehicles...`);
+    vehicleData = await enrichAllVehiclesWithNhtsaData(supabaseClient, vehicleData);
+    console.log(`🔍 NHTSA enrichment completed for all vehicles`);
+    
     // Log detailed parsing statistics
     const skippedCount = allRawData.length - vehicleData.length;
     if (skippedCount > 0) {
