@@ -151,7 +151,12 @@ serve(async (req) => {
     );
 
     const requestBody = await req.json();
-    const { vin, vehicleId, action, batch_size } = requestBody;
+    let { vin, vehicleId, action, batch_size } = requestBody;
+    
+    // Trim whitespace from VIN if provided
+    if (vin) {
+      vin = String(vin).trim();
+    }
 
     // Handle batch decode action for cron job
     if (action === 'batch_decode') {
@@ -187,9 +192,10 @@ serve(async (req) => {
 
       // Process each vehicle with intelligent timing
       for (const vehicle of vehicles) {
-        if (vehicle.vin && vehicle.vin.length === 17) {
+        const trimmedVin = vehicle.vin ? String(vehicle.vin).trim() : null;
+        if (trimmedVin && trimmedVin.length === 17) {
           try {
-            const success = await decodeVin(vehicle.vin, vehicle.id, supabaseClient);
+            const success = await decodeVin(trimmedVin, vehicle.id, supabaseClient);
             if (success) decoded_count++;
             
             // Smart delay based on time of day (EST)

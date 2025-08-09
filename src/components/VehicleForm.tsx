@@ -380,7 +380,7 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
                 <Input
                   id="vin"
                   value={formData.vin || ''}
-                  onChange={(e) => updateField('vin', e.target.value)}
+                  onChange={(e) => updateField('vin', e.target.value.trim())}
                   placeholder="17-character VIN"
                   maxLength={17}
                   className="flex-1"

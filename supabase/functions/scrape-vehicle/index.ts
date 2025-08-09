@@ -42,7 +42,7 @@ serve(async (req) => {
           make: v.make ?? '',
           model: v.model ?? '',
           trim: v.trim ?? null,
-          vin: v.vin ?? null,
+          vin: v.vin ? String(v.vin).trim() : null, // Trim whitespace from VIN
           mileage: typeof v.mileage === 'number' ? v.mileage : parseInt(String(v.mileage || '').replace(/[^0-9]/g,'')) || null,
           price: typeof v.price === 'number' ? v.price : ((parseFloat(String(v.price||'').replace(/[^0-9.]/g,''))||0) * 100) || null,
           body_style_nhtsa: v.body_style || null,
