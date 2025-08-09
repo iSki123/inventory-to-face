@@ -578,6 +578,15 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
             lead_count: 0,
             user_id: userId,
             ai_images_generated: true, // Set to true since we have images
+            // Include NHTSA data if available from VIN decoding
+            body_style_nhtsa: vehicle.body_style_nhtsa || null,
+            fuel_type_nhtsa: vehicle.fuel_type_nhtsa || null,
+            engine_nhtsa: vehicle.engine_nhtsa || null,
+            transmission_nhtsa: vehicle.transmission_nhtsa || null,
+            drivetrain_nhtsa: vehicle.drivetrain_nhtsa || null,
+            vehicle_type_nhtsa: vehicle.vehicle_type_nhtsa || null,
+            // Set vin_decoded_at if VIN decoding was successful
+            vin_decoded_at: vehicle.vin_decoded_at || null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           }])
@@ -991,24 +1000,68 @@ async function processVinDecoding(supabaseClient: any, vehiclesNeedingDecoding: 
         const vinData = await vinResponse.json();
         const results = vinData.Results || [];
         
-        // Extract make, model, year from VIN decode results
+        // Extract all relevant NHTSA data
         const makeResult = results.find((r: any) => r.Variable === 'Make');
         const modelResult = results.find((r: any) => r.Variable === 'Model');
         const yearResult = results.find((r: any) => r.Variable === 'Model Year');
+        const bodyClassResult = results.find((r: any) => r.Variable === 'Body Class');
+        const fuelTypePrimaryResult = results.find((r: any) => r.Variable === 'Fuel Type - Primary');
+        const engineNumberOfCylindersResult = results.find((r: any) => r.Variable === 'Engine Number of Cylinders');
+        const transmissionStyleResult = results.find((r: any) => r.Variable === 'Transmission Style');
+        const driveTypeResult = results.find((r: any) => r.Variable === 'Drive Type');
+        const vehicleTypeResult = results.find((r: any) => r.Variable === 'Vehicle Type');
+        const engineConfigurationResult = results.find((r: any) => r.Variable === 'Engine Configuration');
         
         const decodedMake = makeResult?.Value;
         const decodedModel = modelResult?.Value;
         const decodedYear = yearResult?.Value ? parseInt(yearResult.Value) : null;
         
+        // Extract NHTSA fields for database storage
+        const nhtsaData = {
+          body_style_nhtsa: bodyClassResult?.Value || null,
+          fuel_type_nhtsa: fuelTypePrimaryResult?.Value || null,
+          engine_nhtsa: engineNumberOfCylindersResult?.Value ? `${engineNumberOfCylindersResult.Value} Cylinder` : null,
+          transmission_nhtsa: transmissionStyleResult?.Value || null,
+          drivetrain_nhtsa: driveTypeResult?.Value || null,
+          vehicle_type_nhtsa: vehicleTypeResult?.Value || null
+        };
+        
+        // Map NHTSA data to UI-friendly fields
+        const fuelTypeMapping: { [key: string]: string } = {
+          'Gasoline': 'gasoline',
+          'Electric': 'electric', 
+          'Hybrid': 'hybrid',
+          'Diesel': 'diesel',
+          'Flex Fuel': 'flex_fuel'
+        };
+        
+        const transmissionMapping: { [key: string]: string } = {
+          'Manual': 'manual',
+          'Automatic': 'automatic', 
+          'CVT': 'cvt'
+        };
+        
+        const mappedFuelType = nhtsaData.fuel_type_nhtsa ? 
+          fuelTypeMapping[nhtsaData.fuel_type_nhtsa] || 'gasoline' : 'gasoline';
+        
+        const mappedTransmission = nhtsaData.transmission_nhtsa ?
+          transmissionMapping[nhtsaData.transmission_nhtsa] || 'automatic' : 'automatic';
+        
         if (decodedMake && decodedModel) {
           console.log(`✅ VIN decoded successfully: ${vehicle.vin} -> ${decodedYear} ${decodedMake} ${decodedModel}`);
           
-          // Update vehicle with decoded information
+          // Update vehicle with decoded information including NHTSA data
           const updatedVehicle = {
             ...vehicle,
             make: decodedMake,
             model: decodedModel,
-            year: decodedYear || vehicle.year
+            year: decodedYear || vehicle.year,
+            fuel_type: mappedFuelType,
+            transmission: mappedTransmission,
+            // Store NHTSA raw data
+            ...nhtsaData,
+            // Mark as VIN decoded
+            vin_decoded_at: new Date().toISOString()
           };
           
           return updatedVehicle;
@@ -1030,9 +1083,17 @@ async function processVinDecoding(supabaseClient: any, vehiclesNeedingDecoding: 
     
     decodedVehicles.push(...batchDecoded);
     
-    // Small delay between batches to avoid overwhelming the VIN API
+    // NHTSA API rate limiting - use longer delays to respect their automated traffic control
     if (i + batchSize < vehiclesNeedingDecoding.length) {
-      await new Promise(resolve => setTimeout(resolve, 200));
+      const now = new Date();
+      const estHour = (now.getUTCHours() - 5 + 24) % 24; // Convert to EST
+      const isBusinessHours = estHour >= 6 && estHour <= 18;
+      const isWeekday = now.getUTCDay() >= 1 && now.getUTCDay() <= 5;
+      
+      // Use conservative delays to avoid being rate limited
+      const delayMs = (isBusinessHours && isWeekday) ? 10000 : 5000; // 10s business hours, 5s off-hours
+      console.log(`⏳ Waiting ${delayMs/1000}s before next VIN decoding batch (NHTSA rate limiting)`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
     }
   }
   
