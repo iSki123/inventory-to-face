@@ -1157,12 +1157,12 @@ async function enrichAllVehiclesWithNhtsaData(supabaseClient: any, vehicles: any
 async function processPostInsertionVinDecoding(supabaseClient: any, insertedVehicles: any[]): Promise<void> {
   console.log(`🔍 Starting post-insertion VIN decoding for ${insertedVehicles.length} vehicles`);
   
-  // Filter vehicles that have valid VINs but haven't been decoded yet
-  const vehiclesNeedingDecoding = insertedVehicles.filter(v => 
-    v.vin && 
-    v.vin.length === 17 && 
-    !v.vin_decoded_at
-  );
+  // Filter vehicles that have valid VINs - ALL imported vehicles should get VIN decoded
+  const vehiclesNeedingDecoding = insertedVehicles.filter(v => {
+    const hasValidVin = v.vin && typeof v.vin === 'string' && v.vin.trim().length >= 17;
+    console.log(`🔍 VIN Check - Vehicle ${v.year} ${v.make} ${v.model}: VIN="${v.vin}", hasValidVin=${hasValidVin}, vin_decoded_at=${v.vin_decoded_at}`);
+    return hasValidVin;
+  });
   
   console.log(`📊 VIN decoding analysis: ${vehiclesNeedingDecoding.length}/${insertedVehicles.length} vehicles need VIN decoding`);
   
