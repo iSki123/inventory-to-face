@@ -101,13 +101,21 @@ export const useVehicles = () => {
             
             // Show toast for image generation completion only if AI image generation is enabled
             if (updatedVehicle.ai_images_generated && updatedVehicle.images && updatedVehicle.images.length > 0) {
-              const isAIImageGenerationEnabled = getSetting('ai_image_generation_enabled', { enabled: true })?.enabled !== false;
-              if (isAIImageGenerationEnabled) {
-                toast({
-                  title: "AI Images Generated",
-                  description: `Generated ${updatedVehicle.images.length} images for ${updatedVehicle.year} ${updatedVehicle.make} ${updatedVehicle.model}`,
+              // Check if the site setting allows AI image generation
+              supabase
+                .from('site_settings')
+                .select('setting_value')
+                .eq('setting_key', 'ai_image_generation_enabled')
+                .maybeSingle()
+                .then(({ data }) => {
+                  const isEnabled = (data?.setting_value as any)?.enabled !== false;
+                  if (isEnabled) {
+                    toast({
+                      title: "AI Images Generated",
+                      description: `Generated ${updatedVehicle.images.length} images for ${updatedVehicle.year} ${updatedVehicle.make} ${updatedVehicle.model}`,
+                    });
+                  }
                 });
-              }
             }
           } else if (payload.eventType === 'DELETE') {
             const deletedVehicle = payload.old as Vehicle;
