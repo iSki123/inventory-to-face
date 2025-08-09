@@ -45,10 +45,12 @@ async function decodeVin(vin: string, vehicleId: string, supabaseClient: any): P
       }
       const tr = (existingVinData.transmission_nhtsa || '').toLowerCase();
       if (tr && tr.includes('manual')) {
-        // Only override if NHTSA explicitly indicates manual transmission
+        // Only set to manual if NHTSA explicitly indicates manual transmission
         mappedTransmission = 'Manual transmission';
+      } else {
+        // Default to automatic for all other cases (including null/empty)
+        mappedTransmission = 'Automatic transmission';
       }
-      // Otherwise, leave transmission as-is (likely automatic)
 
       const updatePayload: Record<string, any> = { ...vinData };
       if (typeof mappedFuelType !== 'undefined') updatePayload.fuel_type = mappedFuelType;
@@ -112,10 +114,12 @@ async function decodeVin(vin: string, vehicleId: string, supabaseClient: any): P
     }
     const tr = (vinData.transmission_nhtsa || '').toLowerCase();
     if (tr && tr.includes('manual')) {
-      // Only override if NHTSA explicitly indicates manual transmission
+      // Only set to manual if NHTSA explicitly indicates manual transmission
       mappedTransmission = 'Manual transmission';
+    } else {
+      // Default to automatic for all other cases (including null/empty)
+      mappedTransmission = 'Automatic transmission';
     }
-    // Otherwise, leave transmission as-is (likely automatic)
 
     const updatePayload: Record<string, any> = { ...vinData };
     if (typeof mappedFuelType !== 'undefined') updatePayload.fuel_type = mappedFuelType;
@@ -287,10 +291,12 @@ serve(async (req) => {
       }
       const tr = (vinData.transmission_nhtsa || '').toLowerCase();
       if (tr && tr.includes('manual')) {
-        // Only override if NHTSA explicitly indicates manual transmission
+        // Only set to manual if NHTSA explicitly indicates manual transmission
         mappedTransmission = 'Manual transmission';
+      } else {
+        // Default to automatic for all other cases (including null/empty)
+        mappedTransmission = 'Automatic transmission';
       }
-      // Otherwise, leave transmission as-is (likely automatic)
 
       const updatePayload: Record<string, any> = { ...vinData };
       if (typeof mappedFuelType !== 'undefined') updatePayload.fuel_type = mappedFuelType;
