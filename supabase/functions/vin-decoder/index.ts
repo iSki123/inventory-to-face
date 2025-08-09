@@ -44,9 +44,11 @@ async function decodeVin(vin: string, vehicleId: string, supabaseClient: any): P
         else mappedFuelType = 'Gasoline';
       }
       const tr = (existingVinData.transmission_nhtsa || '').toLowerCase();
-      if (tr) {
-        mappedTransmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+      if (tr && tr.includes('manual')) {
+        // Only override if NHTSA explicitly indicates manual transmission
+        mappedTransmission = 'Manual transmission';
       }
+      // Otherwise, leave transmission as-is (likely automatic)
 
       const updatePayload: Record<string, any> = { ...vinData };
       if (typeof mappedFuelType !== 'undefined') updatePayload.fuel_type = mappedFuelType;
@@ -109,9 +111,11 @@ async function decodeVin(vin: string, vehicleId: string, supabaseClient: any): P
       else mappedFuelType = 'Gasoline';
     }
     const tr = (vinData.transmission_nhtsa || '').toLowerCase();
-    if (tr) {
-      mappedTransmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+    if (tr && tr.includes('manual')) {
+      // Only override if NHTSA explicitly indicates manual transmission
+      mappedTransmission = 'Manual transmission';
     }
+    // Otherwise, leave transmission as-is (likely automatic)
 
     const updatePayload: Record<string, any> = { ...vinData };
     if (typeof mappedFuelType !== 'undefined') updatePayload.fuel_type = mappedFuelType;
@@ -282,9 +286,11 @@ serve(async (req) => {
         else mappedFuelType = 'Gasoline';
       }
       const tr = (vinData.transmission_nhtsa || '').toLowerCase();
-      if (tr) {
-        mappedTransmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+      if (tr && tr.includes('manual')) {
+        // Only override if NHTSA explicitly indicates manual transmission
+        mappedTransmission = 'Manual transmission';
       }
+      // Otherwise, leave transmission as-is (likely automatic)
 
       const updatePayload: Record<string, any> = { ...vinData };
       if (typeof mappedFuelType !== 'undefined') updatePayload.fuel_type = mappedFuelType;
