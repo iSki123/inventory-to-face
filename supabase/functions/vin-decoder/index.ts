@@ -198,14 +198,16 @@ serve(async (req) => {
             const success = await decodeVin(trimmedVin, vehicle.id, supabaseClient);
             if (success) decoded_count++;
             
-            // Smart delay based on time of day (EST)
+            // NHTSA API rate limiting - be very conservative
+            // Using 5-10 second delays to respect their automated traffic control
             const now = new Date();
             const estHour = (now.getUTCHours() - 5 + 24) % 24; // Convert to EST
             const isBusinessHours = estHour >= 6 && estHour <= 18;
             const isWeekday = now.getUTCDay() >= 1 && now.getUTCDay() <= 5;
             
-            // Longer delays during business hours to be more respectful
-            const delayMs = (isBusinessHours && isWeekday) ? 2000 : 1000;
+            // Much longer delays to avoid being rate limited by NHTSA
+            // Their docs mention automated traffic control, so we need to be conservative
+            const delayMs = (isBusinessHours && isWeekday) ? 10000 : 5000; // 10s business hours, 5s off-hours
             await new Promise(resolve => setTimeout(resolve, delayMs));
             
           } catch (error) {
