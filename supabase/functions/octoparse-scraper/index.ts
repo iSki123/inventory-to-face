@@ -638,13 +638,69 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
 
   console.log(`Final result: ${insertedVehicles.length}/${vehicleData.length} vehicles inserted successfully`);
 
+  // Generate AI descriptions for newly inserted vehicles
+  if (insertedVehicles.length > 0) {
+    console.log(`Generating AI descriptions for ${insertedVehicles.length} vehicles...`);
+    
+    // Process in batches to avoid overwhelming the API
+    const batchSize = 5;
+    let aiGeneratedCount = 0;
+    
+    for (let i = 0; i < insertedVehicles.length; i += batchSize) {
+      const batch = insertedVehicles.slice(i, i + batchSize);
+      
+      const aiPromises = batch.map(async (vehicle) => {
+        try {
+          console.log(`Generating AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+          
+          const aiResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-vehicle-description`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            },
+            body: JSON.stringify({
+              vehicle: vehicle
+            }),
+          });
+
+          if (aiResponse.ok) {
+            const aiData = await aiResponse.json();
+            if (aiData.success && aiData.description) {
+              // Update the vehicle with AI description
+              await supabaseClient
+                .from('vehicles')
+                .update({ ai_description: aiData.description })
+                .eq('id', vehicle.id)
+                .eq('user_id', userId);
+              
+              console.log(`✅ AI description generated for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+              aiGeneratedCount++;
+            }
+          }
+        } catch (error) {
+          console.error(`❌ Failed to generate AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}:`, error);
+        }
+      });
+      
+      await Promise.allSettled(aiPromises);
+      
+      // Add delay between batches to respect rate limits
+      if (i + batchSize < insertedVehicles.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    console.log(`🎉 Generated AI descriptions for ${aiGeneratedCount}/${insertedVehicles.length} vehicles`);
+  }
+
   return new Response(
     JSON.stringify({ 
       success: true,
       insertedCount: insertedVehicles.length,
       totalProcessed: vehicleData.length,
       vehicles: insertedVehicles,
-      message: `Successfully imported ${insertedVehicles.length} out of ${vehicleData.length} vehicles`,
+      message: `Successfully imported ${insertedVehicles.length} out of ${vehicleData.length} vehicles with AI descriptions generated automatically.`,
       dataSource: accessToken && source.octoparse_task_id ? 'octoparse' : 'mock'
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -1474,6 +1530,63 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
 
     console.log(`Final result: ${insertedVehicles.length}/${vehicleData.length} vehicles inserted successfully`);
 
+    // Generate AI descriptions for newly inserted vehicles
+    if (insertedVehicles.length > 0) {
+      console.log(`Generating AI descriptions for ${insertedVehicles.length} vehicles...`);
+      
+      // Process in batches to avoid overwhelming the API
+      const batchSize = 5;
+      let aiGeneratedCount = 0;
+      
+      for (let i = 0; i < insertedVehicles.length; i += batchSize) {
+        const batch = insertedVehicles.slice(i, i + batchSize);
+        
+        const aiPromises = batch.map(async (vehicle) => {
+          try {
+            console.log(`Generating AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+            
+            const aiResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-vehicle-description`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              },
+              body: JSON.stringify({
+                vehicle: vehicle,
+                customPrompt: aiDescriptionPrompt
+              }),
+            });
+
+            if (aiResponse.ok) {
+              const aiData = await aiResponse.json();
+              if (aiData.success && aiData.description) {
+                // Update the vehicle with AI description
+                await supabaseClient
+                  .from('vehicles')
+                  .update({ ai_description: aiData.description })
+                  .eq('id', vehicle.id)
+                  .eq('user_id', userId);
+                
+                console.log(`✅ AI description generated for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+                aiGeneratedCount++;
+              }
+            }
+          } catch (error) {
+            console.error(`❌ Failed to generate AI description for ${vehicle.year} ${vehicle.make} ${vehicle.model}:`, error);
+          }
+        });
+        
+        await Promise.allSettled(aiPromises);
+        
+        // Add delay between batches to respect rate limits
+        if (i + batchSize < insertedVehicles.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      console.log(`🎉 Generated AI descriptions for ${aiGeneratedCount}/${insertedVehicles.length} vehicles`);
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true,
@@ -1482,7 +1595,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
         vehicles: insertedVehicles,
         errors: errors,
         diagnostics: diagReport,
-        message: `Successfully imported ${insertedVehicles.length} of ${vehicleData.length} vehicles from task ${taskId}. AI descriptions and images are being generated in the background.`,
+        message: `Successfully imported ${insertedVehicles.length} of ${vehicleData.length} vehicles from task ${taskId}. AI descriptions have been generated automatically.`,
         taskId
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
