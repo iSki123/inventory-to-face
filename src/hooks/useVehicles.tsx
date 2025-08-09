@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -60,7 +60,36 @@ export const useVehicles = () => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const { getSetting } = useSiteSettings();
+  
+  // Queue for managing sequential notifications
+  const notificationQueueRef = useRef<Array<() => void>>([]);
+  const isProcessingQueueRef = useRef(false);
+  
+  // Function to process the notification queue sequentially
+  const processNotificationQueue = async () => {
+    if (isProcessingQueueRef.current || notificationQueueRef.current.length === 0) {
+      return;
+    }
+    
+    isProcessingQueueRef.current = true;
+    
+    while (notificationQueueRef.current.length > 0) {
+      const notification = notificationQueueRef.current.shift();
+      if (notification) {
+        notification();
+        // Wait 2 seconds between notifications to prevent overlap
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+    
+    isProcessingQueueRef.current = false;
+  };
 
+  // Function to add notification to queue
+  const queueNotification = (notification: () => void) => {
+    notificationQueueRef.current.push(notification);
+    processNotificationQueue();
+  };
   // Set up real-time subscription for vehicles table
   useEffect(() => {
     if (!user) return;
@@ -89,9 +118,12 @@ export const useVehicles = () => {
               return [newVehicle, ...prev];
             });
             
-            toast({
-              title: "New Vehicle Added",
-              description: `${newVehicle.year} ${newVehicle.make} ${newVehicle.model} has been imported`,
+            // Queue the notification instead of showing immediately to prevent overlap
+            queueNotification(() => {
+              toast({
+                title: "New Vehicle Added",
+                description: `${newVehicle.year} ${newVehicle.make} ${newVehicle.model} has been imported`,
+              });
             });
           } else if (payload.eventType === 'UPDATE') {
             const updatedVehicle = payload.new as Vehicle;
