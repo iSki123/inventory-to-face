@@ -504,6 +504,12 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
         console.log(`🔍 VIN decoding completed. Total vehicles for import: ${vehicleData.length}`);
       }
       
+      // ALSO decode VIN for ALL vehicles to get NHTSA data, even if they have make/model
+      console.log(`🔍 Starting NHTSA data collection for all ${vehicleData.length} vehicles...`);
+      const vehiclesWithNhtsaData = await processVinDecoding(supabaseClient, vehicleData);
+      vehicleData = vehiclesWithNhtsaData;
+      console.log(`🔍 NHTSA data collection completed for all vehicles`);
+      
     } catch (error) {
       console.error('Error fetching Octoparse data:', error);
       vehicleData = generateMockVehicleData();
@@ -1068,6 +1074,21 @@ async function processVinDecoding(supabaseClient: any, vehiclesNeedingDecoding: 
             make: decodedMake,
             model: decodedModel,
             year: decodedYear || vehicle.year,
+            fuel_type: mappedFuelType,
+            transmission: mappedTransmission,
+            // Store NHTSA raw data
+            ...nhtsaData,
+            // Mark as VIN decoded
+            vin_decoded_at: new Date().toISOString()
+          };
+          
+          return updatedVehicle;
+        } else if (nhtsaData.fuel_type_nhtsa || nhtsaData.transmission_nhtsa || nhtsaData.body_style_nhtsa) {
+          // Even if make/model decode failed, save NHTSA data if we got it
+          console.log(`✅ VIN NHTSA data retrieved for ${vehicle.vin} (${vehicle.make} ${vehicle.model})`);
+          
+          const updatedVehicle = {
+            ...vehicle,
             fuel_type: mappedFuelType,
             transmission: mappedTransmission,
             // Store NHTSA raw data
