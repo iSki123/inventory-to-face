@@ -1158,7 +1158,7 @@ async function enrichAllVehiclesWithNhtsaData(supabaseClient: any, vehicles: any
       // ALWAYS return the vehicle, enriched if possible
       try {
         if (!vehicle.vin || vehicle.vin.length < 17) {
-          console.log(`⚠️ Skipping VIN enrichment for ${vehicle.year} ${vehicle.make} ${vehicle.model} - invalid VIN: ${vehicle.vin}`);
+          console.log(`⚠️ Skipping VIN enrichment for ${vehicle.year} ${vehicle.make} ${vehicle.model} - invalid VIN: "${vehicle.vin}" (length: ${vehicle.vin?.length || 0})`);
           return vehicle; // Return as-is
         }
         
@@ -1166,37 +1166,54 @@ async function enrichAllVehiclesWithNhtsaData(supabaseClient: any, vehicles: any
         
         // Call VIN decoder API with timeout and retry
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        const timeoutId = setTimeout(() => {
+          console.warn(`⏰ VIN API timeout for ${vehicle.vin} after 10 seconds`);
+          controller.abort();
+        }, 10000); // 10 second timeout
         
+        let vinResponse;
         try {
-          console.log(`🔍 Calling NHTSA API for VIN: ${vehicle.vin}`);
-          const vinResponse = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${vehicle.vin}?format=json`, {
+          console.log(`🌐 Making NHTSA API call for VIN: ${vehicle.vin}`);
+          vinResponse = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${vehicle.vin}?format=json`, {
             signal: controller.signal,
             headers: {
-              'User-Agent': 'VehicleDataScraper/1.0'
+              'User-Agent': 'VehicleDataScraper/1.0',
+              'Accept': 'application/json'
             }
           });
           clearTimeout(timeoutId);
           
+          console.log(`📡 NHTSA API response for ${vehicle.vin}: ${vinResponse.status} ${vinResponse.statusText}`);
+          
           if (!vinResponse.ok) {
-            console.warn(`VIN enrichment API failed for ${vehicle.vin}: ${vinResponse.status}`);
+            console.warn(`❌ VIN enrichment API failed for ${vehicle.vin}: ${vinResponse.status} ${vinResponse.statusText}`);
             return vehicle; // Return original vehicle
           }
-          
-          console.log(`✅ NHTSA API response received for ${vehicle.vin}: ${vinResponse.status}`);
         } catch (fetchError) {
           clearTimeout(timeoutId);
-          console.error(`❌ NHTSA API call failed for ${vehicle.vin}:`, fetchError);
+          console.error(`❌ NHTSA API network error for ${vehicle.vin}:`, fetchError.message);
+          if (fetchError.name === 'AbortError') {
+            console.warn(`⏰ NHTSA API call timed out for ${vehicle.vin}`);
+          }
           return vehicle; // Return original vehicle
         }
         
+        
         let vinData, results;
         try {
-          vinData = await vinResponse.json();
+          const responseText = await vinResponse.text();
+          console.log(`📄 NHTSA API raw response length for ${vehicle.vin}: ${responseText.length} characters`);
+          
+          vinData = JSON.parse(responseText);
           results = vinData.Results || [];
           console.log(`📊 NHTSA API returned ${results.length} data points for ${vehicle.vin}`);
+          
+          if (results.length === 0) {
+            console.warn(`⚠️ NHTSA API returned no results for VIN ${vehicle.vin}`);
+            return vehicle;
+          }
         } catch (parseError) {
-          console.error(`❌ Failed to parse NHTSA response for ${vehicle.vin}:`, parseError);
+          console.error(`❌ Failed to parse NHTSA response for ${vehicle.vin}:`, parseError.message);
           return vehicle;
         }
         
@@ -1266,10 +1283,21 @@ async function enrichAllVehiclesWithNhtsaData(supabaseClient: any, vehicles: any
     });
     
     const batchResults = await Promise.allSettled(batchPromises);
-    const batchEnriched = batchResults.map(result => 
-      result.status === 'fulfilled' ? result.value : null
-    ).filter(v => v !== null);
+    console.log(`🔄 Batch ${Math.floor(i/batchSize) + 1} completed: ${batchResults.length} promises settled`);
     
+    const batchEnriched = [];
+    batchResults.forEach((result, index) => {
+      if (result.status === 'fulfilled' && result.value) {
+        batchEnriched.push(result.value);
+      } else if (result.status === 'rejected') {
+        const vehicle = batch[index];
+        console.error(`❌ VIN enrichment promise rejected for ${vehicle?.vin || 'unknown'}:`, result.reason);
+        // Still include the original vehicle
+        batchEnriched.push(vehicle);
+      }
+    });
+    
+    console.log(`✅ Batch ${Math.floor(i/batchSize) + 1} results: ${batchEnriched.length} vehicles processed`);
     enrichedVehicles.push(...batchEnriched);
     
     // NHTSA API rate limiting - use conservative delays
@@ -1580,8 +1608,22 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
     
     // ALWAYS decode VIN for ALL vehicles to get NHTSA data for ChatGPT descriptions
     console.log(`🔍 Starting NHTSA enrichment for all ${vehicleData.length} vehicles...`);
-    vehicleData = await enrichAllVehiclesWithNhtsaData(supabaseClient, vehicleData);
-    console.log(`🔍 NHTSA enrichment completed for all vehicles`);
+    console.log(`📊 Sample vehicles for enrichment:`, vehicleData.slice(0, 3).map(v => ({ 
+      year: v.year, 
+      make: v.make, 
+      model: v.model, 
+      vin: v.vin,
+      hasVin: !!v.vin 
+    })));
+    
+    try {
+      vehicleData = await enrichAllVehiclesWithNhtsaData(supabaseClient, vehicleData);
+      console.log(`🔍 NHTSA enrichment completed for all vehicles`);
+    } catch (enrichmentError) {
+      console.error(`❌ NHTSA enrichment failed:`, enrichmentError);
+      // Continue with non-enriched data to avoid blocking imports
+      console.log(`⚠️ Continuing with non-enriched vehicle data due to enrichment failure`);
+    }
     
     // Log detailed parsing statistics
     const skippedCount = allRawData.length - vehicleData.length;
