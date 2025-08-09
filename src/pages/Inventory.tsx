@@ -429,11 +429,17 @@ export default function Inventory() {
                           </Badge>
                         </div>
                         
-                        {vehicle.description && (
+                        <div className="space-y-2">
+                          {vehicle.ai_description && (
+                            <div className="flex items-center gap-1 mb-1">
+                              <Sparkles className="h-3 w-3 text-purple-500" />
+                              <Badge variant="outline" className="text-xs text-purple-600">AI Generated</Badge>
+                            </div>
+                          )}
                           <p className="text-sm text-muted-foreground line-clamp-2">
-                            {vehicle.description}
+                            {vehicle.ai_description || vehicle.description || 'No description available'}
                           </p>
-                        )}
+                        </div>
 
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Eye className="h-4 w-4" />
