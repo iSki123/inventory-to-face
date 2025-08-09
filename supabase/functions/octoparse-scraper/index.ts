@@ -1608,6 +1608,14 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
               status: 'available',
               facebook_post_status: 'draft',
               ai_images_generated: vehicle.images && vehicle.images.length > 0,
+              // Include NHTSA VIN decoded fields
+              body_style_nhtsa: vehicle.body_style_nhtsa,
+              fuel_type_nhtsa: vehicle.fuel_type_nhtsa,
+              engine_nhtsa: vehicle.engine_nhtsa,
+              transmission_nhtsa: vehicle.transmission_nhtsa,
+              drivetrain_nhtsa: vehicle.drivetrain_nhtsa,
+              vehicle_type_nhtsa: vehicle.vehicle_type_nhtsa,
+              vin_decoded_at: vehicle.vin_decoded_at,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             }])
