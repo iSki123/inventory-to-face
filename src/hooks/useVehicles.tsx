@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { processVehicleColors } from '@/lib/colorMapping';
+import { useSiteSettings } from '@/hooks/useSiteSettings';
 
 export interface Vehicle {
   id: string;
@@ -58,6 +59,7 @@ export const useVehicles = () => {
   const [loading, setLoading] = useState(true);
   const { user, profile } = useAuth();
   const { toast } = useToast();
+  const { getSetting } = useSiteSettings();
 
   // Set up real-time subscription for vehicles table
   useEffect(() => {
@@ -97,12 +99,15 @@ export const useVehicles = () => {
               v.id === updatedVehicle.id ? updatedVehicle : v
             ));
             
-            // Show toast for image generation completion
+            // Show toast for image generation completion only if AI image generation is enabled
             if (updatedVehicle.ai_images_generated && updatedVehicle.images && updatedVehicle.images.length > 0) {
-              toast({
-                title: "AI Images Generated",
-                description: `Generated ${updatedVehicle.images.length} images for ${updatedVehicle.year} ${updatedVehicle.make} ${updatedVehicle.model}`,
-              });
+              const isAIImageGenerationEnabled = getSetting('ai_image_generation_enabled', { enabled: true })?.enabled !== false;
+              if (isAIImageGenerationEnabled) {
+                toast({
+                  title: "AI Images Generated",
+                  description: `Generated ${updatedVehicle.images.length} images for ${updatedVehicle.year} ${updatedVehicle.make} ${updatedVehicle.model}`,
+                });
+              }
             }
           } else if (payload.eventType === 'DELETE') {
             const deletedVehicle = payload.old as Vehicle;
