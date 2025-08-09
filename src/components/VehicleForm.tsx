@@ -157,8 +157,13 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
   // Update form data when vehicle prop changes or profile loads
   useEffect(() => {
     if (vehicle) {
-      // Map existing NHTSA data to form fields if available
-      const mappedData: Partial<Vehicle> = { ...vehicle };
+      // Map existing NHTSA data to form fields if available and trim whitespace
+      const mappedData: Partial<Vehicle> = { 
+        ...vehicle,
+        // Trim VIN and trim fields when loading vehicle data
+        vin: vehicle.vin?.trim(),
+        trim: vehicle.trim?.trim(),
+      };
       
       // Use AI description as the main description if available and no regular description exists
       if (vehicle.ai_description && (!vehicle.description || vehicle.description === `${vehicle.year} ${vehicle.make} ${vehicle.model}`)) {
