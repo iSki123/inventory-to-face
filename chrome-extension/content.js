@@ -2473,56 +2473,47 @@ class SalesonatorAutomator {
       fileInput.files = emptyDataTransfer.files;
       
       // Brief delay to ensure clearing takes effect
-      await this.delay(100);
+      await this.delay(200);
       
-      // Method 1: Direct file list assignment with React value setter
+      // Method 1: Single DataTransfer with all files to prevent duplication
       const dataTransfer = new DataTransfer();
       files.forEach((file, index) => {
         this.log(`📸 Adding file ${index + 1}: ${file.name} (${file.size} bytes)`);
         dataTransfer.items.add(file);
       });
       
-      // Set the files property directly
+      // Set the files property directly only once
       fileInput.files = dataTransfer.files;
       
-      // Method 2: React-specific value setting (from reverse engineering)
-      const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      // Method 2: React-specific value setting (from reverse engineering) - only once
       const fileSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')?.set;
       
       if (fileSetter) {
         fileSetter.call(fileInput, dataTransfer.files);
       }
       
-      // Method 3: Trigger React events in sequence
-      const events = [
-        new Event('input', { bubbles: true }),
-        new Event('change', { bubbles: true }),
-        new Event('blur', { bubbles: true })
-      ];
+      // Brief delay before triggering events
+      await this.delay(300);
       
-      for (const event of events) {
-        fileInput.dispatchEvent(event);
-        await this.delay(100);
-      }
-      
-      // Method 4: Focus and trigger additional React hooks
+      // Method 3: Trigger React events in sequence - only once each
       fileInput.focus();
-      await this.delay(200);
+      await this.delay(100);
       
-      // Trigger React's synthetic events
-      const syntheticEvent = new Event('change', { bubbles: true });
-      Object.defineProperty(syntheticEvent, 'target', {
+      // Single change event to prevent duplication
+      const changeEvent = new Event('change', { bubbles: true });
+      Object.defineProperty(changeEvent, 'target', {
         value: fileInput,
         enumerable: true
       });
-      Object.defineProperty(syntheticEvent, 'currentTarget', {
+      Object.defineProperty(changeEvent, 'currentTarget', {
         value: fileInput,
         enumerable: true
       });
       
-      fileInput.dispatchEvent(syntheticEvent);
+      fileInput.dispatchEvent(changeEvent);
       
-      await this.delay(this.randomDelay(1000, 2000));
+      // Wait longer to ensure Facebook processes the single event
+      await this.delay(1000);
       
       this.log('📸 React-compatible file setting completed');
       
