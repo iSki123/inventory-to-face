@@ -1122,6 +1122,25 @@ async function processVinDecoding(supabaseClient: any, vehiclesNeedingDecoding: 
       } catch (error) {
         console.error(`❌ VIN decoding failed for ${vehicle.vin}:`, error);
         return null;
+      }
+    });
+
+    const batchResults = await Promise.allSettled(batchPromises);
+    const batchDecoded = batchResults.map(result => 
+      result.status === 'fulfilled' ? result.value : null
+    ).filter(v => v !== null);
+    
+    decodedVehicles.push(...batchDecoded);
+    
+    // Add delay between batches to respect NHTSA rate limits
+    if (i + batchSize < vehiclesNeedingDecoding.length) {
+      console.log('⏳ Waiting 2 seconds before next VIN decoding batch...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+  
+  console.log(`🔍 VIN decoding completed: ${decodedVehicles.length}/${vehiclesNeedingDecoding.length} vehicles successfully decoded`);
+  return decodedVehicles;
 }
 
 // Enhanced VIN enrichment that ALWAYS returns all vehicles, enriched with NHTSA data when possible
