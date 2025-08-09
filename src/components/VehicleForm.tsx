@@ -160,6 +160,11 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
       // Map existing NHTSA data to form fields if available
       const mappedData: Partial<Vehicle> = { ...vehicle };
       
+      // Use AI description as the main description if available and no regular description exists
+      if (vehicle.ai_description && (!vehicle.description || vehicle.description === `${vehicle.year} ${vehicle.make} ${vehicle.model}`)) {
+        mappedData.description = vehicle.ai_description;
+      }
+      
       // Map NHTSA decoded fields to form fields for better display
       if (vehicle.body_style_nhtsa) {
         const nhtsaBodyStyle = vehicle.body_style_nhtsa.toLowerCase();
