@@ -768,6 +768,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      deduct_credit_and_update_vehicle: {
+        Args: {
+          p_vehicle_id: string
+          p_user_id: string
+          p_facebook_post_id: string
+          p_update_data: Json
+        }
+        Returns: Json
+      }
       get_current_user_role: {
         Args: Record<PropertyKey, never>
         Returns: string
