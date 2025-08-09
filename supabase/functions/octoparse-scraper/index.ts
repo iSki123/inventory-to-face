@@ -489,8 +489,20 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
       }
 
       console.log(`Total raw data fetched: ${allRawData.length} records from ${totalPages} pages`);
-      vehicleData = parseOctoparseData(allRawData);
-      console.log(`Parsed ${vehicleData.length} vehicles from Octoparse data`);
+      
+      const parseResult = parseOctoparseData(allRawData);
+      let vehicleData = parseResult.validVehicles;
+      const vehiclesNeedingVinDecoding = parseResult.vehiclesNeedingVinDecoding;
+      
+      console.log(`Parsed ${vehicleData.length} vehicles ready for import, ${vehiclesNeedingVinDecoding.length} vehicles need VIN decoding`);
+      
+      // Process VIN decoding for vehicles missing make/model data
+      if (vehiclesNeedingVinDecoding.length > 0) {
+        console.log(`🔍 Starting VIN decoding for ${vehiclesNeedingVinDecoding.length} vehicles...`);
+        const decodedVehicles = await processVinDecoding(supabaseClient, vehiclesNeedingVinDecoding);
+        vehicleData = vehicleData.concat(decodedVehicles);
+        console.log(`🔍 VIN decoding completed. Total vehicles for import: ${vehicleData.length}`);
+      }
       
     } catch (error) {
       console.error('Error fetching Octoparse data:', error);
