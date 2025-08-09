@@ -1915,3 +1915,4 @@ function generateVIN() {
   }
   return vin;
 }
+}
