@@ -452,10 +452,19 @@ export const useVehicles = () => {
 
   const updateVehicle = async (id: string, updates: Partial<Vehicle>) => {
     try {
+      // Trim VIN and trim fields if they're being updated
+      const trimmedUpdates = { ...updates };
+      if (trimmedUpdates.vin) {
+        trimmedUpdates.vin = String(trimmedUpdates.vin).trim();
+      }
+      if (trimmedUpdates.trim) {
+        trimmedUpdates.trim = String(trimmedUpdates.trim).trim();
+      }
+
       // Process colors if they're being updated
-      const processedUpdates = (updates.exterior_color || updates.interior_color) 
-        ? processVehicleColors(updates) 
-        : updates;
+      const processedUpdates = (trimmedUpdates.exterior_color || trimmedUpdates.interior_color) 
+        ? processVehicleColors(trimmedUpdates) 
+        : trimmedUpdates;
 
       const { data, error } = await supabase
         .from('vehicles')
