@@ -93,16 +93,18 @@ export const useVehicles = () => {
               new Date(v.created_at).getTime() > Date.now() - 10000 // Last 10 seconds
             );
             
-            if (recentVehicles.length < 5) { // Only show individual notifications for small batches
+            if (recentVehicles.length < 6) { // Show individual notifications for up to 6 vehicles
               toast.success(`New Vehicle Added`, {
                 description: `${newVehicle.year} ${newVehicle.make} ${newVehicle.model} has been imported`,
                 duration: 4000,
+                className: "border-border bg-background text-foreground",
               });
-            } else if (recentVehicles.length === 5) {
+            } else if (recentVehicles.length === 6) {
               // Show a bulk import notification when we hit the threshold
               toast.info(`Bulk Import in Progress`, {
                 description: `Multiple vehicles are being imported...`,
                 duration: 6000,
+                className: "border-border bg-background text-foreground",
               });
             }
           } else if (payload.eventType === 'UPDATE') {
@@ -185,11 +187,12 @@ export const useVehicles = () => {
         new Date(v.created_at).getTime() > Date.now() - 30000 // Last 30 seconds
       );
       
-      if (recentVehicles.length >= 5) {
+      if (recentVehicles.length >= 7) {
         // Show bulk import completion notification
         toast.success(`Bulk Import Complete`, {
           description: `Successfully imported ${recentVehicles.length} vehicles`,
           duration: 5000,
+          className: "border-border bg-background text-foreground",
         });
       }
       
