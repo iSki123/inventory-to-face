@@ -1143,179 +1143,198 @@ async function processVinDecoding(supabaseClient: any, vehiclesNeedingDecoding: 
   return decodedVehicles;
 }
 
-// Enhanced VIN enrichment that ALWAYS returns all vehicles, enriched with NHTSA data when possible
+// Fixed VIN enrichment function that properly saves VIN data to database after vehicle insertion
 async function enrichAllVehiclesWithNhtsaData(supabaseClient: any, vehicles: any[]): Promise<any[]> {
-  const enrichedVehicles = [];
-  const batchSize = 3; // Smaller batches for reliability
+  console.log(`🔍 VIN enrichment will be handled post-insertion for proper database persistence`);
+  console.log(`📦 Returning ${vehicles.length} vehicles as-is - VIN enrichment will happen after database insertion`);
   
-  console.log(`🔍 Enriching ${vehicles.length} vehicles with NHTSA data in batches of ${batchSize}`);
+  // Don't enrich here - let the post-insertion VIN decoding handle it properly
+  // This avoids the issue where enriched data gets lost because it's not persisted
+  return vehicles;
+}
+
+// New function to handle VIN decoding after vehicles are inserted into database
+async function processPostInsertionVinDecoding(supabaseClient: any, insertedVehicles: any[]): Promise<void> {
+  console.log(`🔍 Starting post-insertion VIN decoding for ${insertedVehicles.length} vehicles`);
   
-  for (let i = 0; i < vehicles.length; i += batchSize) {
-    const batch = vehicles.slice(i, i + batchSize);
-    console.log(`🔍 NHTSA enrichment batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(vehicles.length/batchSize)}`);
+  // Filter vehicles that have valid VINs but haven't been decoded yet
+  const vehiclesNeedingDecoding = insertedVehicles.filter(v => 
+    v.vin && 
+    v.vin.length === 17 && 
+    !v.vin_decoded_at
+  );
+  
+  console.log(`📊 VIN decoding analysis: ${vehiclesNeedingDecoding.length}/${insertedVehicles.length} vehicles need VIN decoding`);
+  
+  if (vehiclesNeedingDecoding.length === 0) {
+    console.log(`✅ No vehicles need VIN decoding`);
+    return;
+  }
+  
+  let successCount = 0;
+  let failureCount = 0;
+  
+  // Process vehicles one by one with proper rate limiting
+  for (let i = 0; i < vehiclesNeedingDecoding.length; i++) {
+    const vehicle = vehiclesNeedingDecoding[i];
     
-    const batchPromises = batch.map(async (vehicle) => {
-      // ALWAYS return the vehicle, enriched if possible
-      try {
-        if (!vehicle.vin || vehicle.vin.length < 17) {
-          console.log(`⚠️ Skipping VIN enrichment for ${vehicle.year} ${vehicle.make} ${vehicle.model} - invalid VIN: "${vehicle.vin}" (length: ${vehicle.vin?.length || 0})`);
-          return vehicle; // Return as-is
-        }
-        
-        console.log(`🔍 Enriching VIN: ${vehicle.vin} (${vehicle.year} ${vehicle.make} ${vehicle.model})`);
-        
-        // Call VIN decoder API with timeout and retry
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-          console.warn(`⏰ VIN API timeout for ${vehicle.vin} after 10 seconds`);
-          controller.abort();
-        }, 10000); // 10 second timeout
-        
-        let vinResponse;
-        try {
-          console.log(`🌐 Making NHTSA API call for VIN: ${vehicle.vin}`);
-          vinResponse = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${vehicle.vin}?format=json`, {
-            signal: controller.signal,
-            headers: {
-              'User-Agent': 'VehicleDataScraper/1.0',
-              'Accept': 'application/json'
-            }
-          });
-          clearTimeout(timeoutId);
-          
-          console.log(`📡 NHTSA API response for ${vehicle.vin}: ${vinResponse.status} ${vinResponse.statusText}`);
-          
-          if (!vinResponse.ok) {
-            console.warn(`❌ VIN enrichment API failed for ${vehicle.vin}: ${vinResponse.status} ${vinResponse.statusText}`);
-            return vehicle; // Return original vehicle
-          }
-        } catch (fetchError) {
-          clearTimeout(timeoutId);
-          console.error(`❌ NHTSA API network error for ${vehicle.vin}:`, fetchError.message);
-          if (fetchError.name === 'AbortError') {
-            console.warn(`⏰ NHTSA API call timed out for ${vehicle.vin}`);
-          }
-          return vehicle; // Return original vehicle
-        }
-        
-        
-        let vinData, results;
-        try {
-          const responseText = await vinResponse.text();
-          console.log(`📄 NHTSA API raw response length for ${vehicle.vin}: ${responseText.length} characters`);
-          
-          vinData = JSON.parse(responseText);
-          results = vinData.Results || [];
-          console.log(`📊 NHTSA API returned ${results.length} data points for ${vehicle.vin}`);
-          
-          if (results.length === 0) {
-            console.warn(`⚠️ NHTSA API returned no results for VIN ${vehicle.vin}`);
-            return vehicle;
-          }
-        } catch (parseError) {
-          console.error(`❌ Failed to parse NHTSA response for ${vehicle.vin}:`, parseError.message);
-          return vehicle;
-        }
-        
-        // Extract NHTSA data
-        const bodyClassResult = results.find((r: any) => r.Variable === 'Body Class');
-        const fuelTypePrimaryResult = results.find((r: any) => r.Variable === 'Fuel Type - Primary');
-        const engineNumberOfCylindersResult = results.find((r: any) => r.Variable === 'Engine Number of Cylinders');
-        const transmissionStyleResult = results.find((r: any) => r.Variable === 'Transmission Style');
-        const driveTypeResult = results.find((r: any) => r.Variable === 'Drive Type');
-        const vehicleTypeResult = results.find((r: any) => r.Variable === 'Vehicle Type');
-        
-        // Extract NHTSA fields for database storage
-        const nhtsaData = {
-          body_style_nhtsa: bodyClassResult?.Value || null,
-          fuel_type_nhtsa: fuelTypePrimaryResult?.Value || null,
-          engine_nhtsa: engineNumberOfCylindersResult?.Value ? `${engineNumberOfCylindersResult.Value} Cylinder` : null,
-          transmission_nhtsa: transmissionStyleResult?.Value || null,
-          drivetrain_nhtsa: driveTypeResult?.Value || null,
-          vehicle_type_nhtsa: vehicleTypeResult?.Value || null
-        };
-        
-        // Map NHTSA data to UI-friendly fields
-        const fuelTypeMapping: { [key: string]: string } = {
-          'Gasoline': 'gasoline',
-          'Electric': 'electric', 
-          'Hybrid': 'hybrid',
-          'Diesel': 'diesel',
-          'Flex Fuel': 'flex_fuel'
-        };
-        
-        const transmissionMapping: { [key: string]: string } = {
-          'Manual': 'manual',
-          'Automatic': 'automatic', 
-          'CVT': 'cvt'
-        };
-        
-        const mappedFuelType = nhtsaData.fuel_type_nhtsa ? 
-          fuelTypeMapping[nhtsaData.fuel_type_nhtsa] || vehicle.fuel_type || 'gasoline' : vehicle.fuel_type || 'gasoline';
-        
-        const mappedTransmission = nhtsaData.transmission_nhtsa ?
-          transmissionMapping[nhtsaData.transmission_nhtsa] || vehicle.transmission || 'automatic' : vehicle.transmission || 'automatic';
-        
-        // Return enriched vehicle with NHTSA data
-        const enrichedVehicle = {
-          ...vehicle,
-          fuel_type: mappedFuelType,
-          transmission: mappedTransmission,
-          // Store NHTSA raw data
-          ...nhtsaData,
-          // Mark as VIN decoded
-          vin_decoded_at: new Date().toISOString()
-        };
-        
-        console.log(`✅ VIN enrichment successful for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
-        console.log(`🔍 NHTSA data extracted:`, {
-          body_style: nhtsaData.body_style_nhtsa,
-          fuel_type: nhtsaData.fuel_type_nhtsa,
-          transmission: nhtsaData.transmission_nhtsa,
-          drivetrain: nhtsaData.drivetrain_nhtsa
-        });
-        return enrichedVehicle;
-        
-      } catch (error) {
-        console.error(`❌ VIN enrichment failed for ${vehicle.vin}:`, error);
-        return vehicle; // Return original vehicle on error
-      }
-    });
-    
-    const batchResults = await Promise.allSettled(batchPromises);
-    console.log(`🔄 Batch ${Math.floor(i/batchSize) + 1} completed: ${batchResults.length} promises settled`);
-    
-    const batchEnriched = [];
-    batchResults.forEach((result, index) => {
-      if (result.status === 'fulfilled' && result.value) {
-        batchEnriched.push(result.value);
-      } else if (result.status === 'rejected') {
-        const vehicle = batch[index];
-        console.error(`❌ VIN enrichment promise rejected for ${vehicle?.vin || 'unknown'}:`, result.reason);
-        // Still include the original vehicle
-        batchEnriched.push(vehicle);
-      }
-    });
-    
-    console.log(`✅ Batch ${Math.floor(i/batchSize) + 1} results: ${batchEnriched.length} vehicles processed`);
-    enrichedVehicles.push(...batchEnriched);
-    
-    // NHTSA API rate limiting - use conservative delays
-    if (i + batchSize < vehicles.length) {
-      const now = new Date();
-      const estHour = (now.getUTCHours() - 5 + 24) % 24; // Convert to EST
-      const isBusinessHours = estHour >= 6 && estHour <= 18;
-      const isWeekday = now.getUTCDay() >= 1 && now.getUTCDay() <= 5;
+    try {
+      console.log(`🔍 [${i + 1}/${vehiclesNeedingDecoding.length}] Decoding VIN for ${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicle.vin})`);
       
-      // Use conservative delays to avoid being rate limited
-      const delayMs = (isBusinessHours && isWeekday) ? 10000 : 5000; // 10s business hours, 5s off-hours
-      console.log(`⏳ Waiting ${delayMs/1000}s before next NHTSA enrichment batch (rate limiting)`);
-      await new Promise(resolve => setTimeout(resolve, delayMs));
+      // Use the vin-decoder function directly with supabase client
+      const vinDecoded = await decodeVinInternal(vehicle.vin.trim(), vehicle.id, supabaseClient);
+      
+      if (vinDecoded) {
+        successCount++;
+        console.log(`✅ VIN successfully decoded for vehicle ${vehicle.id}`);
+      } else {
+        failureCount++;
+        console.log(`❌ VIN decoding failed for vehicle ${vehicle.id}`);
+      }
+      
+      // Rate limiting - NHTSA recommends being conservative
+      if (i < vehiclesNeedingDecoding.length - 1) {
+        console.log(`⏱️ Waiting 6 seconds before next VIN decode (NHTSA rate limiting)`);
+        await new Promise(resolve => setTimeout(resolve, 6000));
+      }
+      
+    } catch (error) {
+      failureCount++;
+      console.error(`❌ Error decoding VIN for vehicle ${vehicle.id}:`, error);
     }
   }
   
-  console.log(`🔍 NHTSA enrichment completed: ${enrichedVehicles.length}/${vehicles.length} vehicles processed`);
-  return enrichedVehicles;
+  console.log(`🎯 Post-insertion VIN decoding completed: ${successCount} successful, ${failureCount} failed`);
+}
+
+// Internal VIN decoding function that replicates vin-decoder edge function logic
+async function decodeVinInternal(vin: string, vehicleId: string, supabaseClient: any): Promise<boolean> {
+  try {
+    console.log(`🔍 Internal VIN decode for: ${vin}`);
+    
+    // First check if this VIN has already been decoded by any user
+    const { data: existingVinData, error: vinCheckError } = await supabaseClient
+      .from('vehicles')
+      .select('body_style_nhtsa, drivetrain_nhtsa, engine_nhtsa, fuel_type_nhtsa, transmission_nhtsa, vehicle_type_nhtsa')
+      .eq('vin', vin)
+      .not('vin_decoded_at', 'is', null)
+      .limit(1)
+      .single();
+
+    if (!vinCheckError && existingVinData) {
+      console.log(`📋 Using existing VIN data for ${vin} from previous decode`);
+      
+      const nowIso = new Date().toISOString();
+      const vinData = {
+        ...existingVinData,
+        vin_decoded_at: nowIso
+      };
+
+      // Derive UI-friendly fields from NHTSA values
+      let mappedFuelType: string | undefined;
+      let mappedTransmission: string | undefined;
+      const ft = (existingVinData.fuel_type_nhtsa || '').toLowerCase();
+      if (ft) {
+        if (ft.includes('electric')) mappedFuelType = 'Electric';
+        else if (ft.includes('hybrid') && ft.includes('plug')) mappedFuelType = 'Plug-in hybrid';
+        else if (ft.includes('hybrid')) mappedFuelType = 'Hybrid';
+        else if (ft.includes('diesel')) mappedFuelType = 'Diesel';
+        else if (ft.includes('flex')) mappedFuelType = 'Flex';
+        else mappedFuelType = 'Gasoline';
+      }
+      const tr = (existingVinData.transmission_nhtsa || '').toLowerCase();
+      if (tr) {
+        mappedTransmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+      }
+
+      const updatePayload: Record<string, any> = { ...vinData };
+      if (typeof mappedFuelType !== 'undefined') updatePayload.fuel_type = mappedFuelType;
+      if (typeof mappedTransmission !== 'undefined') updatePayload.transmission = mappedTransmission;
+
+      // Update vehicle with existing decoded VIN data and mapped UI fields
+      const { error: updateError } = await supabaseClient
+        .from('vehicles')
+        .update(updatePayload)
+        .eq('id', vehicleId);
+
+      if (updateError) {
+        console.error('Error updating vehicle with existing VIN data:', updateError);
+        return false;
+      }
+
+      console.log(`✅ Successfully updated vehicle ${vehicleId} with existing VIN data`);
+      return true;
+    }
+    
+    // If no existing data found, call NHTSA VIN decoding API
+    console.log(`🌐 Making fresh NHTSA API call for VIN: ${vin}`);
+    const response = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/${vin}?format=json`);
+    
+    if (!response.ok) {
+      console.error(`NHTSA API error for VIN ${vin}: ${response.status}`);
+      return false;
+    }
+
+    const data = await response.json();
+    const results = data.Results || [];
+
+    // Extract relevant fields from NHTSA response
+    const getVariableValue = (variableName: string) => {
+      const result = results.find((r: any) => r.Variable === variableName);
+      return result?.Value || null;
+    };
+
+    const vinData = {
+      body_style_nhtsa: getVariableValue('Body Class'),
+      drivetrain_nhtsa: getVariableValue('Drive Type'),
+      engine_nhtsa: getVariableValue('Engine Model') || getVariableValue('Engine Configuration'),
+      fuel_type_nhtsa: getVariableValue('Fuel Type - Primary'),
+      transmission_nhtsa: getVariableValue('Transmission Style'),
+      vehicle_type_nhtsa: getVariableValue('Vehicle Type'),
+      vin_decoded_at: new Date().toISOString()
+    };
+
+    console.log('Extracted VIN data:', vinData);
+
+    // Derive UI-friendly fields from NHTSA values
+    let mappedFuelType: string | undefined;
+    let mappedTransmission: string | undefined;
+    const ft = (vinData.fuel_type_nhtsa || '').toLowerCase();
+    if (ft) {
+      if (ft.includes('electric')) mappedFuelType = 'Electric';
+      else if (ft.includes('hybrid') && ft.includes('plug')) mappedFuelType = 'Plug-in hybrid';
+      else if (ft.includes('hybrid')) mappedFuelType = 'Hybrid';
+      else if (ft.includes('diesel')) mappedFuelType = 'Diesel';
+      else if (ft.includes('flex')) mappedFuelType = 'Flex';
+      else mappedFuelType = 'Gasoline';
+    }
+    const tr = (vinData.transmission_nhtsa || '').toLowerCase();
+    if (tr) {
+      mappedTransmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+    }
+
+    const updatePayload: Record<string, any> = { ...vinData };
+    if (typeof mappedFuelType !== 'undefined') updatePayload.fuel_type = mappedFuelType;
+    if (typeof mappedTransmission !== 'undefined') updatePayload.transmission = mappedTransmission;
+
+    // Update vehicle with decoded VIN data + mapped UI fields
+    const { error: updateError } = await supabaseClient
+      .from('vehicles')
+      .update(updatePayload)
+      .eq('id', vehicleId);
+
+    if (updateError) {
+      console.error('Error updating vehicle with VIN data:', updateError);
+      return false;
+    }
+
+    console.log(`✅ Successfully updated vehicle ${vehicleId} with fresh VIN data`);
+    return true;
+    
+  } catch (error) {
+    console.error(`❌ Error decoding VIN ${vin}:`, error);
+    return false;
+  }
 }
 
 // Diagnostics helpers
@@ -1892,6 +1911,13 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
       console.log(`🎉 Generated AI descriptions for ${aiGeneratedCount}/${insertedVehicles.length} vehicles`);
     }
 
+    // NOW process VIN decoding for all inserted vehicles with VINs
+    if (insertedVehicles.length > 0) {
+      console.log(`🔍 Starting post-insertion VIN decoding for ${insertedVehicles.length} vehicles...`);
+      await processPostInsertionVinDecoding(supabaseClient, insertedVehicles);
+      console.log(`🎯 Post-insertion VIN decoding completed`);
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true,
@@ -1900,7 +1926,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
         vehicles: insertedVehicles,
         errors: errors,
         diagnostics: diagReport,
-        message: `Successfully imported ${insertedVehicles.length} of ${vehicleData.length} vehicles from task ${taskId}. AI descriptions have been generated automatically.`,
+        message: `Successfully imported ${insertedVehicles.length} of ${vehicleData.length} vehicles from task ${taskId}. AI descriptions and VIN decoding have been completed automatically.`,
         taskId
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
