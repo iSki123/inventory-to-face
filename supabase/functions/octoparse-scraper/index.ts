@@ -1221,31 +1221,6 @@ async function enrichAllVehiclesWithNhtsaData(supabaseClient: any, vehicles: any
   
   console.log(`🔍 NHTSA enrichment completed: ${enrichedVehicles.length}/${vehicles.length} vehicles processed`);
   return enrichedVehicles;
-    });
-    
-    const batchResults = await Promise.allSettled(batchPromises);
-    const batchDecoded = batchResults
-      .filter(result => result.status === 'fulfilled' && result.value)
-      .map(result => (result as PromiseFulfilledResult<any>).value);
-    
-    decodedVehicles.push(...batchDecoded);
-    
-    // NHTSA API rate limiting - use longer delays to respect their automated traffic control
-    if (i + batchSize < vehiclesNeedingDecoding.length) {
-      const now = new Date();
-      const estHour = (now.getUTCHours() - 5 + 24) % 24; // Convert to EST
-      const isBusinessHours = estHour >= 6 && estHour <= 18;
-      const isWeekday = now.getUTCDay() >= 1 && now.getUTCDay() <= 5;
-      
-      // Use conservative delays to avoid being rate limited
-      const delayMs = (isBusinessHours && isWeekday) ? 10000 : 5000; // 10s business hours, 5s off-hours
-      console.log(`⏳ Waiting ${delayMs/1000}s before next VIN decoding batch (NHTSA rate limiting)`);
-      await new Promise(resolve => setTimeout(resolve, delayMs));
-    }
-  }
-  
-  console.log(`🔍 VIN decoding completed: ${decodedVehicles.length}/${vehiclesNeedingDecoding.length} vehicles successfully decoded`);
-  return decodedVehicles;
 }
 
 // Diagnostics helpers
