@@ -46,6 +46,9 @@ async function decodeVin(vin: string, vehicleId: string, supabaseClient: any): P
       const tr = (existingVinData.transmission_nhtsa || '').toLowerCase();
       if (tr) {
         mappedTransmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+      } else {
+        // Default to automatic transmission when NHTSA doesn't provide transmission data
+        mappedTransmission = 'Automatic transmission';
       }
 
       const updatePayload: Record<string, any> = { ...vinData };
@@ -111,6 +114,9 @@ async function decodeVin(vin: string, vehicleId: string, supabaseClient: any): P
     const tr = (vinData.transmission_nhtsa || '').toLowerCase();
     if (tr) {
       mappedTransmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+    } else {
+      // Default to automatic transmission when NHTSA doesn't provide transmission data
+      mappedTransmission = 'Automatic transmission';
     }
 
     const updatePayload: Record<string, any> = { ...vinData };
@@ -282,6 +288,9 @@ serve(async (req) => {
       const tr = (vinData.transmission_nhtsa || '').toLowerCase();
       if (tr) {
         mappedTransmission = tr.includes('manual') ? 'Manual transmission' : 'Automatic transmission';
+      } else {
+        // Default to automatic transmission when NHTSA doesn't provide transmission data
+        mappedTransmission = 'Automatic transmission';
       }
 
       const updatePayload: Record<string, any> = { ...vinData };
