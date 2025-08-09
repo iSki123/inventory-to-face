@@ -87,9 +87,24 @@ export const useVehicles = () => {
               return [newVehicle, ...prev];
             });
             
-            toast.success(`New Vehicle Added`, {
-              description: `${newVehicle.year} ${newVehicle.make} ${newVehicle.model} has been imported`,
-            });
+            // Only show notification if this is a real-time import (not bulk)
+            // We can detect bulk imports by checking if multiple vehicles are being added rapidly
+            const recentVehicles = vehicles.filter(v => 
+              new Date(v.created_at).getTime() > Date.now() - 10000 // Last 10 seconds
+            );
+            
+            if (recentVehicles.length < 5) { // Only show individual notifications for small batches
+              toast.success(`New Vehicle Added`, {
+                description: `${newVehicle.year} ${newVehicle.make} ${newVehicle.model} has been imported`,
+                duration: 4000,
+              });
+            } else if (recentVehicles.length === 5) {
+              // Show a bulk import notification when we hit the threshold
+              toast.info(`Bulk Import in Progress`, {
+                description: `Multiple vehicles are being imported...`,
+                duration: 6000,
+              });
+            }
           } else if (payload.eventType === 'UPDATE') {
             const updatedVehicle = payload.new as Vehicle;
             setVehicles(prev => prev.map(v => 
@@ -164,6 +179,19 @@ export const useVehicles = () => {
       // Log VIN decoded status for debugging
       const decodedCount = vehicles.filter(v => v.vin_decoded_at).length;
       console.log(`${decodedCount} vehicles have VIN decoded data`);
+      
+      // Check if this is a bulk import completion (many vehicles created recently)
+      const recentVehicles = vehicles.filter(v => 
+        new Date(v.created_at).getTime() > Date.now() - 30000 // Last 30 seconds
+      );
+      
+      if (recentVehicles.length >= 5) {
+        // Show bulk import completion notification
+        toast.success(`Bulk Import Complete`, {
+          description: `Successfully imported ${recentVehicles.length} vehicles`,
+          duration: 5000,
+        });
+      }
       
       setVehicles(vehicles);
 
