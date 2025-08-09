@@ -276,7 +276,7 @@ class SalesonatorAutomator {
     const speedMultipliers = {
       slow: [120, 260],
       normal: [50, 200],
-      fast: [20, 60]  // Increased speed for faster typing while maintaining human-like behavior
+      fast: [10, 30]  // Further increased speed for faster typing while maintaining human-like behavior
     };
     const [minDelay, maxDelay] = speedMultipliers[speed] || speedMultipliers.normal;
     
