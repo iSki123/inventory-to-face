@@ -56,10 +56,12 @@ Write a description that:
 4. Is 150-300 words long
 5. Ends with a call to action for interested buyers
 6. Avoids excessive capitalization or spammy language
-7. Does not use dashes (-) or asterisks (*) for formatting
-8. May use emojis occasionally for emphasis
+7. CRITICAL: Do not use hyphens (-), do not use dashes (—), do not use asterisks (*) for formatting or emphasis
+8. Use emojis very sparingly (maximum 2-3 total)
+9. Write in flowing paragraph format without bullet points or lists
+10. Use natural, conversational language without markdown formatting
 
-Keep it conversational but professional, focusing on value and reliability.`;
+Keep it conversational but professional, focusing on value and reliability. Write as plain text without any special formatting characters.`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
