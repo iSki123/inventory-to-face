@@ -504,11 +504,10 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
         console.log(`🔍 VIN decoding completed. Total vehicles for import: ${vehicleData.length}`);
       }
       
-      // ALSO decode VIN for ALL vehicles to get NHTSA data, even if they have make/model
-      console.log(`🔍 Starting NHTSA data collection for all ${vehicleData.length} vehicles...`);
-      const vehiclesWithNhtsaData = await processVinDecoding(supabaseClient, vehicleData);
-      vehicleData = vehiclesWithNhtsaData;
-      console.log(`🔍 NHTSA data collection completed for all vehicles`);
+      // ALWAYS decode VIN for ALL vehicles to get NHTSA data for ChatGPT descriptions
+      console.log(`🔍 Starting NHTSA enrichment for all ${vehicleData.length} vehicles...`);
+      vehicleData = await enrichAllVehiclesWithNhtsaData(supabaseClient, vehicleData);
+      console.log(`🔍 NHTSA enrichment completed for all vehicles`);
       
     } catch (error) {
       console.error('Error fetching Octoparse data:', error);
@@ -1106,7 +1105,122 @@ async function processVinDecoding(supabaseClient: any, vehiclesNeedingDecoding: 
       } catch (error) {
         console.error(`❌ VIN decoding failed for ${vehicle.vin}:`, error);
         return null;
+}
+
+// Enhanced VIN enrichment that ALWAYS returns all vehicles, enriched with NHTSA data when possible
+async function enrichAllVehiclesWithNhtsaData(supabaseClient: any, vehicles: any[]): Promise<any[]> {
+  const enrichedVehicles = [];
+  const batchSize = 3; // Smaller batches for reliability
+  
+  console.log(`🔍 Enriching ${vehicles.length} vehicles with NHTSA data in batches of ${batchSize}`);
+  
+  for (let i = 0; i < vehicles.length; i += batchSize) {
+    const batch = vehicles.slice(i, i + batchSize);
+    console.log(`🔍 NHTSA enrichment batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(vehicles.length/batchSize)}`);
+    
+    const batchPromises = batch.map(async (vehicle) => {
+      // ALWAYS return the vehicle, enriched if possible
+      try {
+        if (!vehicle.vin || vehicle.vin.length < 17) {
+          console.log(`⚠️ Skipping VIN enrichment for ${vehicle.year} ${vehicle.make} ${vehicle.model} - invalid VIN: ${vehicle.vin}`);
+          return vehicle; // Return as-is
+        }
+        
+        console.log(`🔍 Enriching VIN: ${vehicle.vin} (${vehicle.year} ${vehicle.make} ${vehicle.model})`);
+        
+        // Call VIN decoder API
+        const vinResponse = await fetch('https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/' + vehicle.vin + '?format=json');
+        
+        if (!vinResponse.ok) {
+          console.warn(`VIN enrichment API failed for ${vehicle.vin}: ${vinResponse.status}`);
+          return vehicle; // Return original vehicle
+        }
+        
+        const vinData = await vinResponse.json();
+        const results = vinData.Results || [];
+        
+        // Extract NHTSA data
+        const bodyClassResult = results.find((r: any) => r.Variable === 'Body Class');
+        const fuelTypePrimaryResult = results.find((r: any) => r.Variable === 'Fuel Type - Primary');
+        const engineNumberOfCylindersResult = results.find((r: any) => r.Variable === 'Engine Number of Cylinders');
+        const transmissionStyleResult = results.find((r: any) => r.Variable === 'Transmission Style');
+        const driveTypeResult = results.find((r: any) => r.Variable === 'Drive Type');
+        const vehicleTypeResult = results.find((r: any) => r.Variable === 'Vehicle Type');
+        
+        // Extract NHTSA fields for database storage
+        const nhtsaData = {
+          body_style_nhtsa: bodyClassResult?.Value || null,
+          fuel_type_nhtsa: fuelTypePrimaryResult?.Value || null,
+          engine_nhtsa: engineNumberOfCylindersResult?.Value ? `${engineNumberOfCylindersResult.Value} Cylinder` : null,
+          transmission_nhtsa: transmissionStyleResult?.Value || null,
+          drivetrain_nhtsa: driveTypeResult?.Value || null,
+          vehicle_type_nhtsa: vehicleTypeResult?.Value || null
+        };
+        
+        // Map NHTSA data to UI-friendly fields
+        const fuelTypeMapping: { [key: string]: string } = {
+          'Gasoline': 'gasoline',
+          'Electric': 'electric', 
+          'Hybrid': 'hybrid',
+          'Diesel': 'diesel',
+          'Flex Fuel': 'flex_fuel'
+        };
+        
+        const transmissionMapping: { [key: string]: string } = {
+          'Manual': 'manual',
+          'Automatic': 'automatic', 
+          'CVT': 'cvt'
+        };
+        
+        const mappedFuelType = nhtsaData.fuel_type_nhtsa ? 
+          fuelTypeMapping[nhtsaData.fuel_type_nhtsa] || vehicle.fuel_type || 'gasoline' : vehicle.fuel_type || 'gasoline';
+        
+        const mappedTransmission = nhtsaData.transmission_nhtsa ?
+          transmissionMapping[nhtsaData.transmission_nhtsa] || vehicle.transmission || 'automatic' : vehicle.transmission || 'automatic';
+        
+        // Return enriched vehicle with NHTSA data
+        const enrichedVehicle = {
+          ...vehicle,
+          fuel_type: mappedFuelType,
+          transmission: mappedTransmission,
+          // Store NHTSA raw data
+          ...nhtsaData,
+          // Mark as VIN decoded
+          vin_decoded_at: new Date().toISOString()
+        };
+        
+        console.log(`✅ VIN enrichment successful for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+        return enrichedVehicle;
+        
+      } catch (error) {
+        console.error(`❌ VIN enrichment failed for ${vehicle.vin}:`, error);
+        return vehicle; // Return original vehicle on error
       }
+    });
+    
+    const batchResults = await Promise.allSettled(batchPromises);
+    const batchEnriched = batchResults.map(result => 
+      result.status === 'fulfilled' ? result.value : null
+    ).filter(v => v !== null);
+    
+    enrichedVehicles.push(...batchEnriched);
+    
+    // NHTSA API rate limiting - use conservative delays
+    if (i + batchSize < vehicles.length) {
+      const now = new Date();
+      const estHour = (now.getUTCHours() - 5 + 24) % 24; // Convert to EST
+      const isBusinessHours = estHour >= 6 && estHour <= 18;
+      const isWeekday = now.getUTCDay() >= 1 && now.getUTCDay() <= 5;
+      
+      // Use conservative delays to avoid being rate limited
+      const delayMs = (isBusinessHours && isWeekday) ? 10000 : 5000; // 10s business hours, 5s off-hours
+      console.log(`⏳ Waiting ${delayMs/1000}s before next NHTSA enrichment batch (rate limiting)`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  
+  console.log(`🔍 NHTSA enrichment completed: ${enrichedVehicles.length}/${vehicles.length} vehicles processed`);
+  return enrichedVehicles;
     });
     
     const batchResults = await Promise.allSettled(batchPromises);
