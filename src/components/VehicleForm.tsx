@@ -185,7 +185,8 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
         else if (nhtsaBodyStyle.includes('pickup') || nhtsaBodyStyle.includes('truck')) mappedData.body_style_nhtsa = 'Truck';
         else if (nhtsaBodyStyle.includes('van') || nhtsaBodyStyle.includes('minivan')) mappedData.body_style_nhtsa = 'Van/Minivan';
         else if (nhtsaBodyStyle.includes('wagon')) mappedData.body_style_nhtsa = 'Wagon';
-        else mappedData.body_style_nhtsa = 'SUV'; // Default fallback
+        else if (nhtsaBodyStyle.includes('small car')) mappedData.body_style_nhtsa = 'Small Car';
+        else mappedData.body_style_nhtsa = 'Truck'; // Default to Truck for pickup trucks
       }
 
       // Map vehicle type from NHTSA if available
@@ -196,8 +197,8 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
         else mappedData.vehicle_type_nhtsa = 'Car/Truck';
       }
 
-      // Map fuel type from NHTSA to Facebook format if not already properly set
-      if (vehicle.fuel_type_nhtsa && (!vehicle.fuel_type || vehicle.fuel_type === 'Gasoline')) {
+      // Map fuel type from NHTSA to Facebook format
+      if (vehicle.fuel_type_nhtsa) {
         const fuelType = vehicle.fuel_type_nhtsa.toLowerCase();
         if (fuelType.includes('electric')) mappedData.fuel_type = 'Electric';
         else if (fuelType.includes('hybrid') && fuelType.includes('plug')) mappedData.fuel_type = 'Plug-in hybrid';
@@ -207,8 +208,8 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
         else mappedData.fuel_type = 'Gasoline';
       }
 
-      // Map transmission from NHTSA to Facebook format if not already properly set
-      if (vehicle.transmission_nhtsa && (!vehicle.transmission || vehicle.transmission === 'Automatic transmission')) {
+      // Map transmission from NHTSA to Facebook format
+      if (vehicle.transmission_nhtsa) {
         const transmission = vehicle.transmission_nhtsa.toLowerCase();
         if (transmission.includes('manual')) mappedData.transmission = 'Manual transmission';
         else mappedData.transmission = 'Automatic transmission';
