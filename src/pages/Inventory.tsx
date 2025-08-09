@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,16 +9,22 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Edit, Trash2, Facebook, Eye, Settings, RefreshCw, Sparkles } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Facebook, Eye, Settings, RefreshCw, Sparkles, Save } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import { useVehicles, Vehicle } from "@/hooks/useVehicles";
+import { supabase } from "@/integrations/supabase/client";
 import { useVehicleSources } from "@/hooks/useVehicleSources";
 import { VehicleForm } from "@/components/VehicleForm";
 import { VehicleSourceForm } from "@/components/VehicleSourceForm";
 import { VehicleImageWithBlur } from "@/components/VehicleImageWithBlur";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Inventory() {
   const { vehicles, loading, addVehicle, updateVehicle, deleteVehicle, bulkDeleteVehicles, postToFacebook, generateAIDescriptions, generateAIImages, refetch } = useVehicles();
   const { sources, loading: sourcesLoading, addSource, startScraping, importSpecificTask, listAvailableTasks } = useVehicleSources(refetch);
+  const { profile, updateProfile } = useAuth();
+  const { toast } = useToast();
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [conditionFilter, setConditionFilter] = useState("all");
@@ -28,11 +34,59 @@ export default function Inventory() {
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState("vehicles");
   const [taskIdInput, setTaskIdInput] = useState("");
-  const [aiDescriptionPrompt, setAiDescriptionPrompt] = useState("Create a compelling and professional vehicle listing description for Facebook Marketplace that highlights the vehicle's key selling points and ends with a call to action for interested buyers. Write in flowing paragraph format without using hyphens, dashes, or asterisks for formatting. Use emojis very sparingly (maximum 2-3 total) and keep the tone conversational but professional.");
+  
+  // Default prompt (our improved version)
+  const defaultPrompt = "Create a compelling and professional vehicle listing description for Facebook Marketplace that highlights the vehicle's key selling points and ends with a call to action for interested buyers. Write in flowing paragraph format without using hyphens, dashes, or asterisks for formatting. Use emojis very sparingly (maximum 2-3 total) and keep the tone conversational but professional.";
+  
+  // Load saved prompt from profile or use default
+  const [aiDescriptionPrompt, setAiDescriptionPrompt] = useState(
+    profile?.custom_ai_description_prompt || defaultPrompt
+  );
+  
   const [isImporting, setIsImporting] = useState(false);
   const [showTaskBrowser, setShowTaskBrowser] = useState(false);
   const [availableTasks, setAvailableTasks] = useState<any[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+
+  // Update prompt when profile changes
+  useEffect(() => {
+    if (profile?.custom_ai_description_prompt) {
+      setAiDescriptionPrompt(profile.custom_ai_description_prompt);
+    } else {
+      setAiDescriptionPrompt(defaultPrompt);
+    }
+  }, [profile, defaultPrompt]);
+
+  // Save prompt to user profile
+  const handleSavePrompt = async () => {
+    if (!profile) {
+      toast({
+        title: "Error",
+        description: "User profile not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSavingPrompt(true);
+    try {
+      const { error } = await updateProfile({
+        custom_ai_description_prompt: aiDescriptionPrompt
+      });
+
+      if (!error) {
+        toast({
+          title: "Success",
+          description: "AI description prompt saved to your account",
+        });
+      }
+    } catch (error) {
+      console.error('Error saving prompt:', error);
+    } finally {
+      setIsSavingPrompt(false);
+    }
+  };
 
   const filteredVehicles = vehicles.filter(vehicle => {
     const matchesSearch = searchTerm === "" || 
@@ -538,6 +592,35 @@ export default function Inventory() {
                 <p className="text-xs text-muted-foreground">
                   This prompt will be used to generate AI descriptions for vehicles that have missing or short descriptions.
                 </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSavePrompt}
+                    disabled={isSavingPrompt}
+                  >
+                    {isSavingPrompt ? (
+                      <>
+                        <RefreshCw className="mr-2 h-3 w-3 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="mr-2 h-3 w-3" />
+                        Save Prompt
+                      </>
+                    )}
+                  </Button>
+                  {profile?.custom_ai_description_prompt && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAiDescriptionPrompt(defaultPrompt)}
+                    >
+                      Reset to Default
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="flex gap-3">
                 <Input

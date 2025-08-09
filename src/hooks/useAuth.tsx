@@ -17,6 +17,7 @@ interface Profile {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  custom_ai_description_prompt: string | null;
 }
 
 interface AuthContextType {
