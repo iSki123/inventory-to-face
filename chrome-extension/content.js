@@ -276,7 +276,7 @@ class SalesonatorAutomator {
     const speedMultipliers = {
       slow: [120, 260],
       normal: [50, 200],
-      fast: [30, 90]
+      fast: [20, 60]  // Increased speed for faster typing while maintaining human-like behavior
     };
     const [minDelay, maxDelay] = speedMultipliers[speed] || speedMultipliers.normal;
     
@@ -2220,7 +2220,8 @@ class SalesonatorAutomator {
       
       const descriptionInput = await this.waitForElement(['[aria-label*="Description"]', 'textarea'], 5000);
       await this.scrollIntoView(descriptionInput);
-      await this.typeHumanLike(descriptionInput, description);
+      // Use 'fast' speed for description typing while maintaining AI-detection features
+      await this.typeHumanLike(descriptionInput, description, 'fast');
       
       this.log(`✅ Successfully filled description`);
       return true;
