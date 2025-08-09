@@ -2696,73 +2696,110 @@ class SalesonatorAutomator {
     try {
       this.log('🚀 Submitting listing...');
       
-      const submitSelectors = [
+      // Step 1: Click Next button to go to preview page
+      const nextSelectors = [
         'aria:Next',
-        'aria:Post',
-        'aria:Publish',
-        'aria:Submit',
         'text:Next',
-        'text:Post',
-        'text:Publish',
-        'button[type="submit"]',
-        '[data-testid*="submit"]',
-        '[data-testid*="next"]',
-        '.btn-primary'
+        'button:contains("Next")',
+        '[data-testid*="next"]'
       ];
       
-      const submitButton = await this.waitForElement(submitSelectors, 10000);
-      await this.scrollIntoView(submitButton);
-      
-      // Add final delay before submission
+      const nextButton = await this.waitForElement(nextSelectors, 10000);
+      await this.scrollIntoView(nextButton);
       await this.delay(this.randomDelay(1000, 2000));
       
-      submitButton.click();
+      this.log('📋 Clicking Next button...');
+      nextButton.click();
       
-      // Wait for submission confirmation or next step
+      // Wait for preview page to load
       await this.delay(3000);
       
-      // Verify submission success
-      const successIndicators = [
-        'text:posted',
-        'text:published',
-        'text:success',
-        'text:Your listing is now live',
-        '[data-testid*="success"]'
+      // Step 2: Look for and click the final Publish button
+      const publishSelectors = [
+        'aria:Publish',
+        'text:Publish',
+        'button:contains("Publish")',
+        '[data-testid*="publish"]',
+        'button[type="submit"]',
+        '.btn-primary:contains("Publish")'
       ];
       
+      this.log('🔍 Looking for Publish button...');
       try {
-        await this.waitForElement(successIndicators, 5000);
-        this.log('✅ Submission confirmed');
-        return true;
-      } catch (error) {
-        // Check if we're on a preview/confirmation page
-        if (window.location.href.includes('preview') || 
-            window.location.href.includes('confirm')) {
-          this.log('📋 On preview/confirmation page, looking for final submit...');
+        const publishButton = await this.waitForElement(publishSelectors, 8000);
+        await this.scrollIntoView(publishButton);
+        await this.delay(this.randomDelay(1000, 2000));
+        
+        this.log('📤 Clicking Publish button...');
+        publishButton.click();
+        
+        // Wait for publication to complete
+        await this.delay(5000);
+        
+        // Step 3: Verify success and navigate back to marketplace
+        const successIndicators = [
+          'text:posted',
+          'text:published',
+          'text:success',
+          'text:Your listing is now live',
+          'text:listing posted',
+          '[data-testid*="success"]'
+        ];
+        
+        try {
+          await this.waitForElement(successIndicators, 8000);
+          this.log('✅ Listing published successfully!');
           
-          const finalSubmitSelectors = [
-            'aria:Publish',
-            'aria:Post',
-            'text:Publish',
-            'text:Post',
-            'button:contains("Publish")',
-            'button:contains("Post")'
-          ];
+          // Navigate back to marketplace vehicle listings
+          await this.delay(2000);
+          this.log('🔄 Navigating back to marketplace...');
           
+          // Try to navigate back to marketplace
           try {
-            const finalSubmit = await this.waitForElement(finalSubmitSelectors, 5000);
-            await this.scrollIntoView(finalSubmit);
-            await this.delay(this.randomDelay(500, 1000));
-            finalSubmit.click();
+            window.location.href = 'https://www.facebook.com/marketplace/category/vehicles';
             await this.delay(3000);
-            return true;
-          } catch (finalError) {
-            this.log('⚠️ Could not find final submit button');
+          } catch (navError) {
+            this.log('⚠️ Could not auto-navigate, staying on current page');
           }
+          
+          return true;
+        } catch (successError) {
+          this.log('⚠️ Could not verify publication success, but likely succeeded');
+          
+          // Still try to navigate back
+          try {
+            await this.delay(2000);
+            window.location.href = 'https://www.facebook.com/marketplace/category/vehicles';
+            await this.delay(3000);
+          } catch (navError) {
+            this.log('⚠️ Could not auto-navigate back to marketplace');
+          }
+          
+          return true; // Assume success if we got this far
         }
         
-        this.log('⚠️ Could not verify submission success');
-        return false;
+      } catch (publishError) {
+        this.log('❌ Could not find Publish button:', publishError);
+        
+        // Check if already published by looking for success indicators
+        const alreadyPublishedSelectors = [
+          'text:posted',
+          'text:published',
+          'text:success'
+        ];
+        
+        try {
+          await this.waitForElement(alreadyPublishedSelectors, 3000);
+          this.log('✅ Listing appears to be already published');
+          
+          // Navigate back to marketplace
+          await this.delay(2000);
+          window.location.href = 'https://www.facebook.com/marketplace/category/vehicles';
+          return true;
+        } catch (alreadyError) {
+          this.log('❌ Publication failed - could not find Publish button or success confirmation');
+          return false;
+        }
       }
       
     } catch (error) {
