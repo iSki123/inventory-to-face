@@ -145,27 +145,56 @@ async function updateVehicleStatus(supabaseClient: any, vehicleId: string, statu
       updateData.last_posted_at = new Date().toISOString();
     }
 
-    const { data, error } = await supabaseClient
-      .from('vehicles')
-      .update(updateData)
-      .eq('id', vehicleId)
-      .eq('user_id', userId) // Ensure user owns this vehicle
-      .select()
-      .single();
+    // If posting is successful, deduct 1 credit using a transaction
+    if (status === 'posted') {
+      const { data, error } = await supabaseClient.rpc('deduct_credit_and_update_vehicle', {
+        p_vehicle_id: vehicleId,
+        p_user_id: userId,
+        p_facebook_post_id: facebookPostId,
+        p_update_data: updateData
+      });
 
-    if (error) {
-      console.error('Error updating vehicle status:', error);
-      throw new Error('Failed to update vehicle status');
+      if (error) {
+        console.error('Error deducting credit and updating vehicle:', error);
+        if (error.message?.includes('insufficient credits')) {
+          throw new Error('Insufficient credits to post vehicle');
+        }
+        throw new Error('Failed to process vehicle posting');
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          vehicle: data.vehicle,
+          credits: data.credits,
+          message: `Vehicle posted successfully. ${data.credits} credits remaining.`
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    } else {
+      // For non-posted status updates, just update the vehicle normally
+      const { data, error } = await supabaseClient
+        .from('vehicles')
+        .update(updateData)
+        .eq('id', vehicleId)
+        .eq('user_id', userId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating vehicle status:', error);
+        throw new Error('Failed to update vehicle status');
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          vehicle: data,
+          message: `Vehicle status updated to ${status}`
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
-
-    return new Response(
-      JSON.stringify({ 
-        success: true,
-        vehicle: data,
-        message: `Vehicle status updated to ${status}`
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
     
   } catch (error) {
     console.error('Error in updateVehicleStatus:', error);
