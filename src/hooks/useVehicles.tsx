@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { processVehicleColors } from '@/lib/colorMapping';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
 
@@ -58,38 +58,7 @@ export const useVehicles = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const { user, profile } = useAuth();
-  const { toast } = useToast();
   const { getSetting } = useSiteSettings();
-  
-  // Queue for managing sequential notifications
-  const notificationQueueRef = useRef<Array<() => void>>([]);
-  const isProcessingQueueRef = useRef(false);
-  
-  // Function to process the notification queue sequentially
-  const processNotificationQueue = async () => {
-    if (isProcessingQueueRef.current || notificationQueueRef.current.length === 0) {
-      return;
-    }
-    
-    isProcessingQueueRef.current = true;
-    
-    while (notificationQueueRef.current.length > 0) {
-      const notification = notificationQueueRef.current.shift();
-      if (notification) {
-        notification();
-        // Wait 2 seconds between notifications to prevent overlap
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-    }
-    
-    isProcessingQueueRef.current = false;
-  };
-
-  // Function to add notification to queue
-  const queueNotification = (notification: () => void) => {
-    notificationQueueRef.current.push(notification);
-    processNotificationQueue();
-  };
   // Set up real-time subscription for vehicles table
   useEffect(() => {
     if (!user) return;
@@ -118,12 +87,8 @@ export const useVehicles = () => {
               return [newVehicle, ...prev];
             });
             
-            // Queue the notification instead of showing immediately to prevent overlap
-            queueNotification(() => {
-              toast({
-                title: "New Vehicle Added",
-                description: `${newVehicle.year} ${newVehicle.make} ${newVehicle.model} has been imported`,
-              });
+            toast.success(`New Vehicle Added`, {
+              description: `${newVehicle.year} ${newVehicle.make} ${newVehicle.model} has been imported`,
             });
           } else if (payload.eventType === 'UPDATE') {
             const updatedVehicle = payload.new as Vehicle;
@@ -142,8 +107,7 @@ export const useVehicles = () => {
                 .then(({ data }) => {
                   const isEnabled = (data?.setting_value as any)?.enabled !== false;
                   if (isEnabled) {
-                    toast({
-                      title: "AI Images Generated",
+                    toast.success("AI Images Generated", {
                       description: `Generated ${updatedVehicle.images.length} images for ${updatedVehicle.year} ${updatedVehicle.make} ${updatedVehicle.model}`,
                     });
                   }
@@ -190,11 +154,7 @@ export const useVehicles = () => {
 
       if (error) {
         console.error('Error fetching vehicles:', error);
-        toast({
-          title: "Error",
-          description: "Failed to fetch vehicles",
-          variant: "destructive",
-        });
+        toast.error("Failed to fetch vehicles");
         return;
       }
 
@@ -361,11 +321,7 @@ export const useVehicles = () => {
       }
     } catch (error) {
       console.error('Error fetching vehicles:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch vehicles",
-        variant: "destructive",
-      });
+      toast.error("Failed to fetch vehicles");
     } finally {
       setLoading(false);
     }
@@ -397,11 +353,7 @@ export const useVehicles = () => {
 
       if (error) {
         console.error('Error adding vehicle:', error);
-        toast({
-          title: "Error",
-          description: "Failed to add vehicle",
-          variant: "destructive",
-        });
+        toast.error("Failed to add vehicle");
         return null;
       }
 
@@ -489,18 +441,11 @@ export const useVehicles = () => {
         }
       }
       
-      toast({
-        title: "Success",
-        description: "Vehicle added successfully",
-      });
+      toast.success("Vehicle added successfully");
       return newVehicle;
     } catch (error) {
       console.error('Error adding vehicle:', error);
-      toast({
-        title: "Error",
-        description: "Failed to add vehicle",
-        variant: "destructive",
-      });
+      toast.error("Failed to add vehicle");
       return null;
     }
   };
@@ -521,28 +466,17 @@ export const useVehicles = () => {
 
       if (error) {
         console.error('Error updating vehicle:', error);
-        toast({
-          title: "Error",
-          description: "Failed to update vehicle",
-          variant: "destructive",
-        });
+        toast.error("Failed to update vehicle");
         return null;
       }
 
       const updatedVehicle = data as Vehicle;
       setVehicles(prev => prev.map(v => v.id === id ? updatedVehicle : v));
-      toast({
-        title: "Success",
-        description: "Vehicle updated successfully",
-      });
+      toast.success("Vehicle updated successfully");
       return updatedVehicle;
     } catch (error) {
       console.error('Error updating vehicle:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update vehicle",
-        variant: "destructive",
-      });
+      toast.error("Failed to update vehicle");
       return null;
     }
   };
@@ -556,27 +490,16 @@ export const useVehicles = () => {
 
       if (error) {
         console.error('Error deleting vehicle:', error);
-        toast({
-          title: "Error",
-          description: "Failed to delete vehicle",
-          variant: "destructive",
-        });
+        toast.error("Failed to delete vehicle");
         return false;
       }
 
       setVehicles(prev => prev.filter(v => v.id !== id));
-      toast({
-        title: "Success",
-        description: "Vehicle deleted successfully",
-      });
+      toast.success("Vehicle deleted successfully");
       return true;
     } catch (error) {
       console.error('Error deleting vehicle:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete vehicle",
-        variant: "destructive",
-      });
+      toast.error("Failed to delete vehicle");
       return false;
     }
   };
@@ -592,27 +515,16 @@ export const useVehicles = () => {
 
       if (error) {
         console.error('Error bulk deleting vehicles:', error);
-        toast({
-          title: "Error",
-          description: "Failed to delete selected vehicles",
-          variant: "destructive",
-        });
+        toast.error("Failed to delete selected vehicles");
         return false;
       }
 
       setVehicles(prev => prev.filter(v => !vehicleIds.includes(v.id)));
-      toast({
-        title: "Success",
-        description: `Successfully deleted ${vehicleIds.length} vehicle${vehicleIds.length > 1 ? 's' : ''}`,
-      });
+      toast.success(`Successfully deleted ${vehicleIds.length} vehicle${vehicleIds.length > 1 ? 's' : ''}`);
       return true;
     } catch (error) {
       console.error('Error bulk deleting vehicles:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete selected vehicles",
-        variant: "destructive",
-      });
+      toast.error("Failed to delete selected vehicles");
       return false;
     }
   };
@@ -626,31 +538,21 @@ export const useVehicles = () => {
         last_posted_at: new Date().toISOString(),
       });
       
-      toast({
-        title: "Success",
-        description: "Vehicle posted to Facebook Marketplace",
-      });
+      toast.success("Vehicle posted to Facebook Marketplace");
       return true;
     } catch (error) {
       console.error('Error posting to Facebook:', error);
       await updateVehicle(vehicleId, {
         facebook_post_status: 'error',
       });
-      toast({
-        title: "Error",
-        description: "Failed to post to Facebook Marketplace",
-        variant: "destructive",
-      });
+      toast.error("Failed to post to Facebook Marketplace");
       return false;
     }
   };
 
   const generateAIDescriptions = async (vehicleIds: string[]) => {
     setLoading(true);
-    toast({
-      title: "Generating AI Descriptions",
-      description: `Starting AI description generation for ${vehicleIds.length} vehicle${vehicleIds.length > 1 ? 's' : ''}...`,
-    });
+    toast.info(`Starting AI description generation for ${vehicleIds.length} vehicle${vehicleIds.length > 1 ? 's' : ''}...`);
 
     try {
       let successCount = 0;
@@ -680,20 +582,16 @@ export const useVehicles = () => {
         }
       }
 
-      toast({
-        title: "AI Description Generation Complete",
-        description: `Generated descriptions for ${successCount} vehicle${successCount !== 1 ? 's' : ''}${errorCount > 0 ? `. ${errorCount} failed.` : '.'}`,
-        variant: successCount > 0 ? "default" : "destructive",
-      });
+      if (successCount > 0) {
+        toast.success(`Generated descriptions for ${successCount} vehicle${successCount !== 1 ? 's' : ''}${errorCount > 0 ? `. ${errorCount} failed.` : '.'}`);
+      } else {
+        toast.error(`Failed to generate descriptions. ${errorCount} error${errorCount !== 1 ? 's' : ''}.`);
+      }
 
       await fetchVehicles(); // Refresh to get updated descriptions
     } catch (error) {
       console.error('Bulk AI description generation error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to generate AI descriptions. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Failed to generate AI descriptions. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -712,19 +610,12 @@ export const useVehicles = () => {
     const isEnabled = (settings?.setting_value as any)?.enabled !== false; // Default to true
     
     if (!isEnabled) {
-      toast({
-        title: "Feature Disabled",
-        description: "AI image generation is currently disabled site-wide",
-        variant: "destructive",
-      });
+      toast.error("AI image generation is currently disabled site-wide");
       setLoading(false);
       return;
     }
     
-    toast({
-      title: "Generating AI Images",
-      description: `Starting AI image generation for ${vehicleIds.length} vehicle${vehicleIds.length > 1 ? 's' : ''}...`,
-    });
+    toast.info(`Starting AI image generation for ${vehicleIds.length} vehicle${vehicleIds.length > 1 ? 's' : ''}...`);
 
     try {
       let successCount = 0;
@@ -757,20 +648,16 @@ export const useVehicles = () => {
         }
       }
 
-      toast({
-        title: "AI Image Generation Complete",
-        description: `Generated images for ${successCount} vehicle${successCount !== 1 ? 's' : ''}${errorCount > 0 ? `. ${errorCount} failed.` : '.'}`,
-        variant: successCount > 0 ? "default" : "destructive",
-      });
+      if (successCount > 0) {
+        toast.success(`Generated images for ${successCount} vehicle${successCount !== 1 ? 's' : ''}${errorCount > 0 ? `. ${errorCount} failed.` : '.'}`);
+      } else {
+        toast.error(`Failed to generate images. ${errorCount} error${errorCount !== 1 ? 's' : ''}.`);
+      }
 
       await fetchVehicles(); // Refresh to get updated images
     } catch (error) {
       console.error('Bulk AI image generation error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to generate AI images. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Failed to generate AI images. Please try again.");
     } finally {
       setLoading(false);
     }
