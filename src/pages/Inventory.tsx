@@ -28,7 +28,7 @@ export default function Inventory() {
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState("vehicles");
   const [taskIdInput, setTaskIdInput] = useState("");
-  const [aiDescriptionPrompt, setAiDescriptionPrompt] = useState("Create a compelling and professional vehicle listing description for Facebook Marketplace that highlights the vehicle's key selling points and ends with a call to action for interested buyers.");
+  const [aiDescriptionPrompt, setAiDescriptionPrompt] = useState("Create a compelling and professional vehicle listing description for Facebook Marketplace that highlights the vehicle's key selling points and ends with a call to action for interested buyers. Write in flowing paragraph format without using hyphens, dashes, or asterisks for formatting. Use emojis very sparingly (maximum 2-3 total) and keep the tone conversational but professional.");
   const [isImporting, setIsImporting] = useState(false);
   const [showTaskBrowser, setShowTaskBrowser] = useState(false);
   const [availableTasks, setAvailableTasks] = useState<any[]>([]);
