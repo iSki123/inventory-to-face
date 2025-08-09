@@ -1006,8 +1006,25 @@ async function processVinDecoding(supabaseClient: any, vehiclesNeedingDecoding: 
       try {
         console.log(`🔍 Decoding VIN: ${vehicle.vin}`);
         
-        // Call VIN decoder API
-        const vinResponse = await fetch('https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/' + vehicle.vin + '?format=json');
+        // Call VIN decoder API with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        let vinResponse;
+        try {
+          console.log(`🔍 Calling NHTSA API for VIN: ${vehicle.vin}`);
+          vinResponse = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${vehicle.vin}?format=json`, {
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'VehicleDataScraper/1.0'
+            }
+          });
+          clearTimeout(timeoutId);
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+          console.error(`❌ NHTSA API call failed for ${vehicle.vin}:`, fetchError);
+          return null;
+        }
         
         if (!vinResponse.ok) {
           console.warn(`VIN decode API failed for ${vehicle.vin}: ${vinResponse.status}`);
@@ -1128,16 +1145,41 @@ async function enrichAllVehiclesWithNhtsaData(supabaseClient: any, vehicles: any
         
         console.log(`🔍 Enriching VIN: ${vehicle.vin} (${vehicle.year} ${vehicle.make} ${vehicle.model})`);
         
-        // Call VIN decoder API
-        const vinResponse = await fetch('https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/' + vehicle.vin + '?format=json');
+        // Call VIN decoder API with timeout and retry
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
         
-        if (!vinResponse.ok) {
-          console.warn(`VIN enrichment API failed for ${vehicle.vin}: ${vinResponse.status}`);
+        try {
+          console.log(`🔍 Calling NHTSA API for VIN: ${vehicle.vin}`);
+          const vinResponse = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${vehicle.vin}?format=json`, {
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'VehicleDataScraper/1.0'
+            }
+          });
+          clearTimeout(timeoutId);
+          
+          if (!vinResponse.ok) {
+            console.warn(`VIN enrichment API failed for ${vehicle.vin}: ${vinResponse.status}`);
+            return vehicle; // Return original vehicle
+          }
+          
+          console.log(`✅ NHTSA API response received for ${vehicle.vin}: ${vinResponse.status}`);
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+          console.error(`❌ NHTSA API call failed for ${vehicle.vin}:`, fetchError);
           return vehicle; // Return original vehicle
         }
         
-        const vinData = await vinResponse.json();
-        const results = vinData.Results || [];
+        let vinData, results;
+        try {
+          vinData = await vinResponse.json();
+          results = vinData.Results || [];
+          console.log(`📊 NHTSA API returned ${results.length} data points for ${vehicle.vin}`);
+        } catch (parseError) {
+          console.error(`❌ Failed to parse NHTSA response for ${vehicle.vin}:`, parseError);
+          return vehicle;
+        }
         
         // Extract NHTSA data
         const bodyClassResult = results.find((r: any) => r.Variable === 'Body Class');
@@ -1190,6 +1232,12 @@ async function enrichAllVehiclesWithNhtsaData(supabaseClient: any, vehicles: any
         };
         
         console.log(`✅ VIN enrichment successful for ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+        console.log(`🔍 NHTSA data extracted:`, {
+          body_style: nhtsaData.body_style_nhtsa,
+          fuel_type: nhtsaData.fuel_type_nhtsa,
+          transmission: nhtsaData.transmission_nhtsa,
+          drivetrain: nhtsaData.drivetrain_nhtsa
+        });
         return enrichedVehicle;
         
       } catch (error) {
