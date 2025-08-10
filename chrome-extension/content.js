@@ -2261,26 +2261,8 @@ class SalesonatorAutomator {
       
       const descriptionInput = await this.waitForElement(['[aria-label*="Description"]', 'textarea'], 5000);
       await this.scrollIntoView(descriptionInput);
-      
-      // Use direct value setting for description to avoid text corruption
-      descriptionInput.focus();
-      await this.delay(this.randomDelay(300, 700));
-      
-      // Clear existing content
-      if (descriptionInput.select && typeof descriptionInput.select === 'function') {
-        descriptionInput.select();
-      } else {
-        descriptionInput.value = '';
-      }
-      await this.delay(this.randomDelay(100, 300));
-      
-      // Set the value directly without character-by-character typing to prevent corruption
-      this.setNativeValue(descriptionInput, description);
-      
-      // Trigger necessary events
-      descriptionInput.dispatchEvent(new Event('input', { bubbles: true }));
-      descriptionInput.dispatchEvent(new Event('change', { bubbles: true }));
-      await this.delay(this.randomDelay(500, 1000));
+      // Use 'fast' speed for description typing while maintaining AI-detection features
+      await this.typeHumanLike(descriptionInput, description, 'fast');
       
       this.log(`✅ Successfully filled description`);
       return true;
