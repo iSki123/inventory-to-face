@@ -481,12 +481,14 @@ class SalesonatorAutomator {
               const recordResult = await this.recordVehiclePosting(vehicleData.id);
               this.log('✅ Vehicle posting recorded in backend', recordResult);
               
+              // Set posting flag to false and reset uploaded images
+              this.isPosting = false;
+              this.uploadedImages = []; // Reset for next posting session
+              
               // Navigate back to create vehicle page for next posting
               this.log('🔄 Navigating back to create page for next vehicle...');
               await this.navigateToCreateVehiclePage();
               
-              this.isPosting = false;
-              this.uploadedImages = []; // Reset for next posting session
               return { 
                 success: true, 
                 credits: recordResult.credits,
@@ -496,12 +498,14 @@ class SalesonatorAutomator {
               this.log('⚠️ Vehicle posted but failed to record in backend:', backendError);
               console.error('Backend recording error:', backendError);
               
+              // Set posting flag to false and reset uploaded images
+              this.isPosting = false;
+              this.uploadedImages = []; // Reset for next posting session
+              
               // Still navigate back for next vehicle even if recording failed
               this.log('🔄 Navigating back to create page despite recording error...');
               await this.navigateToCreateVehiclePage();
               
-              this.isPosting = false;
-              this.uploadedImages = []; // Reset for next posting session
               return { 
                 success: true, 
                 warning: 'Posted but failed to record: ' + backendError.message 
@@ -3083,16 +3087,16 @@ class SalesonatorAutomator {
       }
       
       const data = await response.json();
-      this.log('📋 Backend response data:', data);
+      this.log('📋 Backend response data:', JSON.stringify(data, null, 2));
       
       if (!data.success) {
         throw new Error(data.error || 'Failed to record posting');
       }
       
-      this.log('✅ Successfully recorded posting, credits remaining:', data.credits);
+      this.log('✅ Successfully recorded posting, credits remaining:', data.data?.credits || data.credits);
       return {
         success: true,
-        credits: data.credits,
+        credits: data.data?.credits || data.credits,
         message: data.message || 'Vehicle posted and recorded successfully'
       };
       
@@ -3111,13 +3115,11 @@ class SalesonatorAutomator {
       // Navigate directly to the create vehicle URL
       const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
       
-      // Use window.location for reliable navigation
+      // Force navigation with location.href
+      this.log('🌐 Redirecting to:', createVehicleUrl);
       window.location.href = createVehicleUrl;
       
-      // Wait for page to load
-      await this.delay(3000);
-      
-      this.log('✅ Navigation to create vehicle page completed');
+      this.log('✅ Navigation initiated to create vehicle page');
       
     } catch (error) {
       this.log('⚠️ Error navigating to create vehicle page:', error);
