@@ -573,11 +573,14 @@ class SalesonatorExtension {
           console.log(`⏳ Waiting ${delay/1000}s before posting next vehicle (${this.currentVehicleIndex + 1}/${this.vehicles.length})`);
           statusEl.textContent = `Waiting ${delay/1000}s before next vehicle... (${this.currentVehicleIndex + 1}/${this.vehicles.length})`;
           
-          // Wait before posting next vehicle
+          // Wait before posting next vehicle - give the navigation time to complete
           setTimeout(() => {
             if (this.isPosting) {
               console.log(`🚗 Starting next vehicle posting: ${this.currentVehicleIndex + 1}/${this.vehicles.length}`);
-              this.postNextVehicle();
+              // Wait a bit more for the page to load after navigation
+              setTimeout(() => {
+                this.postNextVehicle();
+              }, 2000); // Additional delay to ensure create page loads
             }
           }, delay);
         } else {

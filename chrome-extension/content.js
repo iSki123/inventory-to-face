@@ -483,48 +483,52 @@ class SalesonatorAutomator {
               const recordResult = await this.recordVehiclePosting(vehicleData.id);
               this.log('✅ Vehicle posting recorded in backend', recordResult);
               
-              // Notify popup about credit update immediately
-              this.log('📢 Sending credit update message to popup:', recordResult.credits);
-              chrome.runtime.sendMessage({
-                action: 'creditsUpdated',
-                credits: recordResult.credits
-              });
-              
-              // Set posting flag to false and reset uploaded images
+              // Clear posting state first
               this.isPosting = false;
-              this.uploadedImages = []; // Reset for next posting session
+              this.currentVehicleData = null;
+              this.uploadedImages = [];
               this.log('🔄 Reset posting flags and uploaded images');
               
               // Wait a moment for any page processing
-              await this.delay(2000);
+              await this.delay(1000);
               
-              // Navigate back to create vehicle page for next posting
+              // Navigate back to create vehicle page for next posting BEFORE returning success
               this.log('🔄 Initiating navigation back to create page for next vehicle...');
               this.log('📍 Current URL before navigation:', window.location.href);
-              await this.navigateToCreateVehiclePage();
               
+              // Use immediate navigation approach
+              const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
+              this.log('🎯 Navigating immediately to:', createVehicleUrl);
+              window.location.href = createVehicleUrl;
+              
+              // Return success with credits info to popup for processing next vehicle
               return { 
                 success: true, 
                 credits: recordResult.credits,
                 message: recordResult.message 
               };
+              
             } catch (backendError) {
               this.log('⚠️ Vehicle posted but failed to record in backend:', backendError);
               this.log('⚠️ Backend error details:', backendError.message);
               console.error('Backend recording error:', backendError);
               
-              // Set posting flag to false and reset uploaded images
+              // Clear posting state even if recording failed
               this.isPosting = false;
-              this.uploadedImages = []; // Reset for next posting session
+              this.currentVehicleData = null;
+              this.uploadedImages = [];
               this.log('🔄 Reset posting flags despite backend error');
               
               // Wait a moment
-              await this.delay(2000);
+              await this.delay(1000);
               
               // Still navigate back for next vehicle even if recording failed
               this.log('🔄 Attempting navigation despite recording error...');
               this.log('📍 Current URL before fallback navigation:', window.location.href);
-              await this.navigateToCreateVehiclePage();
+              
+              const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
+              this.log('🎯 Fallback navigation to:', createVehicleUrl);
+              window.location.href = createVehicleUrl;
               
               return { 
                 success: true, 
