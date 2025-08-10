@@ -702,6 +702,30 @@ class SalesonatorExtension {
         // The posting will continue automatically via the existing delay mechanism
       }
       
+      if (message.action === 'urlChanged') {
+        console.log('🔄 URL changed from:', message.oldUrl, 'to:', message.newUrl);
+        const statusEl = document.getElementById('status');
+        if (message.newUrl.includes('/marketplace/category/vehicles')) {
+          statusEl.textContent = 'Facebook redirected to vehicles page, navigating to create page...';
+        } else if (message.newUrl.includes('/marketplace/create/vehicle')) {
+          statusEl.textContent = 'Ready on create vehicle page, continuing posting...';
+        }
+      }
+      
+      if (message.action === 'readyForNextVehicle') {
+        console.log('✅ Content script ready for next vehicle posting');
+        const statusEl = document.getElementById('status');
+        statusEl.textContent = 'Ready for next vehicle posting...';
+        
+        // Continue with next vehicle after a short delay
+        setTimeout(() => {
+          if (this.isPosting && this.currentVehicleIndex < this.vehicles.length) {
+            this.currentVehicleIndex++;
+            this.postNextVehicle();
+          }
+        }, 1000);
+      }
+      
       return true; // Keep the message channel open
     });
   }

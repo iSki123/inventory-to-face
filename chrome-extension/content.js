@@ -7,8 +7,11 @@ class SalesonatorAutomator {
     this.debugMode = true;
     this.retryAttempts = 3;
     this.uploadedImages = []; // Track uploaded images to prevent duplicates
+    this.currentUrl = window.location.href;
+    this.isWaitingForNextVehicle = false;
     this.setupMessageListener();
     this.installNavigationGuards();
+    this.setupUrlChangeDetection();
     this.checkWebAppAuthentication(); // Check for web app auth on load
   }
 
@@ -497,22 +500,14 @@ class SalesonatorAutomator {
               this.log('🔄 Reset posting flags and uploaded images');
               
               // Wait a moment for any page processing
-              await this.delay(1000);
+              await this.delay(2000);
               
-              // Navigate back to create vehicle page for next posting BEFORE returning success
-              this.log('🔄 Initiating navigation back to create page for next vehicle...');
-              this.log('📍 Current URL before navigation:', window.location.href);
+              // Set flag that we're waiting for the next vehicle posting
+              this.isWaitingForNextVehicle = true;
               
-              // Use immediate navigation approach
-              const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
-              this.log('🎯 Navigating immediately to:', createVehicleUrl);
-              window.location.href = createVehicleUrl;
-              
-              // Send navigation message to popup
-              chrome.runtime.sendMessage({
-                action: 'navigatedToCreate',
-                url: createVehicleUrl
-              });
+              // Let URL change detection handle navigation after Facebook redirects
+              this.log('🔄 Posting complete, waiting for Facebook redirects...');
+              this.log('📡 URL change detection will handle navigation to create page automatically');
               
               // Return success with credits info to popup for processing next vehicle
               return { 
@@ -3147,6 +3142,70 @@ class SalesonatorAutomator {
     }
   }
 
+  // Setup URL change detection to handle Facebook redirects
+  setupUrlChangeDetection() {
+    this.log('🔍 Setting up URL change detection...');
+    
+    // Monitor for URL changes using both popstate and a periodic check
+    window.addEventListener('popstate', () => this.handleUrlChange());
+    
+    // Periodic URL check (Facebook uses pushState which doesn't trigger popstate)
+    setInterval(() => {
+      if (window.location.href !== this.currentUrl) {
+        this.handleUrlChange();
+      }
+    }, 1000);
+    
+    // Also monitor for page load events
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => this.handleUrlChange());
+    } else {
+      // Document already loaded
+      setTimeout(() => this.handleUrlChange(), 500);
+    }
+  }
+
+  // Handle URL changes and redirects
+  handleUrlChange() {
+    const newUrl = window.location.href;
+    const oldUrl = this.currentUrl;
+    
+    if (newUrl !== oldUrl) {
+      this.log('🔄 URL changed detected:');
+      this.log('  From:', oldUrl);
+      this.log('  To:', newUrl);
+      
+      this.currentUrl = newUrl;
+      
+      // Check if we've been redirected to vehicles category after posting
+      if (newUrl.includes('/marketplace/category/vehicles') && this.isWaitingForNextVehicle) {
+        this.log('🎯 Detected redirect to vehicles category after posting - navigating to create page');
+        setTimeout(() => {
+          this.navigateToCreateVehiclePage();
+        }, 2000); // Wait 2 seconds before navigating to create page
+      }
+      
+      // Check if we're on the create vehicle page and ready for next posting
+      else if (newUrl.includes('/marketplace/create/vehicle') && this.isWaitingForNextVehicle) {
+        this.log('✅ Successfully navigated to create vehicle page - ready for next posting');
+        this.isWaitingForNextVehicle = false;
+        
+        // Notify popup that we're ready for the next vehicle
+        chrome.runtime.sendMessage({
+          action: 'readyForNextVehicle',
+          url: newUrl
+        });
+      }
+      
+      // Update popup with current status
+      chrome.runtime.sendMessage({
+        action: 'urlChanged',
+        oldUrl: oldUrl,
+        newUrl: newUrl
+      });
+    }
+  }
+
   // Navigate back to create vehicle page for next posting
   async navigateToCreateVehiclePage() {
     try {
@@ -3158,17 +3217,12 @@ class SalesonatorAutomator {
       const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
       this.log('🎯 Target URL:', createVehicleUrl);
       
-      // Immediate navigation with fallback
-      this.log('🌐 Initiating navigation...');
+      // Set flag that we're waiting for the next vehicle
+      this.isWaitingForNextVehicle = true;
       
       // Use a more reliable navigation approach
+      this.log('🌐 Initiating navigation...');
       window.location.href = createVehicleUrl;
-      
-      // Send navigation message to popup to handle delay
-      chrome.runtime.sendMessage({
-        action: 'navigatedToCreate',
-        url: createVehicleUrl
-      });
       
       this.log('✅ Navigation initiated to create vehicle page');
       
