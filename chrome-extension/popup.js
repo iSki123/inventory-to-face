@@ -577,10 +577,13 @@ class SalesonatorExtension {
           setTimeout(() => {
             if (this.isPosting) {
               console.log(`🚗 Starting next vehicle posting: ${this.currentVehicleIndex + 1}/${this.vehicles.length}`);
-              // Wait a bit more for the page to load after navigation
+              statusEl.textContent = `Loading create page for next vehicle... (${this.currentVehicleIndex + 1}/${this.vehicles.length})`;
+              // Wait extra time for the page to load after navigation
               setTimeout(() => {
-                this.postNextVehicle();
-              }, 2000); // Additional delay to ensure create page loads
+                if (this.isPosting) {
+                  this.postNextVehicle();
+                }
+              }, 3000); // Increased delay to ensure create page fully loads
             }
           }, delay);
         } else {
@@ -692,6 +695,11 @@ class SalesonatorExtension {
         console.log('💰 Updating credits from message:', message.credits);
         this.credits = message.credits;
         this.updateCreditDisplay();
+      }
+      
+      if (message.action === 'navigatedToCreate') {
+        console.log('🔄 Content script navigated to create page, will continue posting after delay');
+        // The posting will continue automatically via the existing delay mechanism
       }
       
       return true; // Keep the message channel open

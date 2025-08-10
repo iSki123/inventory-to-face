@@ -482,6 +482,13 @@ class SalesonatorAutomator {
               
               const recordResult = await this.recordVehiclePosting(vehicleData.id);
               this.log('✅ Vehicle posting recorded in backend', recordResult);
+              this.log('💰 Credits after posting:', recordResult.credits);
+              
+              // Send credit update to popup immediately
+              chrome.runtime.sendMessage({
+                action: 'creditsUpdated',
+                credits: recordResult.credits
+              });
               
               // Clear posting state first
               this.isPosting = false;
@@ -500,6 +507,12 @@ class SalesonatorAutomator {
               const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
               this.log('🎯 Navigating immediately to:', createVehicleUrl);
               window.location.href = createVehicleUrl;
+              
+              // Send navigation message to popup
+              chrome.runtime.sendMessage({
+                action: 'navigatedToCreate',
+                url: createVehicleUrl
+              });
               
               // Return success with credits info to popup for processing next vehicle
               return { 
@@ -3145,28 +3158,19 @@ class SalesonatorAutomator {
       const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
       this.log('🎯 Target URL:', createVehicleUrl);
       
-      // Try multiple navigation methods for reliability
-      this.log('🌐 Method 1: Attempting window.location.href...');
+      // Immediate navigation with fallback
+      this.log('🌐 Initiating navigation...');
+      
+      // Use a more reliable navigation approach
       window.location.href = createVehicleUrl;
       
-      // Backup method after a delay
-      setTimeout(() => {
-        this.log('🌐 Method 2: Backup using window.location.replace...');
-        if (window.location.href !== createVehicleUrl) {
-          window.location.replace(createVehicleUrl);
-        }
-      }, 1000);
+      // Send navigation message to popup to handle delay
+      chrome.runtime.sendMessage({
+        action: 'navigatedToCreate',
+        url: createVehicleUrl
+      });
       
-      // Final fallback
-      setTimeout(() => {
-        this.log('🌐 Method 3: Final fallback check...');
-        if (window.location.href !== createVehicleUrl) {
-          this.log('⚠️ Previous methods failed, forcing navigation...');
-          window.location.assign(createVehicleUrl);
-        }
-      }, 3000);
-      
-      this.log('✅ Navigation methods initiated to create vehicle page');
+      this.log('✅ Navigation initiated to create vehicle page');
       
     } catch (error) {
       this.log('⚠️ Error navigating to create vehicle page:', error.message);
