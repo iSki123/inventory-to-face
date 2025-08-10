@@ -1097,21 +1097,18 @@ class SalesonatorAutomator {
     }
   }
 
-  // Fill Price input
+  // Fill Price input - using the same reliable method as mileage
   async fillPrice(price) {
     try {
       this.log(`💰 Filling price: ${price}`);
 
       // Normalize to integer dollars (strip non-digits and fix cents if needed)
       const rawDigits = String(price ?? '').replace(/[^\d]/g, '');
-      const toNumber = (val) => {
-        if (val === null || val === undefined) return null;
-        const digits = String(val).replace(/[^\d]/g, '');
-        return digits ? parseInt(digits, 10) : null;
-      };
-
       let expectedNum = rawDigits ? parseInt(rawDigits, 10) : null;
-      if (!expectedNum || expectedNum <= 0) throw new Error('Invalid price value provided');
+      
+      if (!expectedNum || expectedNum <= 0) {
+        throw new Error('Invalid price value provided');
+      }
 
       // Heuristic: some sources store price in cents (e.g., 2155000 -> 21550)
       // If 6+ digits and ends with "00", treat as cents and divide by 100
@@ -1144,50 +1141,36 @@ class SalesonatorAutomator {
       }
 
       await this.scrollIntoView(priceInput);
-
-      // Hard clear existing value
+      
+      // Clear existing value and set new one - same as mileage method
       priceInput.focus();
       if (priceInput.select) priceInput.select();
       await this.delay(100);
-      this.setNativeValue(priceInput, '');
-      priceInput.dispatchEvent(new Event('input', { bubbles: true }));
-      await this.delay(50);
-
-      // Set target value without formatting
+      
+      // Use React-compatible value setting with expected price
       this.setNativeValue(priceInput, expectedNum.toString());
+      
+      // Trigger React events - same as mileage method
       priceInput.dispatchEvent(new Event('input', { bubbles: true }));
       priceInput.dispatchEvent(new Event('change', { bubbles: true }));
       priceInput.dispatchEvent(new Event('blur', { bubbles: true }));
-
-      await this.delay(600);
-
-      // Verify numerically (ignore $ and commas that FB adds)
-      const currentNum = toNumber(priceInput.value);
-      if (currentNum === expectedNum) {
+      
+      await this.delay(500);
+      
+      // Verify value was set - using simple string comparison like mileage
+      const currentValue = (priceInput.value || '').toString().replace(/[^\d]/g, '');
+      if (currentValue === expectedNum.toString()) {
         this.log('✅ Successfully filled price:', expectedNum);
         return true;
-      }
-
-      this.log('⚠️ Price verification mismatch. Expected:', expectedNum, 'Got raw:', priceInput.value, 'Parsed:', currentNum);
-
-      // Fallback: clear then type human-like
-      priceInput.focus();
-      if (priceInput.select) priceInput.select();
-      await this.delay(50);
-      this.setNativeValue(priceInput, '');
-      priceInput.dispatchEvent(new Event('input', { bubbles: true }));
-      await this.delay(50);
-      await this.typeHumanLike(priceInput, expectedNum.toString());
-      await this.delay(600);
-
-      const finalNum = toNumber(priceInput.value);
-      if (finalNum === expectedNum) {
-        this.log('✅ Price set after typing:', expectedNum);
       } else {
-        this.log('⚠️ Final price mismatch. Expected:', expectedNum, 'Got raw:', priceInput.value, 'Parsed:', finalNum);
+        this.log('⚠️ Price value verification failed. Expected:', expectedNum.toString(), 'Got:', priceInput.value, 'Parsed:', currentValue);
+        // Try typing approach as fallback - same as mileage method
+        priceInput.focus();
+        if (priceInput.select) priceInput.select();
+        await this.typeHumanLike(priceInput, expectedNum.toString());
+        return true;
       }
-      return true;
-
+      
     } catch (error) {
       this.log('⚠️ Could not fill price:', price, error);
       return false;
