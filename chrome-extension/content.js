@@ -2928,32 +2928,36 @@ class SalesonatorAutomator {
 
   // Message listener setup
   setupMessageListener() {
-      chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-        this.log('📨 Received message in content script:', request);
-        
-        if (request.action === 'postVehicle') {
-          this.log('🚀 Starting vehicle posting process...');
-          this.postVehicle(request.vehicle)
-            .then(result => {
-              this.log('📤 Sending response back to popup:', result);
-              sendResponse(result);
-            })
-            .catch(error => {
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      this.log('📨 Received message in content script:', request);
+      
+      if (request.action === 'postVehicle') {
+        this.log('🚀 Starting vehicle posting process...');
+        this.postVehicle(request.vehicle)
+          .then(result => {
+            this.log('📤 Sending response back to popup:', result);
+            sendResponse(result);
+          })
+          .catch(error => {
             this.log('❌ Error in postVehicle:', error);
             sendResponse({ success: false, error: error.message });
           });
-        
         return true; // Keep message channel open for async response
       }
       
       if (request.action === 'checkLogin') {
         const isLoggedIn = this.checkFacebookLogin();
         sendResponse({ loggedIn: isLoggedIn });
+        return false; // Synchronous response
       }
       
       if (request.action === 'ping') {
         sendResponse({ status: 'ready', enhanced: true });
+        return false; // Synchronous response
       }
+      
+      // For unknown actions, don't keep channel open
+      return false;
     });
   }
 
