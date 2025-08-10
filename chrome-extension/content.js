@@ -478,15 +478,29 @@ class SalesonatorAutomator {
             // Record the posting in backend and deduct credits
             try {
               this.log('📝 Recording vehicle posting in backend...');
+              this.log('🔍 Current URL before recording:', window.location.href);
+              
               const recordResult = await this.recordVehiclePosting(vehicleData.id);
               this.log('✅ Vehicle posting recorded in backend', recordResult);
+              
+              // Notify popup about credit update immediately
+              this.log('📢 Sending credit update message to popup:', recordResult.credits);
+              chrome.runtime.sendMessage({
+                action: 'creditsUpdated',
+                credits: recordResult.credits
+              });
               
               // Set posting flag to false and reset uploaded images
               this.isPosting = false;
               this.uploadedImages = []; // Reset for next posting session
+              this.log('🔄 Reset posting flags and uploaded images');
+              
+              // Wait a moment for any page processing
+              await this.delay(2000);
               
               // Navigate back to create vehicle page for next posting
-              this.log('🔄 Navigating back to create page for next vehicle...');
+              this.log('🔄 Initiating navigation back to create page for next vehicle...');
+              this.log('📍 Current URL before navigation:', window.location.href);
               await this.navigateToCreateVehiclePage();
               
               return { 
@@ -496,14 +510,20 @@ class SalesonatorAutomator {
               };
             } catch (backendError) {
               this.log('⚠️ Vehicle posted but failed to record in backend:', backendError);
+              this.log('⚠️ Backend error details:', backendError.message);
               console.error('Backend recording error:', backendError);
               
               // Set posting flag to false and reset uploaded images
               this.isPosting = false;
               this.uploadedImages = []; // Reset for next posting session
+              this.log('🔄 Reset posting flags despite backend error');
+              
+              // Wait a moment
+              await this.delay(2000);
               
               // Still navigate back for next vehicle even if recording failed
-              this.log('🔄 Navigating back to create page despite recording error...');
+              this.log('🔄 Attempting navigation despite recording error...');
+              this.log('📍 Current URL before fallback navigation:', window.location.href);
               await this.navigateToCreateVehiclePage();
               
               return { 
@@ -2921,16 +2941,17 @@ class SalesonatorAutomator {
 
   // Message listener setup
   setupMessageListener() {
-    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-      this.log('📨 Received message:', request);
-      
-      if (request.action === 'postVehicle') {
-        this.postVehicle(request.vehicle)
-          .then(result => {
-            this.log('📤 Sending response:', result);
-            sendResponse(result);
-          })
-          .catch(error => {
+      chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        this.log('📨 Received message in content script:', request);
+        
+        if (request.action === 'postVehicle') {
+          this.log('🚀 Starting vehicle posting process...');
+          this.postVehicle(request.vehicle)
+            .then(result => {
+              this.log('📤 Sending response back to popup:', result);
+              sendResponse(result);
+            })
+            .catch(error => {
             this.log('❌ Error in postVehicle:', error);
             sendResponse({ success: false, error: error.message });
           });
@@ -3044,64 +3065,79 @@ class SalesonatorAutomator {
   // Record vehicle posting in backend and deduct credits
   async recordVehiclePosting(vehicleId) {
     try {
-      this.log('📝 Getting user token for backend recording...');
+      this.log('📝 Starting vehicle posting record process for ID:', vehicleId);
+      
       // Get user token from extension storage
+      this.log('🔍 Getting user token from storage...');
       const result = await new Promise((resolve) => {
         chrome.runtime.sendMessage({ action: 'getStorageData', key: 'userToken' }, resolve);
       });
       
+      this.log('🗂️ Storage result:', result);
       const userToken = result?.value;
       if (!userToken) {
+        this.log('❌ No user token found in storage');
         throw new Error('User not authenticated - no token found');
       }
       
-      this.log('🔑 Token found, generating Facebook post ID...');
+      this.log('🔑 Token found, length:', userToken.length);
+      
       // Generate a fake Facebook post ID (since we can't easily extract the real one)
       const facebookPostId = `fb_${Date.now()}_${vehicleId.substring(0, 8)}`;
+      this.log('🆔 Generated Facebook post ID:', facebookPostId);
       
-      this.log('📤 Sending record request to backend...', {
-        vehicleId: vehicleId.substring(0, 8) + '...',
+      const requestPayload = {
+        action: 'update_vehicle_status',
+        vehicleId: vehicleId,
+        status: 'posted',
         facebookPostId: facebookPostId
-      });
+      };
       
-      const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster', {
+      this.log('📤 Sending request to backend with payload:', JSON.stringify(requestPayload, null, 2));
+      
+      const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster';
+      this.log('🌐 API URL:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${userToken}`
         },
-        body: JSON.stringify({
-          action: 'update_vehicle_status',
-          vehicleId: vehicleId,
-          status: 'posted',
-          facebookPostId: facebookPostId
-        })
+        body: JSON.stringify(requestPayload)
       });
       
       this.log('📨 Backend response status:', response.status);
+      this.log('📨 Backend response headers:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
         const errorText = await response.text();
-        this.log('❌ Backend error response:', errorText);
+        this.log('❌ Backend error response text:', errorText);
         throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
       }
       
       const data = await response.json();
-      this.log('📋 Backend response data:', JSON.stringify(data, null, 2));
+      this.log('📋 Full backend response data:', JSON.stringify(data, null, 2));
       
       if (!data.success) {
+        this.log('❌ Backend returned success=false with error:', data.error);
         throw new Error(data.error || 'Failed to record posting');
       }
       
-      this.log('✅ Successfully recorded posting, credits remaining:', data.data?.credits || data.credits);
+      const credits = data.data?.credits || data.credits;
+      this.log('✅ Successfully recorded posting!');
+      this.log('💰 Credits remaining:', credits);
+      this.log('📝 Response message:', data.message);
+      
       return {
         success: true,
-        credits: data.data?.credits || data.credits,
+        credits: credits,
         message: data.message || 'Vehicle posted and recorded successfully'
       };
       
     } catch (error) {
-      this.log('❌ Error recording vehicle posting:', error);
+      this.log('❌ Error in recordVehiclePosting:', error.message);
+      this.log('❌ Full error object:', error);
       console.error('Full recording error:', error);
       throw error;
     }
@@ -3110,19 +3146,40 @@ class SalesonatorAutomator {
   // Navigate back to create vehicle page for next posting
   async navigateToCreateVehiclePage() {
     try {
-      this.log('🔄 Navigating to Facebook Marketplace create vehicle page...');
+      this.log('🔄 Starting navigation to Facebook Marketplace create vehicle page...');
+      this.log('📍 Current URL before navigation:', window.location.href);
+      this.log('📍 Current page title:', document.title);
       
       // Navigate directly to the create vehicle URL
       const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
+      this.log('🎯 Target URL:', createVehicleUrl);
       
-      // Force navigation with location.href
-      this.log('🌐 Redirecting to:', createVehicleUrl);
+      // Try multiple navigation methods for reliability
+      this.log('🌐 Method 1: Attempting window.location.href...');
       window.location.href = createVehicleUrl;
       
-      this.log('✅ Navigation initiated to create vehicle page');
+      // Backup method after a delay
+      setTimeout(() => {
+        this.log('🌐 Method 2: Backup using window.location.replace...');
+        if (window.location.href !== createVehicleUrl) {
+          window.location.replace(createVehicleUrl);
+        }
+      }, 1000);
+      
+      // Final fallback
+      setTimeout(() => {
+        this.log('🌐 Method 3: Final fallback check...');
+        if (window.location.href !== createVehicleUrl) {
+          this.log('⚠️ Previous methods failed, forcing navigation...');
+          window.location.assign(createVehicleUrl);
+        }
+      }, 3000);
+      
+      this.log('✅ Navigation methods initiated to create vehicle page');
       
     } catch (error) {
-      this.log('⚠️ Error navigating to create vehicle page:', error);
+      this.log('⚠️ Error navigating to create vehicle page:', error.message);
+      this.log('⚠️ Full navigation error:', error);
       console.error('Navigation error:', error);
     }
   }

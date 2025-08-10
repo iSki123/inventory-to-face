@@ -6,6 +6,7 @@ class SalesonatorExtension {
     this.currentVehicleIndex = 0;
     this.credits = 0;
     this.init();
+    this.setupMessageListener();
   }
 
   async init() {
@@ -658,6 +659,8 @@ class SalesonatorExtension {
     const creditCountEl = document.getElementById('creditCount');
     const creditBalanceEl = document.getElementById('creditBalance');
     
+    console.log('🎯 Updating credit display to:', this.credits);
+    
     if (creditCountEl) {
       creditCountEl.textContent = this.credits;
     }
@@ -675,6 +678,21 @@ class SalesonatorExtension {
         creditBalanceEl.style.background = 'linear-gradient(135deg, #10b981, #059669)';
       }
     }
+  }
+
+  setupMessageListener() {
+    // Listen for messages from content script
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      console.log('📨 Popup received message:', message);
+      
+      if (message.action === 'creditsUpdated') {
+        console.log('💰 Updating credits from message:', message.credits);
+        this.credits = message.credits;
+        this.updateCreditDisplay();
+      }
+      
+      return true; // Keep the message channel open
+    });
   }
 }
 
