@@ -705,11 +705,22 @@ class SalesonatorExtension {
       if (message.action === 'urlChanged') {
         console.log('🔄 URL changed from:', message.oldUrl, 'to:', message.newUrl);
         const statusEl = document.getElementById('status');
-        if (message.newUrl.includes('/marketplace/category/vehicles')) {
+        
+        if (message.status === 'redirected_to_vehicles_page') {
+          statusEl.textContent = 'Posting successful! Redirecting to continue...';
+        } else if (message.status === 'ready_for_next_vehicle') {
+          statusEl.textContent = 'Ready for next vehicle posting...';
+        } else if (message.newUrl.includes('/marketplace/category/vehicles')) {
           statusEl.textContent = 'Facebook redirected to vehicles page, navigating to create page...';
         } else if (message.newUrl.includes('/marketplace/create/vehicle')) {
           statusEl.textContent = 'Ready on create vehicle page, continuing posting...';
         }
+      }
+      
+      if (message.action === 'navigatingToCreate') {
+        console.log('🔄 Navigating to create page from:', message.fromUrl, 'to:', message.toUrl);
+        const statusEl = document.getElementById('status');
+        statusEl.textContent = 'Navigating to create vehicle page...';
       }
       
       if (message.action === 'readyForNextVehicle') {
