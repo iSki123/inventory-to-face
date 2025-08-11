@@ -1121,12 +1121,12 @@ class SalesonatorAutomator {
     }
   }
 
-  // Fill Price input - using the same reliable method as mileage
+  // Fill Price input - using the exact same reliable method as mileage
   async fillPrice(price) {
     try {
       this.log(`💰 Filling price: ${price}`);
 
-      // Normalize to integer dollars (strip non-digits and fix cents if needed)
+      // Normalize to integer dollars (strip non-digits, remove decimals, fix cents if needed)
       const rawDigits = String(price ?? '').replace(/[^\d]/g, '');
       let expectedNum = rawDigits ? parseInt(rawDigits, 10) : null;
       
@@ -1174,7 +1174,7 @@ class SalesonatorAutomator {
 
       await this.scrollIntoView(priceInput);
       
-      // Clear existing value and set new one - same as mileage method
+      // Clear existing value and set new one - exact same as mileage method
       priceInput.focus();
       if (priceInput.select) priceInput.select();
       await this.delay(100);
@@ -1182,20 +1182,20 @@ class SalesonatorAutomator {
       // Use React-compatible value setting with expected price
       this.setNativeValue(priceInput, expectedNum.toString());
       
-      // Trigger React events - same as mileage method
+      // Trigger React events - exact same as mileage method
       priceInput.dispatchEvent(new Event('input', { bubbles: true }));
       priceInput.dispatchEvent(new Event('change', { bubbles: true }));
       priceInput.dispatchEvent(new Event('blur', { bubbles: true }));
       
       await this.delay(500);
       
-      // Verify value was set - same exact logic as mileage
+      // Verify value was set - exact same logic as mileage
       if ((priceInput.value || '').toString() === expectedNum.toString()) {
         this.log('✅ Successfully filled price:', expectedNum);
         return true;
       } else {
         this.log('⚠️ Price value verification failed. Expected:', expectedNum.toString(), 'Got:', priceInput.value);
-        // Try typing approach as fallback - same as mileage method
+        // Try typing approach as fallback - exact same as mileage method
         priceInput.focus();
         if (priceInput.select) priceInput.select();
         await this.typeHumanLike(priceInput, expectedNum.toString());
