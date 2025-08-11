@@ -2507,17 +2507,9 @@ class SalesonatorAutomator {
       this.log('⚠️ Image upload failed:', error);
       return false;
     }
-  }
-        '[data-testid*="image"]',
-        'img[src*="blob:"]',
-        '.image-preview'
-      ];
-      
-      let uploadSuccess = false;
-      for (const selector of uploadIndicators) {
-        const indicators = document.querySelectorAll(selector);
-        if (indicators.length > 0) {
-          uploadSuccess = true;
+
+  // Fallback image upload method
+  async handleImageUploadsFallback(images, fileInput) {
           this.log(`📸 Found ${indicators.length} upload indicators, upload appears successful`);
           break;
         }
