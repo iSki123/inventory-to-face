@@ -569,8 +569,8 @@ class SalesonatorExtension {
   }
 
   async sendVehicleToContentScript(vehicle) {
-    return new Promise((resolve, reject) => {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    return new Promise(async (resolve, reject) => {
+      chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
         if (chrome.runtime.lastError) {
           return reject(new Error('Could not get current tab'));
         }
@@ -580,20 +580,44 @@ class SalesonatorExtension {
         }
 
         const currentTab = tabs[0];
-        chrome.tabs.sendMessage(currentTab.id, {
-          action: 'postVehicle',
-          vehicle: vehicle
-        }, (response) => {
-          if (chrome.runtime.lastError) {
-            return reject(new Error(chrome.runtime.lastError.message));
-          }
-          
-          if (response && response.success) {
-            resolve(response);
-          } else {
-            reject(new Error(response?.error || 'Unknown error from content script'));
-          }
-        });
+        
+        // First, ensure content script is ready with ping-pong
+        let retries = 0;
+        const maxRetries = 10;
+        
+        const checkContentScript = () => {
+          chrome.tabs.sendMessage(currentTab.id, { action: 'ping' }, (response) => {
+            if (chrome.runtime.lastError || !response) {
+              retries++;
+              if (retries < maxRetries) {
+                console.log(`Content script not ready, retrying... (${retries}/${maxRetries})`);
+                setTimeout(checkContentScript, 1000);
+              } else {
+                reject(new Error('Content script not responding after multiple attempts. Please refresh the Facebook page.'));
+              }
+            } else {
+              console.log('✅ Content script is ready, sending vehicle data...');
+              // Content script is ready, now send the actual message
+              chrome.tabs.sendMessage(currentTab.id, {
+                action: 'postVehicle',
+                vehicle: vehicle
+              }, (response) => {
+                if (chrome.runtime.lastError) {
+                  return reject(new Error(chrome.runtime.lastError.message));
+                }
+                
+                if (response && response.success) {
+                  resolve(response);
+                } else {
+                  reject(new Error(response?.error || 'Unknown error from content script'));
+                }
+              });
+            }
+          });
+        };
+        
+        // Start the check
+        checkContentScript();
       });
     });
   }
