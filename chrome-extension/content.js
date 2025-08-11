@@ -2585,6 +2585,7 @@ class SalesonatorAutomator {
       this.log('⚠️ Image upload failed:', error);
       return false;
     }
+  }
 
   // Fallback image upload method
   async handleImageUploadsFallback(images, fileInput) {
