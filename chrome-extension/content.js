@@ -467,9 +467,11 @@ class SalesonatorAutomator {
           await this.delay(1000, attempt);
           
           // Handle image uploads if images are provided
-          if (vehicleData.images && vehicleData.images.length > 0) {
+          if (vehicleData.images && Array.isArray(vehicleData.images) && vehicleData.images.length > 0) {
             await this.handleImageUploads(vehicleData.images);
             await this.delay(1000, attempt);
+          } else {
+            this.log('📸 No images provided or images array is invalid, skipping image upload');
           }
           
           // Submit with verification
@@ -2343,6 +2345,12 @@ class SalesonatorAutomator {
       this.log('📸 Starting enhanced image upload process...');
       this.log('📸 Processing image uploads for Facebook Marketplace...');
       
+      // Validate images parameter
+      if (!images || !Array.isArray(images) || images.length === 0) {
+        this.log('📸 No valid images provided, skipping upload');
+        return true;
+      }
+      
       // Enhanced session-based duplicate prevention
       const sessionKey = `upload_session_${Date.now()}`;
       if (this.currentUploadSession) {
@@ -2428,7 +2436,7 @@ class SalesonatorAutomator {
         this.log('📸 Existing files:', existingFileInfo);
         
         // If we already have files and they seem to be our target files, skip upload
-        const uniqueImages = Array.from(new Set((images || []).filter(Boolean)));
+        const uniqueImages = Array.from(new Set((Array.isArray(images) ? images : []).filter(Boolean)));
         if (fileInput.files.length >= uniqueImages.length) {
           this.log('📸 File input already contains sufficient images, skipping duplicate upload');
           this.uploadedImages = uniqueImages; // Track uploaded images
@@ -2440,7 +2448,7 @@ class SalesonatorAutomator {
       this.log('📸 Found file input, proceeding with image processing...');
       
       // Get pre-downloaded images or download them now
-      const uniqueImages = Array.from(new Set((images || []).filter(Boolean)));
+      const uniqueImages = Array.from(new Set((Array.isArray(images) ? images : []).filter(Boolean)));
       this.log(`📸 Processing ${uniqueImages.length} unique images (URL-deduped)...`);
       
       const files = await this.getPreDownloadedImages(uniqueImages);
@@ -2951,6 +2959,20 @@ class SalesonatorAutomator {
       
       if (request.action === 'postVehicle') {
         this.log('🚀 Starting vehicle posting process...');
+        
+        // Validate vehicle data structure
+        if (!request.vehicle) {
+          this.log('❌ No vehicle data provided');
+          sendResponse({ success: false, error: 'No vehicle data provided' });
+          return true;
+        }
+        
+        // Ensure images is an array
+        if (request.vehicle.images && !Array.isArray(request.vehicle.images)) {
+          this.log('⚠️ Converting non-array images to array');
+          request.vehicle.images = [];
+        }
+        
         this.postVehicle(request.vehicle)
           .then(result => {
             this.log('📤 Sending response back to popup:', result);
