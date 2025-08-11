@@ -2338,7 +2338,7 @@ class SalesonatorAutomator {
     }
   }
 
-  // Simple image upload handling - restored old working version
+  // Simple image upload handling - restored to working version
   async handleImageUploads(images) {
     try {
       this.log('📸 Starting image upload process...');
@@ -2367,9 +2367,26 @@ class SalesonatorAutomator {
       
       this.log(`📸 Found file input, processing ${images.length} images...`);
       
-      // Download images
-      const files = await this.downloadImagesViaBackground(images);
-      const validFiles = files.filter(file => file !== null);
+      // Process images one by one using simple fetch
+      const validFiles = [];
+      for (let i = 0; i < Math.min(images.length, 5); i++) {
+        try {
+          const imageUrl = images[i];
+          this.log(`📸 Downloading image ${i + 1}: ${imageUrl}`);
+          
+          const response = await fetch(imageUrl);
+          if (response.ok) {
+            const blob = await response.blob();
+            const file = new File([blob], `image_${i + 1}.jpg`, { type: 'image/jpeg' });
+            validFiles.push(file);
+            this.log(`✅ Successfully downloaded image ${i + 1}`);
+          } else {
+            this.log(`❌ Failed to download image ${i + 1}: ${response.status}`);
+          }
+        } catch (error) {
+          this.log(`❌ Error downloading image ${i + 1}:`, error);
+        }
+      }
       
       if (validFiles.length === 0) {
         this.log('❌ No valid images to upload');
@@ -2387,7 +2404,7 @@ class SalesonatorAutomator {
       // Trigger change event
       fileInput.dispatchEvent(new Event('change', { bubbles: true }));
       
-      await this.delay(1000);
+      await this.delay(2000); // Wait longer for files to process
       
       this.log(`✅ Successfully uploaded ${validFiles.length} images`);
       return true;
