@@ -2,10 +2,66 @@ import { useAuth } from '@/hooks/useAuth';
 import { Navigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Car, Users, MessageSquare, TrendingUp, ArrowRight } from 'lucide-react';
-
+import { Car, Users, MessageSquare, TrendingUp, ArrowRight, Zap, Shield, CreditCard, Clock } from 'lucide-react';
+import { useEffect } from 'react';
 const Index = () => {
   const { user, loading } = useAuth();
+
+  // SEO: dynamic title, description and canonical
+  useEffect(() => {
+    const title = 'Salesonator | Pay‑As‑You‑Go Facebook Marketplace Automation';
+    const description = 'Pay‑as‑you‑go solution for dealership owners, managers, and salespeople to sell more cars with Facebook automation, AI replies, and a unified lead inbox.';
+    document.title = title;
+
+    let meta = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'description';
+      document.head.appendChild(meta);
+    }
+    meta.content = description;
+
+    const canonicalHref = `${window.location.origin}/`;
+    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.rel = 'canonical';
+      document.head.appendChild(canonical);
+    }
+    canonical.href = canonicalHref;
+  }, []);
+
+  const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://salesonator.com';
+  const faqJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: [
+      {
+        '@type': 'Question',
+        name: 'How does pricing work?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: 'Salesonator uses a credit-based, pay-as-you-go model. Purchase credits and use them for listings and AI-powered replies—only pay for what you use.'
+        }
+      },
+      {
+        '@type': 'Question',
+        name: 'Do I need to change my current workflow?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: 'No. Connect your website inventory, post to Facebook Marketplace automatically, and manage all conversations from one inbox.'
+        }
+      },
+      {
+        '@type': 'Question',
+        name: 'What do I need to get started?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: 'Create an account, connect your inventory source, and start posting. No long-term contracts—start with a small credit pack.'
+        }
+      }
+    ]
+  };
 
   if (loading) {
     return (
@@ -29,109 +85,226 @@ const Index = () => {
             <Car className="h-8 w-8 text-primary" />
             <span className="text-2xl font-bold text-primary">Salesonator</span>
           </div>
-          <Button asChild>
-            <Link to="/auth">Get Started</Link>
-          </Button>
+          <nav className="flex items-center gap-4">
+            <Button variant="ghost" asChild>
+              <Link to="#features">Features</Link>
+            </Button>
+            <Button variant="ghost" asChild>
+              <Link to="#how-it-works">How it works</Link>
+            </Button>
+            <Button variant="ghost" asChild>
+              <Link to="#faq">FAQ</Link>
+            </Button>
+            <Button asChild>
+              <Link to="/auth">Get Started</Link>
+            </Button>
+          </nav>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="py-20 px-4">
-        <div className="container max-w-6xl mx-auto text-center">
-          <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
-            Automate Your <span className="text-primary">Dealership</span> Sales
-          </h1>
-          <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
-            Seamlessly scrape inventory, post to Facebook Marketplace, and manage leads with AI-powered responses. 
-            All from one powerful dashboard.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+      <main>
+        {/* Hero Section */}
+        <section className="py-20 px-4">
+          <div className="container max-w-6xl mx-auto grid lg:grid-cols-2 gap-10 items-center">
+            <div>
+              <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
+                Pay‑As‑You‑Go Facebook Marketplace Automation
+              </h1>
+              <p className="text-xl text-muted-foreground mb-8">
+                Built for dealership owners, managers, and salespeople: post vehicles, handle leads, and send AI‑powered replies—all from one dashboard.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button size="lg" asChild>
+                  <Link to="/auth">Start Free</Link>
+                </Button>
+                <Button size="lg" variant="outline" asChild>
+                  <a href="#how-it-works">See how it works</a>
+                </Button>
+              </div>
+
+              {/* Proof strip */}
+              <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-6 text-left">
+                <div>
+                  <div className="flex items-center gap-2 font-semibold"><Zap className="h-5 w-5 text-primary" /> Faster Listings</div>
+                  <p className="text-muted-foreground text-sm">Automated posting to Marketplace</p>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 font-semibold"><MessageSquare className="h-5 w-5 text-primary" /> AI Replies</div>
+                  <p className="text-muted-foreground text-sm">Human‑like responses, instantly</p>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 font-semibold"><CreditCard className="h-5 w-5 text-primary" /> Pay‑As‑You‑Go</div>
+                  <p className="text-muted-foreground text-sm">Only pay for the credits you use</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-card p-6 shadow-sm">
+              <div className="grid grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader>
+                    <TrendingUp className="h-10 w-10 text-primary mb-2" />
+                    <CardTitle className="text-xl">Boost Efficiency</CardTitle>
+                    <CardDescription>Automate repetitive steps and save hours weekly.</CardDescription>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <Shield className="h-10 w-10 text-primary mb-2" />
+                    <CardTitle className="text-xl">Human‑like Automation</CardTitle>
+                    <CardDescription>Engineered to mimic real behavior to reduce flags.</CardDescription>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <Users className="h-10 w-10 text-primary mb-2" />
+                    <CardTitle className="text-xl">Lead Inbox</CardTitle>
+                    <CardDescription>Track conversations and statuses in one place.</CardDescription>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <Clock className="h-10 w-10 text-primary mb-2" />
+                    <CardTitle className="text-xl">Real‑time Updates</CardTitle>
+                    <CardDescription>Refresh leads, retry posts, and monitor activity.</CardDescription>
+                  </CardHeader>
+                </Card>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* How it works */}
+        <section id="how-it-works" className="py-20 px-4 bg-muted/50">
+          <div className="container max-w-6xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl md:text-4xl font-bold mb-3">How It Works</h2>
+              <p className="text-lg text-muted-foreground">From inventory to conversations in four simple steps</p>
+            </div>
+            <div className="grid md:grid-cols-4 gap-6">
+              {[
+                { step: 1, title: 'Connect Inventory', desc: 'Pull vehicles via our scraper integration.' },
+                { step: 2, title: 'Post to Marketplace', desc: 'Human‑like automation publishes your listings.' },
+                { step: 3, title: 'Engage Leads', desc: 'AI crafts replies; track every conversation.' },
+                { step: 4, title: 'Pay As You Go', desc: 'Use credits only when you post or reply.' },
+              ].map((s) => (
+                <div key={s.step} className="rounded-lg border bg-card p-6">
+                  <div className="text-primary text-sm font-semibold mb-1">Step {s.step}</div>
+                  <h3 className="text-xl font-semibold mb-2">{s.title}</h3>
+                  <p className="text-muted-foreground">{s.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Features */}
+        <section id="features" className="py-20 px-4">
+          <div className="container max-w-6xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl md:text-4xl font-bold mb-3">Everything You Need</h2>
+              <p className="text-lg text-muted-foreground">Use the tools we built to scale your dealership operations</p>
+            </div>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[
+                { Icon: Car, title: 'Inventory Management', desc: 'Scrape and sync vehicles with images, VIN, and details.' },
+                { Icon: MessageSquare, title: 'AI Lead Responses', desc: 'Personalized, human‑like replies with simulated typing.' },
+                { Icon: TrendingUp, title: 'Analytics', desc: 'Track posting success, conversion, and response times.' },
+                { Icon: Users, title: 'Lead Inbox', desc: 'Statuses, search, export, and real‑time refresh.' },
+                { Icon: Shield, title: 'Human‑Behavior Automation', desc: 'Reduce detection risk with thoughtful pacing.' },
+                { Icon: CreditCard, title: 'Credits‑Based Billing', desc: 'Flexible, scalable pricing—no contracts.' },
+              ].map(({ Icon, title, desc }) => (
+                <Card key={title} className="hover-scale">
+                  <CardHeader>
+                    <Icon className="h-12 w-12 text-primary mb-4" />
+                    <CardTitle>{title}</CardTitle>
+                    <CardDescription>{desc}</CardDescription>
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Pricing CTA */}
+        <section className="py-20 px-4 bg-muted/50">
+          <div className="container max-w-5xl mx-auto">
+            <div className="rounded-xl border bg-card p-8 md:p-12 text-center shadow-sm">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">Only Pay For What You Use</h2>
+              <p className="text-lg text-muted-foreground mb-8">Purchase credits for postings and AI replies. Scale up when you need to—no subscriptions required.</p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button size="lg" asChild>
+                  <Link to="/billing">View Credit Options</Link>
+                </Button>
+                <Button size="lg" variant="outline" asChild>
+                  <Link to="/auth">Create a Free Account</Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Testimonials (Sample placeholders) */}
+        <section className="py-20 px-4">
+          <div className="container max-w-6xl mx-auto">
+            <div className="text-center mb-10">
+              <h2 className="text-3xl md:text-4xl font-bold mb-3">What Dealers Say</h2>
+              <p className="text-sm text-muted-foreground">Sample reviews for layout—replace with real customer feedback when available.</p>
+            </div>
+            <div className="grid md:grid-cols-3 gap-6">
+              {[
+                'Posted 30 cars in an afternoon and closed 3 deals the same week.',
+                'Our team replies faster with AI suggestions—conversations feel natural.',
+                'Credits keep costs predictable. We pay more only when we sell more.'
+              ].map((quote, i) => (
+                <Card key={i}>
+                  <CardHeader>
+                    <CardTitle className="text-xl">Sample Review</CardTitle>
+                    <CardDescription>“{quote}”</CardDescription>
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section id="faq" className="py-20 px-4 bg-muted/50">
+          <div className="container max-w-4xl mx-auto">
+            <div className="text-center mb-10">
+              <h2 className="text-3xl md:text-4xl font-bold mb-3">Frequently Asked Questions</h2>
+              <p className="text-lg text-muted-foreground">Quick answers about pricing, setup, and workflow</p>
+            </div>
+            <div className="space-y-4">
+              <details className="rounded-lg border bg-card p-4" open>
+                <summary className="cursor-pointer font-semibold">How does pricing work?</summary>
+                <p className="mt-2 text-muted-foreground">Salesonator uses credits. Use them for postings and AI replies. Buy more anytime.</p>
+              </details>
+              <details className="rounded-lg border bg-card p-4">
+                <summary className="cursor-pointer font-semibold">Do I need a long‑term contract?</summary>
+                <p className="mt-2 text-muted-foreground">No. Start small and scale up as needed—pay only for what you use.</p>
+              </details>
+              <details className="rounded-lg border bg-card p-4">
+                <summary className="cursor-pointer font-semibold">Can my whole team use it?</summary>
+                <p className="mt-2 text-muted-foreground">Yes. Owners, managers, and salespeople can collaborate using the shared lead inbox.</p>
+              </details>
+            </div>
+          </div>
+          {/* Structured data for FAQ */}
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
+        </section>
+
+        {/* Final CTA */}
+        <section className="py-20 px-4">
+          <div className="container max-w-4xl mx-auto text-center">
+            <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Sell More Cars?</h2>
+            <p className="text-xl text-muted-foreground mb-8">Start posting to Facebook Marketplace and engaging leads today.</p>
             <Button size="lg" asChild>
-              <Link to="/auth">
-                Start Free Trial <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
-            <Button variant="outline" size="lg">
-              Watch Demo
+              <Link to="/auth">Get Started</Link>
             </Button>
           </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section className="py-20 px-4 bg-muted/50">
-        <div className="container max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Everything You Need</h2>
-            <p className="text-xl text-muted-foreground">Powerful tools to scale your dealership operations</p>
-          </div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card>
-              <CardHeader>
-                <Car className="h-12 w-12 text-primary mb-4" />
-                <CardTitle>Inventory Management</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  Automatically scrape vehicle data from dealership websites and sync with Facebook Marketplace.
-                </CardDescription>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <Users className="h-12 w-12 text-primary mb-4" />
-                <CardTitle>Lead Management</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  Centralized inbox to track, manage, and respond to all your marketplace leads in real-time.
-                </CardDescription>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <MessageSquare className="h-12 w-12 text-primary mb-4" />
-                <CardTitle>AI Responses</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  Generate personalized, human-like responses to customer inquiries with GPT-4 integration.
-                </CardDescription>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <TrendingUp className="h-12 w-12 text-primary mb-4" />
-                <CardTitle>Analytics</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  Track posting success rates, lead conversion, and revenue metrics from a comprehensive dashboard.
-                </CardDescription>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-20 px-4">
-        <div className="container max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Transform Your Sales?</h2>
-          <p className="text-xl text-muted-foreground mb-8">
-            Join hundreds of dealerships already using Salesonator to automate their operations and increase sales.
-          </p>
-          <Button size="lg" asChild>
-            <Link to="/auth">
-              Get Started Today <ArrowRight className="ml-2 h-5 w-5" />
-            </Link>
-          </Button>
-        </div>
-      </section>
+        </section>
+      </main>
 
       {/* Footer */}
       <footer className="border-t py-8 px-4">
