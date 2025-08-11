@@ -3142,6 +3142,12 @@ class SalesonatorAutomator {
           
           // Also notify web app of successful posting (non-blocking)
           this.notifyWebAppOfPosting();
+          
+          // Signal popup to continue with next vehicle immediately
+          chrome.runtime.sendMessage({
+            action: 'continueWithNextVehicle',
+            message: 'Vehicle posted successfully, ready for next vehicle'
+          });
         } catch (error) {
           console.log('Extension context invalidated, but posting was successful');
         }
