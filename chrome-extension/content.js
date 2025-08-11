@@ -2357,48 +2357,170 @@ class SalesonatorAutomator {
     }
   }
 
-  // Simple image upload handling - restored to working version
+  // Enhanced image upload handling with better error recovery and Facebook compatibility
   async handleImageUploads(images) {
     try {
-      this.log('📸 Starting image upload process...');
+      this.log('📸 Starting enhanced image upload process...');
       
       if (!images || !Array.isArray(images) || images.length === 0) {
         this.log('📸 No images provided, skipping upload');
         return true;
       }
       
-      // Find file input 
+      // Wait for page to be fully loaded before looking for file input
+      await this.delay(2000);
+      
+      // Find file input with enhanced selectors
       const fileInputSelectors = [
         'input[type="file"][accept*="image"]',
         'input[type="file"][multiple]',
-        'input[type="file"]'
+        'input[type="file"]',
+        'input[accept*="image/*"]',
+        'input[accept*=".jpg"]',
+        'input[accept*=".jpeg"]',
+        'input[accept*=".png"]'
       ];
       
       let fileInput = null;
       for (const selector of fileInputSelectors) {
-        fileInput = document.querySelector(selector);
+        const inputs = document.querySelectorAll(selector);
+        for (const input of inputs) {
+          // Check if input is visible and functional
+          if (input.offsetParent !== null && !input.disabled) {
+            fileInput = input;
+            break;
+          }
+        }
         if (fileInput) break;
       }
       
+      // If no file input found, try clicking on photo upload areas
       if (!fileInput) {
-        throw new Error('No file input found on page');
+        this.log('📸 No file input found, looking for photo upload button...');
+        const uploadButtons = [
+          '[role="button"]:has-text("Add photos")',
+          '[aria-label*="Add photos"]',
+          '[aria-label*="Upload"]',
+          'button:contains("photos")',
+          'div[role="button"]'
+        ];
+        
+        for (const selector of uploadButtons) {
+          try {
+            const button = await this.waitForElement([selector], 2000);
+            if (button) {
+              this.log(`📸 Found upload button, clicking: ${button.textContent?.trim()}`);
+              await this.scrollIntoView(button);
+              button.click();
+              await this.delay(1000);
+              
+              // Try finding file input again after clicking
+              for (const inputSelector of fileInputSelectors) {
+                fileInput = document.querySelector(inputSelector);
+                if (fileInput && fileInput.offsetParent !== null && !fileInput.disabled) break;
+              }
+              if (fileInput) break;
+            }
+          } catch (error) {
+            // Continue to next selector
+          }
+        }
       }
       
-      this.log(`📸 Found file input, processing ${images.length} images...`);
+      if (!fileInput) {
+        this.log('❌ No accessible file input found on page');
+        // Don't throw error, just return false to continue with posting
+        return false;
+      }
       
-      // Process images one by one using simple fetch
+      this.log(`📸 Found file input: ${fileInput.outerHTML.substring(0, 200)}...`);
+      this.log(`📸 Processing ${Math.min(images.length, 20)} images...`);
+      
+      // Use background script to download images with better CORS handling
+      const validFiles = await this.downloadImagesViaBackground(images.slice(0, 20));
+      const successfulFiles = validFiles.filter(f => f !== null);
+      
+      if (successfulFiles.length === 0) {
+        this.log('❌ No valid images could be downloaded');
+        // Try fallback direct fetch method
+        this.log('📸 Trying fallback direct fetch method...');
+        return await this.handleImageUploadsFallback(images, fileInput);
+      }
+      
+      this.log(`📸 Successfully downloaded ${successfulFiles.length} images`);
+      
+      // Set files using enhanced React compatibility
+      await this.setFilesWithReactCompatibility(fileInput, successfulFiles);
+      
+      // Wait for upload to process and verify
+      await this.delay(3000);
+      
+      // Verify upload success by checking for image previews or upload indicators
+      const uploadIndicators = [
+        '.uploaded-image',
+        '[data-testid*="image"]',
+        'img[src*="blob:"]',
+        '.image-preview'
+      ];
+      
+      let uploadSuccess = false;
+      for (const selector of uploadIndicators) {
+        const indicators = document.querySelectorAll(selector);
+        if (indicators.length > 0) {
+          uploadSuccess = true;
+          this.log(`📸 Found ${indicators.length} upload indicators, upload appears successful`);
+          break;
+        }
+      }
+      
+      if (!uploadSuccess) {
+        this.log('⚠️ No upload indicators found, but continuing anyway');
+      }
+      
+      this.log(`✅ Image upload process completed - ${successfulFiles.length} files processed`);
+      return true;
+      
+    } catch (error) {
+      this.log('⚠️ Image upload failed:', error);
+      // Try fallback method
+      this.log('📸 Trying fallback image upload method...');
+      try {
+        const fileInput = document.querySelector('input[type="file"]');
+        if (fileInput) {
+          return await this.handleImageUploadsFallback(images, fileInput);
+        }
+      } catch (fallbackError) {
+        this.log('⚠️ Fallback upload also failed:', fallbackError);
+      }
+      return false;
+    }
+  }
+  
+  // Fallback image upload method using direct fetch
+  async handleImageUploadsFallback(images, fileInput) {
+    try {
+      this.log('📸 Using fallback image upload method...');
+      
       const validFiles = [];
       for (let i = 0; i < Math.min(images.length, 5); i++) {
         try {
           const imageUrl = images[i];
           this.log(`📸 Downloading image ${i + 1}: ${imageUrl}`);
           
-          const response = await fetch(imageUrl);
+          // Try different approaches to fetch the image
+          const response = await fetch(imageUrl, {
+            mode: 'cors',
+            credentials: 'omit',
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+          });
+          
           if (response.ok) {
             const blob = await response.blob();
-            const file = new File([blob], `image_${i + 1}.jpg`, { type: 'image/jpeg' });
+            const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
             validFiles.push(file);
-            this.log(`✅ Successfully downloaded image ${i + 1}`);
+            this.log(`✅ Successfully downloaded image ${i + 1} via fallback`);
           } else {
             this.log(`❌ Failed to download image ${i + 1}: ${response.status}`);
           }
@@ -2408,7 +2530,7 @@ class SalesonatorAutomator {
       }
       
       if (validFiles.length === 0) {
-        this.log('❌ No valid images to upload');
+        this.log('❌ No valid images to upload via fallback');
         return false;
       }
       
@@ -2422,14 +2544,15 @@ class SalesonatorAutomator {
       
       // Trigger change event
       fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+      fileInput.dispatchEvent(new Event('input', { bubbles: true }));
       
-      await this.delay(2000); // Wait longer for files to process
+      await this.delay(3000);
       
-      this.log(`✅ Successfully uploaded ${validFiles.length} images`);
+      this.log(`✅ Fallback upload completed - ${validFiles.length} files`);
       return true;
       
     } catch (error) {
-      this.log('⚠️ Image upload failed:', error);
+      this.log('⚠️ Fallback image upload failed:', error);
       return false;
     }
   }
