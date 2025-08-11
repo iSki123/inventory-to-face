@@ -2574,7 +2574,7 @@ class SalesonatorAutomator {
       console.log(`[FILE SETTING DEBUG] About to set ${files.length} files on input element`);
       console.log('[FILE SETTING DEBUG] Files details:', files.map(f => ({ name: f.name, size: f.size, type: f.type })));
       
-      // Validate files before setting
+      // Validate files before setting - filter out null/undefined
       const validFiles = files.filter(file => {
         const isValid = file && file.size > 0 && file.size < 50 * 1024 * 1024; // Max 50MB per file
         if (!isValid) {
@@ -2589,6 +2589,13 @@ class SalesonatorAutomator {
       
       console.log(`[FILE SETTING DEBUG] Using ${validFiles.length} valid files out of ${files.length}`);
       
+      // CRITICAL: Ensure input supports multiple files
+      if (!fileInput.hasAttribute('multiple') && validFiles.length > 1) {
+        console.log('[FILE SETTING DEBUG] Setting multiple attribute on file input');
+        fileInput.setAttribute('multiple', 'multiple');
+        fileInput.multiple = true;
+      }
+      
       // Clear any existing files first
       try {
         const emptyDataTransfer = new DataTransfer();
@@ -2599,58 +2606,108 @@ class SalesonatorAutomator {
         console.log('[FILE SETTING DEBUG] Failed to clear existing files:', e);
       }
       
-      // Create new DataTransfer with valid files
+      // Create new DataTransfer with ALL valid files at once
       const dataTransfer = new DataTransfer();
       
-      validFiles.forEach((file, index) => {
+      // Add all files to the same DataTransfer object
+      for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i];
         try {
-          console.log(`[FILE SETTING DEBUG] Adding file ${index + 1}: ${file.name} (${file.size} bytes, ${file.type})`);
+          console.log(`[FILE SETTING DEBUG] Adding file ${i + 1}/${validFiles.length}: ${file.name} (${file.size} bytes, ${file.type})`);
           dataTransfer.items.add(file);
+          console.log(`[FILE SETTING DEBUG] Successfully added file ${i + 1}, DataTransfer now has ${dataTransfer.files.length} files`);
         } catch (e) {
-          console.log(`[FILE SETTING DEBUG] Failed to add file ${index + 1}:`, e);
+          console.log(`[FILE SETTING DEBUG] Failed to add file ${i + 1}:`, e);
         }
-      });
-      
-      console.log(`[FILE SETTING DEBUG] DataTransfer created with ${dataTransfer.files.length} files`);
-      
-      // Method 1: Direct assignment
-      try {
-        fileInput.files = dataTransfer.files;
-        console.log('[FILE SETTING DEBUG] Set files via direct assignment');
-      } catch (e) {
-        console.log('[FILE SETTING DEBUG] Direct assignment failed:', e);
       }
       
-      // Method 2: Use property descriptor setter for React compatibility
+      console.log(`[FILE SETTING DEBUG] Final DataTransfer created with ${dataTransfer.files.length} files`);
+      
+      // CRITICAL: Set ALL files at once using multiple methods for maximum compatibility
+      let fileSetSuccess = false;
+      
+      // Method 1: Use Object.defineProperty for React compatibility (most reliable)
       try {
-        const fileSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')?.set;
-        if (fileSetter) {
-          fileSetter.call(fileInput, dataTransfer.files);
-          console.log('[FILE SETTING DEBUG] Set files via property descriptor');
-        }
+        Object.defineProperty(fileInput, 'files', {
+          value: dataTransfer.files,
+          configurable: true
+        });
+        console.log('[FILE SETTING DEBUG] Set files via Object.defineProperty');
+        fileSetSuccess = true;
       } catch (e) {
-        console.log('[FILE SETTING DEBUG] Property descriptor method failed:', e);
+        console.log('[FILE SETTING DEBUG] Object.defineProperty method failed:', e);
+      }
+      
+      // Method 2: Direct assignment as backup
+      if (!fileSetSuccess) {
+        try {
+          fileInput.files = dataTransfer.files;
+          console.log('[FILE SETTING DEBUG] Set files via direct assignment');
+          fileSetSuccess = true;
+        } catch (e) {
+          console.log('[FILE SETTING DEBUG] Direct assignment failed:', e);
+        }
+      }
+      
+      // Method 3: Property descriptor setter as final backup
+      if (!fileSetSuccess) {
+        try {
+          const fileSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')?.set;
+          if (fileSetter) {
+            fileSetter.call(fileInput, dataTransfer.files);
+            console.log('[FILE SETTING DEBUG] Set files via property descriptor');
+            fileSetSuccess = true;
+          }
+        } catch (e) {
+          console.log('[FILE SETTING DEBUG] Property descriptor method failed:', e);
+        }
+      }
+      
+      if (!fileSetSuccess) {
+        throw new Error('All file setting methods failed');
       }
       
       // Brief delay before events
-      await this.delay(300);
+      await this.delay(500);
       
-      // Method 3: Focus and trigger change events
+      // Verify files were set BEFORE triggering events
+      const preEventFileCount = fileInput.files ? fileInput.files.length : 0;
+      console.log(`[FILE SETTING DEBUG] Pre-event verification: ${preEventFileCount} files in input`);
+      
+      if (preEventFileCount !== validFiles.length) {
+        console.log(`[FILE SETTING DEBUG] WARNING: Expected ${validFiles.length} files but input has ${preEventFileCount}`);
+      }
+      
+      // Focus and trigger events for React
       try {
         fileInput.focus();
-        await this.delay(100);
+        await this.delay(200);
         
-        // Create comprehensive change event
+        // Create change event with proper target references
         const changeEvent = new Event('change', { bubbles: true, cancelable: true });
-        Object.defineProperty(changeEvent, 'target', { value: fileInput, enumerable: true });
-        Object.defineProperty(changeEvent, 'currentTarget', { value: fileInput, enumerable: true });
+        Object.defineProperty(changeEvent, 'target', { 
+          value: fileInput, 
+          enumerable: true,
+          configurable: true 
+        });
+        Object.defineProperty(changeEvent, 'currentTarget', { 
+          value: fileInput, 
+          enumerable: true,
+          configurable: true 
+        });
         
         fileInput.dispatchEvent(changeEvent);
         console.log('[FILE SETTING DEBUG] Dispatched change event');
         
+        await this.delay(100);
+        
         // Also trigger input event for React
         const inputEvent = new Event('input', { bubbles: true, cancelable: true });
-        Object.defineProperty(inputEvent, 'target', { value: fileInput, enumerable: true });
+        Object.defineProperty(inputEvent, 'target', { 
+          value: fileInput, 
+          enumerable: true,
+          configurable: true 
+        });
         fileInput.dispatchEvent(inputEvent);
         console.log('[FILE SETTING DEBUG] Dispatched input event');
         
@@ -2658,17 +2715,22 @@ class SalesonatorAutomator {
         console.log('[FILE SETTING DEBUG] Event dispatching failed:', e);
       }
       
-      // Wait for React to process
-      await this.delay(2000);
+      // Wait for React to process the files
+      await this.delay(3000);
       
-      // Verify files were set
-      const actualFileCount = fileInput.files ? fileInput.files.length : 0;
-      console.log(`[FILE SETTING DEBUG] Verification: ${actualFileCount} files set in input`);
+      // Final verification
+      const finalFileCount = fileInput.files ? fileInput.files.length : 0;
+      console.log(`[FILE SETTING DEBUG] Final verification: ${finalFileCount} files in input`);
       
-      if (actualFileCount > 0) {
-        this.log(`✅ Successfully set ${actualFileCount} files in input`);
+      if (finalFileCount === validFiles.length) {
+        this.log(`✅ Successfully set ALL ${finalFileCount} files in input!`);
+        return true;
+      } else if (finalFileCount > 0) {
+        this.log(`⚠️ Partial success: ${finalFileCount}/${validFiles.length} files set in input`);
+        return true; // Still consider this a success
       } else {
-        console.log('[FILE SETTING DEBUG] Warning: No files detected in input after setting');
+        this.log(`❌ No files detected in input after setting`);
+        return false;
       }
       
     } catch (error) {
