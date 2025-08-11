@@ -3139,6 +3139,9 @@ class SalesonatorAutomator {
             newUrl: newUrl,
             status: 'posted_successfully'
           });
+          
+          // Also notify web app of successful posting (non-blocking)
+          this.notifyWebAppOfPosting();
         } catch (error) {
           console.log('Extension context invalidated, but posting was successful');
         }
@@ -3362,6 +3365,156 @@ class SalesonatorAutomator {
           setTimeout(() => banner.remove(), 300);
         }
       }, 5000);
+    }
+  }
+
+  // Notify web app of successful posting without blocking the extension flow
+  async notifyWebAppOfPosting() {
+    try {
+      if (this.currentVehicle && this.currentVehicle.id) {
+        // Get stored authentication
+        const result = await chrome.storage.local.get(['userToken']);
+        if (!result.userToken) {
+          console.log('No auth token available for web app notification');
+          return;
+        }
+
+        // Extract Facebook post ID from current URL or page
+        const facebookPostId = this.extractFacebookPostId();
+        
+        // Call the facebook-poster edge function to update vehicle status
+        const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${result.userToken}`
+          },
+          body: JSON.stringify({
+            action: 'update_vehicle_status',
+            vehicleId: this.currentVehicle.id,
+            status: 'posted',
+            facebookPostId: facebookPostId
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Web app notified of successful posting:', data);
+          
+          // Schedule URL retrieval for later (after redirect settles)
+          setTimeout(() => {
+            this.retrievePostingUrl();
+          }, 5000);
+        } else {
+          console.log('Failed to notify web app:', response.status);
+        }
+      }
+    } catch (error) {
+      console.log('Error notifying web app (non-blocking):', error);
+    }
+  }
+
+  // Extract Facebook post ID from the current page
+  extractFacebookPostId() {
+    try {
+      // Try to get post ID from URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      let postId = urlParams.get('id') || urlParams.get('post_id');
+      
+      if (!postId) {
+        // Try to extract from current URL path
+        const pathMatch = window.location.pathname.match(/\/([0-9]+)/);
+        if (pathMatch) {
+          postId = pathMatch[1];
+        }
+      }
+      
+      return postId || `marketplace_${Date.now()}`;
+    } catch (error) {
+      console.log('Could not extract Facebook post ID:', error);
+      return `marketplace_${Date.now()}`;
+    }
+  }
+
+  // Retrieve the actual posting URL from Facebook's selling page
+  async retrievePostingUrl() {
+    try {
+      console.log('🔍 Attempting to retrieve posting URL...');
+      
+      // Navigate to the selling page to find the posted vehicle
+      const sellingPageUrl = 'https://www.facebook.com/marketplace/you/selling';
+      
+      // Only navigate if we're not already there
+      if (!window.location.href.includes('/marketplace/you/selling')) {
+        window.location.href = sellingPageUrl;
+        
+        // Wait for page to load, then look for the posted vehicle
+        setTimeout(() => {
+          this.findPostedVehicleUrl();
+        }, 3000);
+      } else {
+        this.findPostedVehicleUrl();
+      }
+    } catch (error) {
+      console.log('Error retrieving posting URL (non-blocking):', error);
+    }
+  }
+
+  // Find the URL of the posted vehicle on the selling page
+  async findPostedVehicleUrl() {
+    try {
+      if (!this.currentVehicle) return;
+
+      // Look for vehicle listings on the selling page
+      const vehicleLinks = document.querySelectorAll('a[href*="/marketplace/item/"]');
+      
+      for (const link of vehicleLinks) {
+        const linkText = link.textContent || '';
+        const vehicleTitle = `${this.currentVehicle.year} ${this.currentVehicle.make} ${this.currentVehicle.model}`;
+        
+        // Check if this link matches our vehicle
+        if (linkText.includes(this.currentVehicle.year.toString()) && 
+            linkText.includes(this.currentVehicle.make) && 
+            linkText.includes(this.currentVehicle.model)) {
+          
+          const postingUrl = link.href;
+          console.log('🎯 Found posting URL:', postingUrl);
+          
+          // Store the URL in the web app
+          await this.storePostingUrl(postingUrl);
+          break;
+        }
+      }
+    } catch (error) {
+      console.log('Error finding posted vehicle URL (non-blocking):', error);
+    }
+  }
+
+  // Store the posting URL in the web app database
+  async storePostingUrl(postingUrl) {
+    try {
+      const result = await chrome.storage.local.get(['userToken']);
+      if (!result.userToken || !this.currentVehicle) return;
+
+      // Update the vehicle with the posting URL (would need a new database field)
+      const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${result.userToken}`
+        },
+        body: JSON.stringify({
+          action: 'store_posting_url',
+          vehicleId: this.currentVehicle.id,
+          postingUrl: postingUrl
+        })
+      });
+
+      if (response.ok) {
+        console.log('✅ Posting URL stored successfully');
+      }
+    } catch (error) {
+      console.log('Error storing posting URL (non-blocking):', error);
     }
   }
 }
