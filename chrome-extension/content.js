@@ -3242,7 +3242,8 @@ class SalesonatorAutomator {
       // Check if we're on the Salesonator domain
       const salesonatorDomains = [
         'urdkaedsfnscgtyvcwlf.supabase.co',
-        'salesonator.lovable.app',
+        'salesonator.com',
+        'salesonator.lovable.app', 
         'preview--inventory-to-face.lovable.app'
       ];
       

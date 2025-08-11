@@ -250,8 +250,26 @@ class SalesonatorExtension {
 
   async openDashboard() {
     try {
-      // Open Salesonator dashboard in new tab
-      const dashboardUrl = 'https://preview--inventory-to-face.lovable.app/';
+      // Try to find existing Salesonator tab first
+      const tabs = await chrome.tabs.query({});
+      const salesonatorTab = tabs.find(tab => 
+        tab.url && (
+          tab.url.includes('salesonator.com') ||
+          tab.url.includes('lovable.app') ||
+          tab.url.includes('lovableproject.com')
+        )
+      );
+      
+      let dashboardUrl;
+      if (salesonatorTab) {
+        // Use the same domain as existing tab
+        const url = new URL(salesonatorTab.url);
+        dashboardUrl = `${url.protocol}//${url.host}/`;
+      } else {
+        // Default to the custom domain
+        dashboardUrl = 'https://salesonator.com/';
+      }
+      
       await chrome.tabs.create({ url: dashboardUrl, active: true });
       
       // Show message that we're waiting for auto-login
