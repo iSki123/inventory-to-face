@@ -2435,7 +2435,7 @@ class SalesonatorAutomator {
     }
   }
 
-  // Simple image upload handling - restored to working version from old-extension
+  // Image upload handling using background script proxy to avoid CORS issues
   async handleImageUploads(images) {
     try {
       this.log('📸 Starting image upload process...');
@@ -2464,21 +2464,36 @@ class SalesonatorAutomator {
       
       this.log(`📸 Found file input, processing ${images.length} images...`);
       
-      // Process images one by one using simple fetch
+      // Process images using background script proxy to avoid CORS
       const validFiles = [];
       for (let i = 0; i < Math.min(images.length, 5); i++) {
         try {
           const imageUrl = images[i];
           this.log(`📸 Downloading image ${i + 1}: ${imageUrl}`);
           
-          const response = await fetch(imageUrl);
-          if (response.ok) {
-            const blob = await response.blob();
+          // Use background script to fetch image via proxy
+          const response = await new Promise((resolve) => {
+            chrome.runtime.sendMessage({
+              action: 'fetchImage',
+              url: imageUrl
+            }, resolve);
+          });
+          
+          if (response && response.success) {
+            // Convert base64 back to blob
+            const base64Data = response.data.split(',')[1];
+            const byteCharacters = atob(base64Data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let j = 0; j < byteCharacters.length; j++) {
+              byteNumbers[j] = byteCharacters.charCodeAt(j);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: 'image/jpeg' });
             const file = new File([blob], `image_${i + 1}.jpg`, { type: 'image/jpeg' });
             validFiles.push(file);
-            this.log(`✅ Successfully downloaded image ${i + 1}`);
+            this.log(`✅ Successfully downloaded image ${i + 1} via proxy`);
           } else {
-            this.log(`❌ Failed to download image ${i + 1}: ${response.status}`);
+            this.log(`❌ Failed to download image ${i + 1}: ${response?.error || 'Unknown error'}`);
           }
         } catch (error) {
           this.log(`❌ Error downloading image ${i + 1}:`, error);
@@ -2490,7 +2505,7 @@ class SalesonatorAutomator {
         return false;
       }
       
-      // Set files using simple DataTransfer
+      // Set files using DataTransfer
       const dataTransfer = new DataTransfer();
       validFiles.forEach(file => {
         dataTransfer.items.add(file);
@@ -2501,7 +2516,7 @@ class SalesonatorAutomator {
       // Trigger change event
       fileInput.dispatchEvent(new Event('change', { bubbles: true }));
       
-      await this.delay(2000); // Wait longer for files to process
+      await this.delay(2000); // Wait for files to process
       
       this.log(`✅ Successfully uploaded ${validFiles.length} images`);
       return true;
