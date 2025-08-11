@@ -453,6 +453,13 @@ class SalesonatorAutomator {
   async postVehicle(vehicleData) {
     try {
       this.log('🚗 Starting enhanced vehicle posting process...', vehicleData);
+      
+      // Check if we're on the correct page first
+      if (!window.location.href.includes('/marketplace/create/vehicle')) {
+        this.log('⚠️ Not on create vehicle page, current URL:', window.location.href);
+        throw new Error('Not on create vehicle page. Please navigate to the Facebook Marketplace create vehicle page first.');
+      }
+      
       this.isPosting = true;
       this.uploadedImages = []; // Reset uploaded images tracking for new posting session
       

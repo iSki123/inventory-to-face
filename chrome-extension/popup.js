@@ -795,14 +795,14 @@ class SalesonatorExtension {
         this.moveToNextVehicle();
         setTimeout(() => {
           this.postNextVehicle();
-        }, 3000); // Wait for navigation to complete
+        }, 5000); // Wait longer for navigation to complete
       } else if (message.action === 'readyForNextVehicle') {
         console.log('🚀 Content script ready for next vehicle');
         document.getElementById('status').textContent = 'Ready for next vehicle...';
-        // Small delay before posting next vehicle
+        // Longer delay to ensure page is fully loaded before posting next vehicle
         setTimeout(() => {
           this.postNextVehicle();
-        }, 2000);
+        }, 4000);
       }
     });
   }
