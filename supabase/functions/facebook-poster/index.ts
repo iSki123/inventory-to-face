@@ -257,3 +257,4 @@ async function deductCredit(supabaseClient: any, vehicleId: string, creditAmount
     console.error('Error in deductCredit:', error);
     throw error;
   }
+}
