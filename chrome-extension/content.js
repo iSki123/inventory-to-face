@@ -2589,35 +2589,53 @@ class SalesonatorAutomator {
 
   // Fallback image upload method
   async handleImageUploadsFallback(images, fileInput) {
-          this.log(`📸 Found ${indicators.length} upload indicators, upload appears successful`);
-          break;
+    try {
+      this.log('📸 Starting fallback image upload method...');
+      
+      if (!images || !Array.isArray(images) || images.length === 0) {
+        this.log('📸 No images to upload in fallback');
+        return true;
+      }
+      
+      if (!fileInput) {
+        this.log('❌ No file input provided for fallback');
+        return false;
+      }
+      
+      // Simple fallback approach - just try to set files directly
+      const imagesToProcess = Math.min(images.length, 4);
+      const validFiles = [];
+      
+      for (let i = 0; i < imagesToProcess; i++) {
+        try {
+          const response = await fetch(images[i]);
+          const blob = await response.blob();
+          const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
+          validFiles.push(file);
+        } catch (error) {
+          this.log(`⚠️ Failed to fetch image ${i + 1} in fallback:`, error);
         }
       }
       
-      if (!uploadSuccess) {
-        this.log('⚠️ No upload indicators found, but continuing anyway');
+      if (validFiles.length === 0) {
+        this.log('❌ No valid images could be processed in fallback');
+        return false;
       }
       
-      this.log(`✅ Image upload process completed - ${successfulFiles.length} files processed`);
+      // Use simple DataTransfer approach
+      const dataTransfer = new DataTransfer();
+      validFiles.forEach(file => dataTransfer.items.add(file));
+      fileInput.files = dataTransfer.files;
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+      
+      this.log(`✅ Fallback upload completed - ${validFiles.length} files`);
       return true;
       
     } catch (error) {
-      this.log('⚠️ Image upload failed:', error);
-      // Try fallback method
-      this.log('📸 Trying fallback image upload method...');
-      try {
-        const fileInput = document.querySelector('input[type="file"]');
-        if (fileInput) {
-          return await this.handleImageUploadsFallback(images, fileInput);
-        }
-      } catch (fallbackError) {
-        this.log('⚠️ Fallback upload also failed:', fallbackError);
-      }
+      this.log('⚠️ Fallback image upload failed:', error);
       return false;
     }
   }
-  
-  // Fallback image upload method using direct fetch
   async handleImageUploadsFallback(images, fileInput) {
     try {
       this.log('📸 Using fallback image upload method...');
