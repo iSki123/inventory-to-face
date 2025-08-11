@@ -590,6 +590,19 @@ class SalesonatorExtension {
         
         const checkContentScript = () => {
           console.log(`Attempting to ping content script (attempt ${retries + 1}/${maxRetries})...`);
+          console.log('Current tab:', currentTab.url, 'Tab ID:', currentTab.id);
+          
+          // Try to inject content script if not already present
+          if (retries === 0) {
+            console.log('Attempting to inject content script...');
+            chrome.scripting.executeScript({
+              target: { tabId: currentTab.id },
+              files: ['content.js']
+            }).catch(err => {
+              console.log('Content script injection failed (may already be injected):', err.message);
+            });
+          }
+          
           chrome.tabs.sendMessage(currentTab.id, { action: 'ping' }, (response) => {
             if (chrome.runtime.lastError) {
               console.log(`Ping failed with error: ${chrome.runtime.lastError.message}`);
@@ -598,7 +611,7 @@ class SalesonatorExtension {
                 console.log(`Content script not ready, retrying... (${retries}/${maxRetries})`);
                 setTimeout(checkContentScript, 1000);
               } else {
-                reject(new Error('Content script not responding after multiple attempts. Please refresh the Facebook page and try again.'));
+                reject(new Error(`Content script not responding after multiple attempts. Current page: ${currentTab.url}. Please reload the extension and refresh the Facebook page.`));
               }
             } else if (!response) {
               console.log('Ping returned no response');
@@ -607,7 +620,7 @@ class SalesonatorExtension {
                 console.log(`No response from content script, retrying... (${retries}/${maxRetries})`);
                 setTimeout(checkContentScript, 1000);
               } else {
-                reject(new Error('Content script not responding after multiple attempts. Please refresh the Facebook page and try again.'));
+                reject(new Error(`Content script not responding after multiple attempts. Current page: ${currentTab.url}. Please reload the extension and refresh the Facebook page.`));
               }
             } else {
               console.log('✅ Content script is ready, received response:', response);

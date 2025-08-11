@@ -23,8 +23,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://www.facebook.com/marketplace/*",
-        "https://facebook.com/marketplace/*"
+        "https://www.facebook.com/*",
+        "https://facebook.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
