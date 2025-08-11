@@ -461,6 +461,17 @@ class SalesonatorExtension {
       return;
     }
 
+    // Limit posting to prevent rate limiting - max 10 vehicles per session
+    const maxVehiclesPerSession = 10;
+    let vehiclesToPost = this.vehicles;
+    
+    if (this.vehicles.length > maxVehiclesPerSession) {
+      const proceed = confirm(`You have ${this.vehicles.length} vehicles ready to post. To avoid Facebook rate limiting, this session will post the first ${maxVehiclesPerSession} vehicles. Continue?`);
+      if (!proceed) return;
+      
+      vehiclesToPost = this.vehicles.slice(0, maxVehiclesPerSession);
+    }
+
     // Check if we're on the right page
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     console.log('Current tab URL:', tab.url);
@@ -494,9 +505,11 @@ class SalesonatorExtension {
     // Store posting state in Chrome Storage for persistence across redirects
     await chrome.storage.local.set({
       isPosting: true,
-      postingQueue: this.vehicles,
+      postingQueue: vehiclesToPost,
       currentVehicleIndex: 0,
-      postingStartTime: Date.now()
+      postingStartTime: Date.now(),
+      totalVehiclesInSession: vehiclesToPost.length,
+      rateLimitingEnabled: true
     });
 
     this.isPosting = true;
@@ -504,9 +517,12 @@ class SalesonatorExtension {
     
     document.getElementById('startPosting').style.display = 'none';
     document.getElementById('stopPosting').style.display = 'inline-block';
-    document.getElementById('status').textContent = 'Starting posting process...';
+    document.getElementById('status').textContent = `Starting posting process for ${vehiclesToPost.length} vehicles with rate limiting...`;
     
-    await this.postNextVehicle();
+    // Start with a longer initial delay to ensure clean start
+    setTimeout(() => {
+      this.postNextVehicle();
+    }, 2000);
   }
 
   async stopPosting() {
@@ -600,11 +616,16 @@ class SalesonatorExtension {
     await chrome.storage.local.set({ currentVehicleIndex: newIndex });
     this.currentVehicleIndex = newIndex;
     
-    // Small delay before continuing
-    const delay = parseInt(document.getElementById('delay').value) || 5;
+    // Enhanced delay with rate limiting - minimum 30 seconds between posts
+    const baseDelay = parseInt(document.getElementById('delay').value) || 5;
+    const rateLimitDelay = Math.max(baseDelay, 30); // Minimum 30 seconds
+    
+    console.log(`⏱️ Waiting ${rateLimitDelay} seconds before next vehicle to avoid rate limiting...`);
+    document.getElementById('status').textContent = `Waiting ${rateLimitDelay} seconds before next vehicle...`;
+    
     setTimeout(() => {
       this.postNextVehicle();
-    }, delay * 1000);
+    }, rateLimitDelay * 1000);
   }
 
   async sendVehicleToContentScript(vehicle) {
