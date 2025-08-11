@@ -21,7 +21,8 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    const { action } = await req.json();
+    const requestBody = await req.json();
+    const { action } = requestBody;
 
     if (!action) {
       throw new Error('action is required');
@@ -45,10 +46,10 @@ serve(async (req) => {
       case 'get_pending_vehicles':
         return await getPendingVehicles(supabaseClient, user.id);
       case 'update_vehicle_status':
-        const { vehicleId, status, facebookPostId } = await req.json();
+        const { vehicleId, status, facebookPostId } = requestBody;
         return await updateVehicleStatus(supabaseClient, vehicleId, status, facebookPostId, user.id);
       case 'deduct_credit':
-        const { vehicle_id, credit_amount } = await req.json();
+        const { vehicle_id, credit_amount } = requestBody;
         return await deductCredit(supabaseClient, vehicle_id, credit_amount, user.id);
       default:
         throw new Error('Invalid action');
