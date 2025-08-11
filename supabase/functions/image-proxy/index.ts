@@ -51,6 +51,12 @@ serve(async (req) => {
           }
 
           const arrayBuffer = await response.arrayBuffer();
+          
+          // Validate image size (max 20MB per image)
+          if (arrayBuffer.byteLength > 20 * 1024 * 1024) {
+            throw new Error(`Image too large: ${(arrayBuffer.byteLength / 1024 / 1024).toFixed(1)}MB (max 20MB)`);
+          }
+          
           // Convert to base64 efficiently to avoid stack overflow on large images
           const uint8Array = new Uint8Array(arrayBuffer);
           let binaryString = '';
@@ -61,7 +67,12 @@ serve(async (req) => {
           }
           const base64 = btoa(binaryString);
           
-          console.log(`Successfully downloaded image ${index + 1}, size: ${arrayBuffer.byteLength} bytes`);
+          // Ensure we have a valid base64 string
+          if (!base64 || base64.length === 0) {
+            throw new Error('Failed to encode image to base64');
+          }
+          
+          console.log(`Successfully downloaded image ${index + 1}, size: ${arrayBuffer.byteLength} bytes, base64 length: ${base64.length}`);
           
           return {
             success: true,

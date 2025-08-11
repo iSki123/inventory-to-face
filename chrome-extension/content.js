@@ -2361,6 +2361,7 @@ class SalesonatorAutomator {
   async handleImageUploads(images) {
     try {
       this.log('📸 Starting enhanced image upload process...');
+      console.log('[IMAGE UPLOAD DEBUG] Starting upload with', images?.length || 0, 'images');
       
       if (!images || !Array.isArray(images) || images.length === 0) {
         this.log('📸 No images provided, skipping upload');
@@ -2434,10 +2435,19 @@ class SalesonatorAutomator {
       }
       
       this.log(`📸 Found file input: ${fileInput.outerHTML.substring(0, 200)}...`);
-      this.log(`📸 Processing ${Math.min(images.length, 20)} images...`);
+      console.log('[IMAGE UPLOAD DEBUG] File input details:', { 
+        type: fileInput.type, 
+        accept: fileInput.accept, 
+        multiple: fileInput.multiple,
+        disabled: fileInput.disabled,
+        visible: fileInput.offsetParent !== null
+      });
+      
+      const imagesToProcess = Math.min(images.length, 10); // Reduce to 10 for better reliability
+      this.log(`📸 Processing ${imagesToProcess} images...`);
       
       // Use background script to download images with better CORS handling
-      const validFiles = await this.downloadImagesViaBackground(images.slice(0, 20));
+      const validFiles = await this.downloadImagesViaBackground(images.slice(0, imagesToProcess));
       const successfulFiles = validFiles.filter(f => f !== null);
       
       if (successfulFiles.length === 0) {
@@ -2561,58 +2571,108 @@ class SalesonatorAutomator {
   async setFilesWithReactCompatibility(fileInput, files) {
     try {
       this.log('📸 Setting files with React compatibility...');
-      this.log(`📸 About to set ${files.length} files on input element`);
+      console.log(`[FILE SETTING DEBUG] About to set ${files.length} files on input element`);
+      console.log('[FILE SETTING DEBUG] Files details:', files.map(f => ({ name: f.name, size: f.size, type: f.type })));
       
-      // Clear any existing files first to prevent accumulation
-      const emptyDataTransfer = new DataTransfer();
-      fileInput.files = emptyDataTransfer.files;
-      
-      // Brief delay to ensure clearing takes effect
-      await this.delay(200);
-      
-      // Method 1: Single DataTransfer with all files to prevent duplication
-      const dataTransfer = new DataTransfer();
-      files.forEach((file, index) => {
-        this.log(`📸 Adding file ${index + 1}: ${file.name} (${file.size} bytes)`);
-        dataTransfer.items.add(file);
+      // Validate files before setting
+      const validFiles = files.filter(file => {
+        const isValid = file && file.size > 0 && file.size < 50 * 1024 * 1024; // Max 50MB per file
+        if (!isValid) {
+          console.log('[FILE SETTING DEBUG] Invalid file filtered out:', file);
+        }
+        return isValid;
       });
       
-      // Set the files property directly only once
-      fileInput.files = dataTransfer.files;
-      
-      // Method 2: React-specific value setting (from reverse engineering) - only once
-      const fileSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')?.set;
-      
-      if (fileSetter) {
-        fileSetter.call(fileInput, dataTransfer.files);
+      if (validFiles.length === 0) {
+        throw new Error('No valid files to upload');
       }
       
-      // Brief delay before triggering events
+      console.log(`[FILE SETTING DEBUG] Using ${validFiles.length} valid files out of ${files.length}`);
+      
+      // Clear any existing files first
+      try {
+        const emptyDataTransfer = new DataTransfer();
+        fileInput.files = emptyDataTransfer.files;
+        await this.delay(200);
+        console.log('[FILE SETTING DEBUG] Cleared existing files');
+      } catch (e) {
+        console.log('[FILE SETTING DEBUG] Failed to clear existing files:', e);
+      }
+      
+      // Create new DataTransfer with valid files
+      const dataTransfer = new DataTransfer();
+      
+      validFiles.forEach((file, index) => {
+        try {
+          console.log(`[FILE SETTING DEBUG] Adding file ${index + 1}: ${file.name} (${file.size} bytes, ${file.type})`);
+          dataTransfer.items.add(file);
+        } catch (e) {
+          console.log(`[FILE SETTING DEBUG] Failed to add file ${index + 1}:`, e);
+        }
+      });
+      
+      console.log(`[FILE SETTING DEBUG] DataTransfer created with ${dataTransfer.files.length} files`);
+      
+      // Method 1: Direct assignment
+      try {
+        fileInput.files = dataTransfer.files;
+        console.log('[FILE SETTING DEBUG] Set files via direct assignment');
+      } catch (e) {
+        console.log('[FILE SETTING DEBUG] Direct assignment failed:', e);
+      }
+      
+      // Method 2: Use property descriptor setter for React compatibility
+      try {
+        const fileSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')?.set;
+        if (fileSetter) {
+          fileSetter.call(fileInput, dataTransfer.files);
+          console.log('[FILE SETTING DEBUG] Set files via property descriptor');
+        }
+      } catch (e) {
+        console.log('[FILE SETTING DEBUG] Property descriptor method failed:', e);
+      }
+      
+      // Brief delay before events
       await this.delay(300);
       
-      // Method 3: Trigger React events in sequence - only once each
-      fileInput.focus();
-      await this.delay(100);
+      // Method 3: Focus and trigger change events
+      try {
+        fileInput.focus();
+        await this.delay(100);
+        
+        // Create comprehensive change event
+        const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+        Object.defineProperty(changeEvent, 'target', { value: fileInput, enumerable: true });
+        Object.defineProperty(changeEvent, 'currentTarget', { value: fileInput, enumerable: true });
+        
+        fileInput.dispatchEvent(changeEvent);
+        console.log('[FILE SETTING DEBUG] Dispatched change event');
+        
+        // Also trigger input event for React
+        const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+        Object.defineProperty(inputEvent, 'target', { value: fileInput, enumerable: true });
+        fileInput.dispatchEvent(inputEvent);
+        console.log('[FILE SETTING DEBUG] Dispatched input event');
+        
+      } catch (e) {
+        console.log('[FILE SETTING DEBUG] Event dispatching failed:', e);
+      }
       
-      // Single change event to prevent duplication
-      const changeEvent = new Event('change', { bubbles: true });
-      Object.defineProperty(changeEvent, 'target', {
-        value: fileInput,
-        enumerable: true
-      });
-      Object.defineProperty(changeEvent, 'currentTarget', {
-        value: fileInput,
-        enumerable: true
-      });
+      // Wait for React to process
+      await this.delay(2000);
       
-      fileInput.dispatchEvent(changeEvent);
+      // Verify files were set
+      const actualFileCount = fileInput.files ? fileInput.files.length : 0;
+      console.log(`[FILE SETTING DEBUG] Verification: ${actualFileCount} files set in input`);
       
-      // Wait longer to ensure Facebook processes the single event
-      await this.delay(1000);
-      
-      this.log('📸 React-compatible file setting completed');
+      if (actualFileCount > 0) {
+        this.log(`✅ Successfully set ${actualFileCount} files in input`);
+      } else {
+        console.log('[FILE SETTING DEBUG] Warning: No files detected in input after setting');
+      }
       
     } catch (error) {
+      console.log('[FILE SETTING DEBUG] Error in file setting:', error);
       this.log('⚠️ Error in React-compatible file setting:', error);
       throw error;
     }
@@ -2733,15 +2793,50 @@ class SalesonatorAutomator {
     return files;
   }
 
-  // Utility function to convert base64 to blob
-  base64ToBlob(base64Data, contentType) {
-    const byteCharacters = atob(base64Data.split(',')[1] || base64Data);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
+  // Enhanced utility function to convert base64 to blob with better error handling
+  base64ToBlob(base64Data, contentType = 'image/jpeg') {
+    try {
+      console.log('[BASE64 DEBUG] Converting base64 to blob, contentType:', contentType);
+      console.log('[BASE64 DEBUG] Base64 data length:', base64Data?.length || 0);
+      
+      // Handle data URLs (data:image/jpeg;base64,xxxxx) vs raw base64
+      let base64String = base64Data;
+      if (base64Data.includes(',')) {
+        base64String = base64Data.split(',')[1];
+        console.log('[BASE64 DEBUG] Extracted base64 from data URL');
+      }
+      
+      // Validate base64 string
+      if (!base64String || base64String.length === 0) {
+        throw new Error('Empty base64 string');
+      }
+      
+      // Decode base64 to binary
+      const byteCharacters = atob(base64String);
+      console.log('[BASE64 DEBUG] Decoded byte characters length:', byteCharacters.length);
+      
+      if (byteCharacters.length === 0) {
+        throw new Error('Base64 decode resulted in empty data');
+      }
+      
+      // Convert to byte array
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      
+      // Create blob with proper MIME type
+      const blob = new Blob([byteArray], { type: contentType });
+      console.log('[BASE64 DEBUG] Created blob:', { size: blob.size, type: blob.type });
+      
+      return blob;
+    } catch (error) {
+      console.log('[BASE64 DEBUG] Error converting base64 to blob:', error);
+      this.log('⚠️ Error converting base64 to blob:', error);
+      // Return empty blob as fallback
+      return new Blob([], { type: contentType });
     }
-    const byteArray = new Uint8Array(byteNumbers);
-    return new Blob([byteArray], { type: contentType });
   }
 
   // Helper function to find associated label for an input
