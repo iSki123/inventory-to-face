@@ -1134,14 +1134,22 @@ class SalesonatorAutomator {
         throw new Error('Invalid price value provided');
       }
 
-      // Heuristic: some sources store price in cents (e.g., 2155000 -> 21550)
-      // If 6+ digits and ends with "00", treat as cents and divide by 100
-      if (rawDigits.length >= 6 && rawDigits.endsWith('00')) {
+      // Improved price normalization logic
+      // If the number is unrealistically high (over 500k), it's likely in cents
+      // If 6+ digits and over 500,000, divide by 100 (cents to dollars)
+      if (rawDigits.length >= 6 && expectedNum > 500000) {
         const centsAdjusted = Math.round(expectedNum / 100);
-        // Only apply if the adjusted value looks like a realistic vehicle price
+        // Only apply if the adjusted value looks like a realistic vehicle price (1k-250k)
         if (centsAdjusted >= 1000 && centsAdjusted <= 250000) {
+          this.log('💰 Converting from cents to dollars:', expectedNum, '->', centsAdjusted);
           expectedNum = centsAdjusted;
         }
+      }
+      
+      // Safety check: if still over 500k, it's probably wrong
+      if (expectedNum > 500000) {
+        this.log('⚠️ Price seems too high, capping at 250k:', expectedNum);
+        expectedNum = Math.min(expectedNum, 250000);
       }
       this.log('💰 Normalized price to dollars:', expectedNum);
 
