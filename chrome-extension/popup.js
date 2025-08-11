@@ -1,4 +1,3 @@
-
 class SalesonatorExtension {
   constructor() {
     this.isPosting = false;
@@ -54,6 +53,9 @@ class SalesonatorExtension {
     
     // Check connection status
     this.checkConnection();
+    
+    // Check for existing posting state
+    await this.checkPostingState();
   }
 
   async checkWebAppAuthentication() {
@@ -449,173 +451,151 @@ class SalesonatorExtension {
       alert('Please navigate to Facebook first.');
       return;
     }
-    
-    // We don't require being on marketplace page since the extension will navigate there
+
+    // Store posting state in Chrome Storage for persistence across redirects
+    await chrome.storage.local.set({
+      isPosting: true,
+      postingQueue: this.vehicles,
+      currentVehicleIndex: 0,
+      postingStartTime: Date.now()
+    });
 
     this.isPosting = true;
     this.currentVehicleIndex = 0;
     
     document.getElementById('startPosting').style.display = 'none';
-    document.getElementById('stopPosting').style.display = 'block';
-    document.getElementById('fetchVehicles').disabled = true;
-
-    this.postNextVehicle();
+    document.getElementById('stopPosting').style.display = 'inline-block';
+    document.getElementById('status').textContent = 'Posting in progress...';
+    
+    await this.postNextVehicle();
   }
 
-  stopPosting() {
+  async stopPosting() {
     this.isPosting = false;
-    document.getElementById('startPosting').style.display = 'block';
-    document.getElementById('stopPosting').style.display = 'none';
-    document.getElementById('fetchVehicles').disabled = false;
     
-    const statusEl = document.getElementById('status');
-    statusEl.className = 'status connected';
-    statusEl.textContent = 'Posting stopped';
+    // Clear posting state from storage
+    await chrome.storage.local.remove(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postingStartTime']);
+    
+    document.getElementById('startPosting').style.display = 'inline-block';
+    document.getElementById('stopPosting').style.display = 'none';
+    document.getElementById('status').textContent = 'Posting stopped';
   }
 
   async postNextVehicle() {
-    if (!this.isPosting || this.currentVehicleIndex >= this.vehicles.length) {
-      this.stopPosting();
+    // Get current state from storage (in case of reload/redirect)
+    const state = await chrome.storage.local.get(['isPosting', 'postingQueue', 'currentVehicleIndex']);
+    
+    if (!state.isPosting || !state.postingQueue || state.currentVehicleIndex >= state.postingQueue.length) {
+      await this.stopPosting();
       document.getElementById('status').textContent = 'All vehicles posted!';
       return;
     }
 
-    const vehicle = this.vehicles[this.currentVehicleIndex];
-    const statusEl = document.getElementById('status');
+    const vehicle = state.postingQueue[state.currentVehicleIndex];
+    console.log('🚗 Posting vehicle', state.currentVehicleIndex + 1, 'of', state.postingQueue.length, ':', vehicle.year, vehicle.make, vehicle.model);
     
-    // Helper function to convert to title case
-    const toTitleCase = (str) => {
-      if (!str) return str;
-      return str.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-    };
+    // Update UI
+    document.getElementById('status').textContent = `Posting ${state.currentVehicleIndex + 1} of ${state.postingQueue.length}: ${vehicle.year} ${vehicle.make} ${vehicle.model}`;
     
-    statusEl.textContent = `Posting vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}: ${vehicle.year} ${vehicle.make} ${toTitleCase(vehicle.model)}`;
-
     try {
-      // Send vehicle data to content script
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      // CRITICAL: Deduct credit BEFORE posting to ensure it completes before redirect
+      console.log('💳 Deducting credit before posting...');
+      await this.deductCreditForPosting(vehicle);
+      console.log('✅ Credit deducted successfully');
       
-      // First, try to ping the content script to see if it's loaded
-      chrome.tabs.sendMessage(tab.id, { action: 'ping' }, async (pingResponse) => {
-        if (chrome.runtime.lastError) {
-          console.log('Content script not loaded, attempting to inject...');
-          
-          // Try to inject the content script manually
-          try {
-            await chrome.scripting.executeScript({
-              target: { tabId: tab.id },
-              files: ['content.js']
-            });
-            
-            // Wait a moment for the script to initialize
-            setTimeout(() => {
-              this.sendVehicleToContentScript(tab.id, vehicle, statusEl);
-            }, 1000);
-          } catch (injectError) {
-            console.error('Failed to inject content script:', injectError);
-            statusEl.textContent = 'Error: Could not load automation script. Please refresh Facebook page.';
-            this.stopPosting();
-          }
-        } else {
-          // Content script is loaded, proceed with posting
-          this.sendVehicleToContentScript(tab.id, vehicle, statusEl);
-        }
-      });
-
+      // Now attempt to post the vehicle
+      await this.sendVehicleToContentScript(vehicle);
     } catch (error) {
       console.error('Error posting vehicle:', error);
-      statusEl.textContent = `Error: ${error.message}`;
-      this.stopPosting();
+      document.getElementById('status').textContent = `Error posting vehicle ${state.currentVehicleIndex + 1}: ${error.message}`;
+      
+      // Continue to next vehicle after error
+      setTimeout(() => {
+        this.moveToNextVehicle();
+      }, 3000);
     }
   }
 
-  sendVehicleToContentScript(tabId, vehicle, statusEl) {
-    chrome.tabs.sendMessage(tabId, {
-      action: 'postVehicle',
-      vehicle: vehicle
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        const errorMessage = chrome.runtime.lastError.message || JSON.stringify(chrome.runtime.lastError);
-        console.error('Error posting vehicle:', errorMessage);
-        statusEl.textContent = `Error: ${errorMessage}`;
-        this.stopPosting();
-        return;
-      }
+  // New method to handle credit deduction before posting
+  async deductCreditForPosting(vehicle) {
+    const { userToken } = await chrome.storage.sync.get(['userToken']);
+    
+    if (!userToken) {
+      throw new Error('User not authenticated');
+    }
 
-      console.log('Vehicle posting response:', response);
+    const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${userToken}`
+      },
+      body: JSON.stringify({
+        action: 'deduct_credit',
+        vehicle_id: vehicle.id,
+        credit_amount: 1
+      })
+    });
 
-      if (response && response.success) {
-        console.log(`✅ Successfully posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length}`);
-        console.log('📊 Response details:', response);
-        
-        // Handle credit updates if available
-        if (response.credits !== undefined) {
-          console.log(`💰 Credits updated: ${this.credits} → ${response.credits}`);
-          this.credits = response.credits;
-          this.updateCreditDisplay();
+    if (!response.ok) {
+      throw new Error(`Failed to deduct credit: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Credit deduction failed');
+    }
+
+    // Update local credit display
+    this.credits = data.remaining_credits || (this.credits - 1);
+    this.updateCreditDisplay();
+    
+    return data;
+  }
+
+  // New method to move to next vehicle and update storage
+  async moveToNextVehicle() {
+    const state = await chrome.storage.local.get(['currentVehicleIndex', 'postingQueue']);
+    const newIndex = (state.currentVehicleIndex || 0) + 1;
+    
+    await chrome.storage.local.set({ currentVehicleIndex: newIndex });
+    this.currentVehicleIndex = newIndex;
+    
+    // Small delay before continuing
+    const delay = parseInt(document.getElementById('delay').value) || 5;
+    setTimeout(() => {
+      this.postNextVehicle();
+    }, delay * 1000);
+  }
+
+  async sendVehicleToContentScript(vehicle) {
+    return new Promise((resolve, reject) => {
+      const [tab] = chrome.tabs.query({ active: true, currentWindow: true }, ([currentTab]) => {
+        if (chrome.runtime.lastError) {
+          return reject(new Error('Could not get current tab'));
         }
-        
-        statusEl.textContent = `✅ Posted vehicle ${this.currentVehicleIndex + 1}/${this.vehicles.length} - Credits: ${this.credits}`;
-        
-        this.currentVehicleIndex++;
-        const delay = parseInt(document.getElementById('delay').value) * 1000;
-        
-        // Check if there are more vehicles to post
-        if (this.currentVehicleIndex < this.vehicles.length) {
-          // Check if we have enough credits to continue
-          if (this.credits <= 0) {
-            statusEl.className = 'status disconnected';
-            statusEl.textContent = 'Insufficient credits to continue posting';
-            this.stopPosting();
-            return;
+
+        chrome.tabs.sendMessage(currentTab.id, {
+          action: 'postVehicle',
+          vehicle: vehicle
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            return reject(new Error(chrome.runtime.lastError.message));
           }
           
-          console.log(`⏳ Waiting ${delay/1000}s before posting next vehicle (${this.currentVehicleIndex + 1}/${this.vehicles.length})`);
-          statusEl.textContent = `Waiting ${delay/1000}s before next vehicle... (${this.currentVehicleIndex + 1}/${this.vehicles.length})`;
-          
-          // Wait before posting next vehicle - give the navigation time to complete
-          setTimeout(() => {
-            if (this.isPosting) {
-              console.log(`🚗 Starting next vehicle posting: ${this.currentVehicleIndex + 1}/${this.vehicles.length}`);
-              statusEl.textContent = `Loading create page for next vehicle... (${this.currentVehicleIndex + 1}/${this.vehicles.length})`;
-              // Wait extra time for the page to load after navigation
-              setTimeout(() => {
-                if (this.isPosting) {
-                  this.postNextVehicle();
-                }
-              }, 3000); // Increased delay to ensure create page fully loads
-            }
-          }, delay);
-        } else {
-          // All vehicles posted
-          console.log('🎉 All vehicles posted successfully!');
-          statusEl.textContent = 'All vehicles posted successfully!';
-          this.stopPosting();
-        }
-      } else {
-        console.error('Failed to post vehicle:', response?.error || 'Unknown error');
-        
-        // Handle insufficient credits error
-        if (response?.error?.includes('Insufficient credits')) {
-          statusEl.className = 'status disconnected';
-          statusEl.textContent = 'Insufficient credits to post vehicle';
-          this.credits = 0;
-          this.updateCreditDisplay();
-        } else {
-          statusEl.textContent = `Failed: ${response?.error || 'Unknown error'}`;
-        }
-        
-        this.stopPosting();
-      }
+          if (response && response.success) {
+            resolve(response);
+          } else {
+            reject(new Error(response?.error || 'Unknown error from content script'));
+          }
+        });
+      });
     });
   }
 
   async saveSettings() {
-    const settings = {
-      delay: document.getElementById('delay').value
-    };
-    
-    await chrome.storage.sync.set(settings);
+    const delay = document.getElementById('delay').value;
+    await chrome.storage.sync.set({ delay });
   }
 
   async logout() {
@@ -623,37 +603,40 @@ class SalesonatorExtension {
     await this.checkAuthentication();
   }
 
-  // Pre-download all vehicle images when vehicles are fetched
   async preDownloadAllImages() {
     try {
-      console.log('Pre-downloading images for all vehicles...');
+      console.log('📸 Starting image pre-download for', this.vehicles.length, 'vehicles...');
       
+      // Collect all unique image URLs from all vehicles
       const allImageUrls = [];
-      this.vehicles.forEach(vehicle => {
+      
+      this.vehicles.forEach((vehicle, index) => {
         if (vehicle.images && Array.isArray(vehicle.images)) {
-          allImageUrls.push(...vehicle.images);
+          vehicle.images.forEach(imageUrl => {
+            if (imageUrl && !allImageUrls.includes(imageUrl)) {
+              allImageUrls.push(imageUrl);
+            }
+          });
         }
       });
       
+      console.log('📸 Found', allImageUrls.length, 'unique images to pre-download');
+      
       if (allImageUrls.length === 0) {
-        console.log('No images to pre-download');
+        console.log('📸 No images to pre-download');
         return;
       }
       
-      console.log(`Pre-downloading ${allImageUrls.length} images...`);
-      
       // Use background script to pre-download images
-      const response = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({
-          action: 'preDownloadImages',
-          images: allImageUrls
-        }, resolve);
+      const response = await chrome.runtime.sendMessage({
+        action: 'preDownloadImages',
+        imageUrls: allImageUrls
       });
       
-      if (response && response.success) {
-        console.log(`✅ Pre-downloaded ${response.successCount}/${response.totalCount} images`);
+      if (response.success) {
+        console.log('✅ Successfully pre-downloaded', response.downloaded, 'images');
       } else {
-        console.log('⚠️ Image pre-download failed:', response?.error);
+        console.warn('⚠️ Some images failed to pre-download:', response.failed);
       }
       
     } catch (error) {
@@ -662,94 +645,62 @@ class SalesonatorExtension {
   }
 
   updateCreditDisplay() {
-    const creditCountEl = document.getElementById('creditCount');
-    const creditBalanceEl = document.getElementById('creditBalance');
-    
-    console.log('🎯 Updating credit display to:', this.credits);
-    
-    if (creditCountEl) {
-      creditCountEl.textContent = this.credits;
-    }
-    
-    // Show credit balance when we have credit info
-    if (creditBalanceEl && this.credits >= 0) {
-      creditBalanceEl.style.display = 'block';
-      
-      // Change color based on credit level
-      if (this.credits === 0) {
-        creditBalanceEl.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
-      } else if (this.credits <= 5) {
-        creditBalanceEl.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
-      } else {
-        creditBalanceEl.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-      }
+    const creditEl = document.getElementById('creditCount');
+    if (creditEl) {
+      creditEl.textContent = this.credits;
     }
   }
 
   setupMessageListener() {
-    // Listen for messages from content script
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      console.log('🚀 POPUP RECEIVED MESSAGE:', message);
+      console.log('📩 Popup received message:', message);
       
-      if (message.action === 'creditsUpdated') {
-        console.log('🚀 POPUP: UPDATING CREDITS FROM MESSAGE:', message.credits);
+      if (message.action === 'updateCredits') {
+        console.log('💳 Updating credits from', this.credits, 'to', message.credits);
         this.credits = message.credits;
         this.updateCreditDisplay();
-      }
-      
-      if (message.action === 'navigatedToCreate') {
-        console.log('🚀 POPUP: Content script navigated to create page');
-      }
-      
-      if (message.action === 'urlChanged') {
-        console.log('🚀 POPUP: URL changed from:', message.oldUrl, 'to:', message.newUrl);
-        const statusEl = document.getElementById('status');
-        
-        if (message.status === 'redirected_to_vehicles_page') {
-          statusEl.textContent = 'Posting successful! Redirecting to continue...';
-        } else if (message.status === 'ready_for_next_vehicle') {
-          statusEl.textContent = 'Ready for next vehicle posting...';
-        } else if (message.newUrl.includes('/marketplace/category/vehicles')) {
-          statusEl.textContent = 'Facebook redirected to vehicles page, navigating to create page...';
-        } else if (message.newUrl.includes('/marketplace/create/vehicle')) {
-          statusEl.textContent = 'Ready on create vehicle page, continuing posting...';
-        }
-      }
-      
-      if (message.action === 'navigatingToCreate') {
-        console.log('🚀 POPUP: Navigating to create page from:', message.fromUrl, 'to:', message.toUrl);
-        const statusEl = document.getElementById('status');
-        statusEl.textContent = 'Navigating to create vehicle page...';
-      }
-      
-      if (message.action === 'readyForNextVehicle') {
-        console.log('🚀 POPUP: Content script ready for next vehicle posting');
-        console.log('🚀 POPUP: Current posting state - isPosting:', this.isPosting, 'currentIndex:', this.currentVehicleIndex, 'totalVehicles:', this.vehicles.length);
-        
-        const statusEl = document.getElementById('status');
-        statusEl.textContent = 'Ready for next vehicle posting...';
-        
-        // Continue with next vehicle after a short delay
+      } else if (message.action === 'vehiclePosted') {
+        console.log('✅ Vehicle posted successfully, moving to next vehicle');
+        this.moveToNextVehicle();
+      } else if (message.action === 'postingError') {
+        console.log('❌ Posting error received:', message.error);
+        // Move to next vehicle even on error
+        this.moveToNextVehicle();
+      } else if (message.action === 'navigationDetected') {
+        console.log('🔄 Navigation detected:', message.url);
+        document.getElementById('status').textContent = 'Navigation detected, waiting for next posting...';
+      } else if (message.action === 'readyForNext') {
+        console.log('✅ Content script is ready for next vehicle');
+        // Small delay before posting next vehicle
         setTimeout(() => {
-          console.log('🚀 POPUP: Checking if should continue posting...');
-          console.log('🚀 POPUP: isPosting:', this.isPosting, 'currentIndex:', this.currentVehicleIndex, 'vehiclesLength:', this.vehicles.length);
-          
-          if (this.isPosting && this.currentVehicleIndex < this.vehicles.length) {
-            console.log('🚀 POPUP: CONTINUING TO NEXT VEHICLE');
-            this.currentVehicleIndex++;
-            this.postNextVehicle();
-          } else {
-            console.log('🚀 POPUP: NOT CONTINUING - isPosting:', this.isPosting, 'index check:', this.currentVehicleIndex < this.vehicles.length);
-          }
-        }, 1000);
+          this.postNextVehicle();
+        }, 2000);
       }
-      
-      return true; // Keep the message channel open
     });
+  }
+
+  // Check for existing posting state on initialization
+  async checkPostingState() {
+    const state = await chrome.storage.local.get(['isPosting', 'postingQueue', 'currentVehicleIndex']);
+    
+    if (state.isPosting && state.postingQueue) {
+      console.log('🔄 Resuming posting from storage state...');
+      this.isPosting = true;
+      this.vehicles = state.postingQueue;
+      this.currentVehicleIndex = state.currentVehicleIndex || 0;
+      
+      // Update UI
+      document.getElementById('startPosting').style.display = 'none';
+      document.getElementById('stopPosting').style.display = 'inline-block';
+      document.getElementById('vehicleCount').textContent = `${this.vehicles.length} vehicles ready to post`;
+      
+      // Resume posting
+      await this.postNextVehicle();
+    }
   }
 }
 
-// Initialize extension when popup opens
+// Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
   new SalesonatorExtension();
 });

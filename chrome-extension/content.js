@@ -3194,12 +3194,12 @@ class SalesonatorAutomator {
       
       // Check if we've been redirected to vehicles category after posting
       if (newUrl.includes('/marketplace/category/vehicles') && this.isWaitingForNextVehicle) {
-        console.log('🚀 DETECTED REDIRECT TO VEHICLES CATEGORY - WILL NAVIGATE TO CREATE');
-        this.log('🎯 Detected redirect to vehicles category after posting - navigating to create page');
+        console.log('🚀 DETECTED REDIRECT TO VEHICLES CATEGORY - POSTING COMPLETED');
+        this.log('🎯 Detected redirect to vehicles category after posting - credit already deducted');
         
         // Send immediate status update to popup
         chrome.runtime.sendMessage({
-          action: 'urlChanged',
+          action: 'vehiclePosted',
           oldUrl: oldUrl,
           newUrl: newUrl,
           status: 'redirected_to_vehicles_page'
