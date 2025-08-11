@@ -602,12 +602,16 @@ class SalesonatorAutomator {
     }
     
     if (currentUrl.includes('facebook.com/marketplace/create/vehicle')) {
-      this.log('✅ Already on vehicle creation page');
+      this.log('✅ Already on vehicle creation page, waiting for it to fully load...');
+      await this.waitForPageToLoad();
       return;
     }
     
     if (currentUrl.includes('facebook.com/marketplace/create')) {
       this.log('📝 On marketplace create page, checking for vehicle category...');
+      
+      // Wait for page to load first
+      await this.waitForPageToLoad();
       
       // Look for vehicle category button/option WITHOUT any navigation
       const vehicleCategorySelectors = [
@@ -620,11 +624,14 @@ class SalesonatorAutomator {
       ];
       
       try {
-        const vehicleCategory = await this.waitForElement(vehicleCategorySelectors, 3000);
+        const vehicleCategory = await this.waitForElement(vehicleCategorySelectors, 5000);
         await this.scrollIntoView(vehicleCategory);
         await this.delay(this.randomDelay(300, 600));
         vehicleCategory.click();
-        await this.delay(this.randomDelay(1000, 2000));
+        await this.delay(this.randomDelay(2000, 3000));
+        
+        // Wait for the new page to load after clicking vehicle category
+        await this.waitForPageToLoad();
         return;
       } catch (error) {
         this.log('⚠️ Could not find vehicle category, proceeding anyway');
@@ -639,9 +646,80 @@ class SalesonatorAutomator {
     }
   }
 
+  // Enhanced page loading detection with multiple strategies
+  async waitForPageToLoad() {
+    this.log('⏳ Waiting for page to fully load...');
+    
+    try {
+      // Strategy 1: Wait for document ready state
+      if (document.readyState !== 'complete') {
+        this.log('📄 Document not ready, waiting...');
+        await new Promise(resolve => {
+          if (document.readyState === 'complete') {
+            resolve();
+          } else {
+            const listener = () => {
+              if (document.readyState === 'complete') {
+                document.removeEventListener('readystatechange', listener);
+                resolve();
+              }
+            };
+            document.addEventListener('readystatechange', listener);
+          }
+        });
+      }
+      
+      // Strategy 2: Wait for React/Facebook components to load
+      const pageLoadIndicators = [
+        'form', // Facebook forms
+        '[role="main"]', // Main content area
+        'input[type="text"]', // Any input field
+        '[data-testid]', // Facebook test ids
+        '.marketplace', // Marketplace specific
+        '[aria-label]' // Any labeled element
+      ];
+      
+      this.log('🔍 Waiting for page elements to appear...');
+      await this.waitForElement(pageLoadIndicators, 10000);
+      
+      // Strategy 3: Wait for no loading spinners
+      this.log('🔄 Checking for loading indicators...');
+      let loadingCount = 0;
+      while (loadingCount < 5) { // Max 5 attempts
+        const loadingElements = document.querySelectorAll(
+          '[role="progressbar"], .loading, .spinner, [aria-label*="Loading"], [aria-label*="loading"]'
+        );
+        
+        if (loadingElements.length === 0) {
+          this.log('✅ No loading indicators found');
+          break;
+        } else {
+          this.log(`⏳ Found ${loadingElements.length} loading indicators, waiting...`);
+          await this.delay(1000);
+          loadingCount++;
+        }
+      }
+      
+      // Strategy 4: Additional delay for React hydration
+      this.log('⚡ Final delay for React hydration...');
+      await this.delay(2000);
+      
+      this.log('✅ Page fully loaded and ready for interaction');
+      
+    } catch (error) {
+      this.log('⚠️ Page loading detection failed, continuing anyway:', error);
+      // Even if detection fails, wait a bit before continuing
+      await this.delay(3000);
+    }
+  }
+
   // Enhanced form filling with React-native value setting
   async fillVehicleForm(vehicleData) {
     this.log('📝 Filling vehicle form with enhanced automation...');
+    
+    // FIRST: Ensure page is fully loaded before starting form fill
+    this.log('⏳ Ensuring page is ready before form filling...');
+    await this.waitForPageToLoad();
     
     // Sequential field completion with proper closure verification
     this.log('🔄 Starting sequential form completion...');
