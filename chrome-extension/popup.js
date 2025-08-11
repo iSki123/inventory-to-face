@@ -570,11 +570,16 @@ class SalesonatorExtension {
 
   async sendVehicleToContentScript(vehicle) {
     return new Promise((resolve, reject) => {
-      const [tab] = chrome.tabs.query({ active: true, currentWindow: true }, ([currentTab]) => {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (chrome.runtime.lastError) {
           return reject(new Error('Could not get current tab'));
         }
 
+        if (!tabs || tabs.length === 0) {
+          return reject(new Error('No active tab found'));
+        }
+
+        const currentTab = tabs[0];
         chrome.tabs.sendMessage(currentTab.id, {
           action: 'postVehicle',
           vehicle: vehicle
