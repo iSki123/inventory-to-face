@@ -2399,31 +2399,61 @@ class SalesonatorAutomator {
       if (!fileInput) {
         this.log('📸 No file input found, looking for photo upload button...');
         const uploadButtons = [
-          '[role="button"]:has-text("Add photos")',
+          'div[role="button"]', // Generic button that might contain "Add photos"
           '[aria-label*="Add photos"]',
           '[aria-label*="Upload"]',
-          'button:contains("photos")',
-          'div[role="button"]'
+          '[aria-label*="photo"]',
+          'button[aria-label*="photo"]',
+          'div[data-testid*="photo"]',
+          '.add-photos-button',
+          '[data-test*="photo"]'
         ];
         
         for (const selector of uploadButtons) {
           try {
             const button = await this.waitForElement([selector], 2000);
-            if (button) {
-              this.log(`📸 Found upload button, clicking: ${button.textContent?.trim()}`);
+            if (button && (button.textContent?.toLowerCase().includes('photo') || 
+                          button.getAttribute('aria-label')?.toLowerCase().includes('photo') ||
+                          selector === 'div[role="button"]')) {
+              this.log(`📸 Found upload button, clicking: ${button.textContent?.trim() || button.getAttribute('aria-label') || 'unlabeled button'}`);
               await this.scrollIntoView(button);
               button.click();
-              await this.delay(1000);
               
-              // Try finding file input again after clicking
-              for (const inputSelector of fileInputSelectors) {
-                fileInput = document.querySelector(inputSelector);
-                if (fileInput && fileInput.offsetParent !== null && !fileInput.disabled) break;
+              // Wait longer for Facebook to create the file input
+              await this.delay(2000);
+              
+              // Try multiple attempts to find the file input after clicking
+              for (let attempt = 0; attempt < 5; attempt++) {
+                this.log(`📸 Attempt ${attempt + 1} to find file input after upload button click...`);
+                
+                // Look for file inputs more broadly after clicking
+                const allFileInputs = document.querySelectorAll('input[type="file"]');
+                this.log(`📸 Found ${allFileInputs.length} file inputs on page`);
+                
+                for (const input of allFileInputs) {
+                  // Check if this input is newly visible/accessible
+                  const style = window.getComputedStyle(input);
+                  const isVisible = style.display !== 'none' && 
+                                  style.visibility !== 'hidden' && 
+                                  style.opacity !== '0';
+                  
+                  this.log(`📸 Checking file input: visible=${isVisible}, disabled=${input.disabled}, accept=${input.accept}`);
+                  
+                  if (isVisible && !input.disabled) {
+                    fileInput = input;
+                    this.log(`📸 Found accessible file input: ${input.outerHTML.substring(0, 100)}...`);
+                    break;
+                  }
+                }
+                
+                if (fileInput) break;
+                await this.delay(1000); // Wait between attempts
               }
+              
               if (fileInput) break;
             }
           } catch (error) {
-            // Continue to next selector
+            this.log(`📸 Error with selector ${selector}:`, error);
           }
         }
       }
