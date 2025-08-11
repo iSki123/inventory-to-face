@@ -470,6 +470,27 @@ class SalesonatorExtension {
       return;
     }
 
+    // Check if we're on the correct vehicle creation URL
+    const targetUrl = 'https://www.facebook.com/marketplace/create/vehicle';
+    
+    if (tab.url !== targetUrl) {
+      document.getElementById('status').textContent = 'Redirecting to Facebook Marketplace vehicle creation page...';
+      
+      try {
+        // Navigate to the correct URL
+        await chrome.tabs.update(tab.id, { url: targetUrl });
+        
+        // Wait for the page to load completely
+        await this.waitForPageLoad(tab.id, targetUrl);
+        
+        document.getElementById('status').textContent = 'Page loaded successfully...';
+      } catch (error) {
+        console.error('Error redirecting to vehicle creation page:', error);
+        document.getElementById('status').textContent = 'Error: Unable to navigate to vehicle creation page';
+        return;
+      }
+    }
+
     // Store posting state in Chrome Storage for persistence across redirects
     await chrome.storage.local.set({
       isPosting: true,
@@ -483,7 +504,7 @@ class SalesonatorExtension {
     
     document.getElementById('startPosting').style.display = 'none';
     document.getElementById('stopPosting').style.display = 'inline-block';
-    document.getElementById('status').textContent = 'Posting in progress...';
+    document.getElementById('status').textContent = 'Starting posting process...';
     
     await this.postNextVehicle();
   }
@@ -719,6 +740,35 @@ class SalesonatorExtension {
     } catch (error) {
       console.error('Error pre-downloading images:', error);
     }
+  }
+
+  // Wait for page to load completely
+  async waitForPageLoad(tabId, expectedUrl) {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Page load timeout'));
+      }, 15000); // 15 second timeout
+
+      const checkComplete = () => {
+        chrome.tabs.get(tabId, (tab) => {
+          if (chrome.runtime.lastError) {
+            clearTimeout(timeout);
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          
+          if (tab.status === 'complete' && tab.url === expectedUrl) {
+            clearTimeout(timeout);
+            // Additional delay to ensure DOM is ready for Facebook's dynamic content
+            setTimeout(resolve, 3000);
+          } else {
+            setTimeout(checkComplete, 500);
+          }
+        });
+      };
+      
+      checkComplete();
+    });
   }
 
   updateCreditDisplay() {
