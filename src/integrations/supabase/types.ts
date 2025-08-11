@@ -642,6 +642,7 @@ export type Database = {
           exterior_color_standardized: string | null
           facebook_post_id: string | null
           facebook_post_status: string | null
+          facebook_posting_url: string | null
           features: string[] | null
           fuel_type: string | null
           fuel_type_nhtsa: string | null
@@ -689,6 +690,7 @@ export type Database = {
           exterior_color_standardized?: string | null
           facebook_post_id?: string | null
           facebook_post_status?: string | null
+          facebook_posting_url?: string | null
           features?: string[] | null
           fuel_type?: string | null
           fuel_type_nhtsa?: string | null
@@ -736,6 +738,7 @@ export type Database = {
           exterior_color_standardized?: string | null
           facebook_post_id?: string | null
           facebook_post_status?: string | null
+          facebook_posting_url?: string | null
           features?: string[] | null
           fuel_type?: string | null
           fuel_type_nhtsa?: string | null

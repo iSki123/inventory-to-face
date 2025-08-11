@@ -48,6 +48,9 @@ serve(async (req) => {
       case 'update_vehicle_status':
         const { vehicleId, status, facebookPostId } = requestBody;
         return await updateVehicleStatus(supabaseClient, vehicleId, status, facebookPostId, user.id);
+      case 'store_posting_url':
+        const { vehicleId: urlVehicleId, postingUrl } = requestBody;
+        return await storePostingUrl(supabaseClient, urlVehicleId, postingUrl, user.id);
       case 'deduct_credit':
         const { vehicle_id, credit_amount } = requestBody;
         return await deductCredit(supabaseClient, vehicle_id, credit_amount, user.id);
@@ -259,3 +262,40 @@ async function deductCredit(supabaseClient: any, vehicleId: string, creditAmount
     throw error;
   }
 }
+
+async function storePostingUrl(supabaseClient: any, vehicleId: string, postingUrl: string, userId: string) {
+  try {
+    console.log(`Storing posting URL for vehicle ${vehicleId}: ${postingUrl}`);
+    
+    // Update the vehicle with the posting URL
+    const { data, error } = await supabaseClient
+      .from('vehicles')
+      .update({ 
+        facebook_posting_url: postingUrl,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', vehicleId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error storing posting URL:', error);
+      throw new Error('Failed to store posting URL');
+    }
+
+    console.log(`Posting URL stored successfully for vehicle ${vehicleId}`);
+
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        vehicle: data,
+        message: `Posting URL stored successfully`
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+    
+  } catch (error) {
+    console.error('Error in storePostingUrl:', error);
+    throw error;
+  }
