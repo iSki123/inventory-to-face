@@ -581,34 +581,51 @@ class SalesonatorExtension {
 
         const currentTab = tabs[0];
         
+        // Add a small delay to ensure content script is fully loaded
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         // First, ensure content script is ready with ping-pong
         let retries = 0;
         const maxRetries = 10;
         
         const checkContentScript = () => {
+          console.log(`Attempting to ping content script (attempt ${retries + 1}/${maxRetries})...`);
           chrome.tabs.sendMessage(currentTab.id, { action: 'ping' }, (response) => {
-            if (chrome.runtime.lastError || !response) {
+            if (chrome.runtime.lastError) {
+              console.log(`Ping failed with error: ${chrome.runtime.lastError.message}`);
               retries++;
               if (retries < maxRetries) {
                 console.log(`Content script not ready, retrying... (${retries}/${maxRetries})`);
                 setTimeout(checkContentScript, 1000);
               } else {
-                reject(new Error('Content script not responding after multiple attempts. Please refresh the Facebook page.'));
+                reject(new Error('Content script not responding after multiple attempts. Please refresh the Facebook page and try again.'));
+              }
+            } else if (!response) {
+              console.log('Ping returned no response');
+              retries++;
+              if (retries < maxRetries) {
+                console.log(`No response from content script, retrying... (${retries}/${maxRetries})`);
+                setTimeout(checkContentScript, 1000);
+              } else {
+                reject(new Error('Content script not responding after multiple attempts. Please refresh the Facebook page and try again.'));
               }
             } else {
-              console.log('✅ Content script is ready, sending vehicle data...');
+              console.log('✅ Content script is ready, received response:', response);
               // Content script is ready, now send the actual message
               chrome.tabs.sendMessage(currentTab.id, {
                 action: 'postVehicle',
                 vehicle: vehicle
               }, (response) => {
                 if (chrome.runtime.lastError) {
+                  console.error('Error sending postVehicle message:', chrome.runtime.lastError.message);
                   return reject(new Error(chrome.runtime.lastError.message));
                 }
                 
                 if (response && response.success) {
+                  console.log('✅ Vehicle posting successful:', response);
                   resolve(response);
                 } else {
+                  console.error('Vehicle posting failed:', response);
                   reject(new Error(response?.error || 'Unknown error from content script'));
                 }
               });

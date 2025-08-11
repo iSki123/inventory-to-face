@@ -2840,14 +2840,19 @@ class SalesonatorAutomator {
 
   // Message listener setup
   setupMessageListener() {
+    console.log('🔧 Setting up message listener in content script...');
+    
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      console.log('📨 Message received in content script:', request.action, request);
       this.log('📨 Received message in content script:', request);
       
       if (request.action === 'postVehicle') {
+        console.log('🚀 Processing postVehicle request...');
         this.log('🚀 Starting vehicle posting process...');
         
         // Validate vehicle data structure
         if (!request.vehicle) {
+          console.log('❌ No vehicle data provided in request');
           this.log('❌ No vehicle data provided');
           sendResponse({ success: false, error: 'No vehicle data provided' });
           return true;
@@ -2861,10 +2866,12 @@ class SalesonatorAutomator {
         
         this.postVehicle(request.vehicle)
           .then(result => {
+            console.log('✅ Vehicle posting completed:', result);
             this.log('📤 Sending response back to popup:', result);
             sendResponse(result);
           })
           .catch(error => {
+            console.error('❌ Vehicle posting failed:', error);
             this.log('❌ Error in postVehicle:', error);
             sendResponse({ success: false, error: error.message });
           });
@@ -2872,19 +2879,26 @@ class SalesonatorAutomator {
       }
       
       if (request.action === 'checkLogin') {
+        console.log('🔐 Checking Facebook login status...');
         const isLoggedIn = this.checkFacebookLogin();
+        console.log('🔐 Login status:', isLoggedIn);
         sendResponse({ loggedIn: isLoggedIn });
         return false; // Synchronous response
       }
       
       if (request.action === 'ping') {
-        sendResponse({ status: 'ready', enhanced: true });
+        console.log('🏓 Ping received, responding with ready status');
+        sendResponse({ status: 'ready', enhanced: true, timestamp: Date.now() });
         return false; // Synchronous response
       }
       
+      console.log('❓ Unknown action received:', request.action);
       // For unknown actions, don't keep channel open
+      sendResponse({ success: false, error: 'Unknown action' });
       return false;
     });
+    
+    console.log('✅ Message listener setup complete');
   }
 
   // Check if user is logged into Facebook
@@ -3338,3 +3352,4 @@ class SalesonatorAutomator {
 // Initialize the enhanced automator
 const salesonatorAutomator = new SalesonatorAutomator();
 console.log('✅ Salesonator Enhanced Automator loaded successfully');
+console.log('📞 Content script ready to receive messages from popup');
