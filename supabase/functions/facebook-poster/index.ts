@@ -299,3 +299,4 @@ async function storePostingUrl(supabaseClient: any, vehicleId: string, postingUr
     console.error('Error in storePostingUrl:', error);
     throw error;
   }
+}
