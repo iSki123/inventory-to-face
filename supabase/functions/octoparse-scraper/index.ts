@@ -1344,7 +1344,7 @@ function generateMockVehicleData() {
     const make = makes[Math.floor(Math.random() * makes.length)];
     const modelList = models[make as keyof typeof models];
     const model = modelList[Math.floor(Math.random() * modelList.length)];
-    const year = 2018 + Math.floor(Math.random() * 7); // 2018-2024
+    const year = 2018 + Math.floor(Math.random() * 8); // 2018-2025
     const price = (15000 + Math.floor(Math.random() * 40000)) * 100; // $15k-$55k in cents
     const mileage = Math.floor(Math.random() * 100000);
     
