@@ -2460,7 +2460,6 @@ class SalesonatorAutomator {
       
       if (!fileInput) {
         this.log('❌ No accessible file input found on page');
-        // Don't throw error, just return false to continue with posting
         return false;
       }
       
@@ -2473,7 +2472,7 @@ class SalesonatorAutomator {
         visible: fileInput.offsetParent !== null
       });
       
-      const imagesToProcess = Math.min(images.length, 10); // Reduce to 10 for better reliability
+      const imagesToProcess = Math.min(images.length, 4); // Limit to 4 images for Facebook
       this.log(`📸 Processing ${imagesToProcess} images...`);
       
       // Use background script to download images with better CORS handling
@@ -2482,22 +2481,33 @@ class SalesonatorAutomator {
       
       if (successfulFiles.length === 0) {
         this.log('❌ No valid images could be downloaded');
-        // Try fallback direct fetch method
-        this.log('📸 Trying fallback direct fetch method...');
-        return await this.handleImageUploadsFallback(images, fileInput);
+        return false;
       }
       
       this.log(`📸 Successfully downloaded ${successfulFiles.length} images`);
       
-      // Set files using enhanced React compatibility
-      await this.setFilesWithReactCompatibility(fileInput, successfulFiles);
+      // Use the SIMPLE approach from old extension that worked
+      const dataTransfer = new DataTransfer();
+      successfulFiles.forEach((file, index) => {
+        this.log(`📸 Adding file ${index + 1}: ${file.name} (${file.size} bytes)`);
+        dataTransfer.items.add(file);
+      });
       
-      // Wait for upload to process and verify
-      await this.delay(3000);
+      fileInput.files = dataTransfer.files;
       
-      // Verify upload success by checking for image previews or upload indicators
-      const uploadIndicators = [
-        '.uploaded-image',
+      // Trigger change event
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+      
+      await this.delay(2000); // Wait longer for files to process
+      
+      this.log(`✅ Successfully uploaded ${successfulFiles.length} images`);
+      return true;
+      
+    } catch (error) {
+      this.log('⚠️ Image upload failed:', error);
+      return false;
+    }
+  }
         '[data-testid*="image"]',
         'img[src*="blob:"]',
         '.image-preview'
