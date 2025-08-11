@@ -1181,13 +1181,12 @@ class SalesonatorAutomator {
       
       await this.delay(500);
       
-      // Verify value was set - using simple string comparison like mileage
-      const currentValue = (priceInput.value || '').toString().replace(/[^\d]/g, '');
-      if (currentValue === expectedNum.toString()) {
+      // Verify value was set - same exact logic as mileage
+      if ((priceInput.value || '').toString() === expectedNum.toString()) {
         this.log('✅ Successfully filled price:', expectedNum);
         return true;
       } else {
-        this.log('⚠️ Price value verification failed. Expected:', expectedNum.toString(), 'Got:', priceInput.value, 'Parsed:', currentValue);
+        this.log('⚠️ Price value verification failed. Expected:', expectedNum.toString(), 'Got:', priceInput.value);
         // Try typing approach as fallback - same as mileage method
         priceInput.focus();
         if (priceInput.select) priceInput.select();
