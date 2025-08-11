@@ -673,13 +673,10 @@ class SalesonatorExtension {
                   return reject(new Error(chrome.runtime.lastError.message));
                 }
                 
-                if (response && response.success) {
-                  console.log('✅ Vehicle posting successful:', response);
-                  resolve(response);
-                } else {
-                  console.error('Vehicle posting failed:', response);
-                  reject(new Error(response?.error || 'Unknown error from content script'));
-                }
+                // Don't wait for response - the content script will notify us via message when done
+                console.log('✅ Vehicle posting command sent, waiting for notification...');
+                document.getElementById('status').textContent = 'Posting vehicle...';
+                resolve({ success: true, message: 'Posting initiated' });
               });
             }
           });
@@ -779,25 +776,21 @@ class SalesonatorExtension {
   }
 
   setupMessageListener() {
+    // Listen for messages from the background script and content script
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      console.log('📩 Popup received message:', message);
+      console.log('📨 Popup received message:', message);
       
-      if (message.action === 'updateCredits') {
-        console.log('💳 Updating credits from', this.credits, 'to', message.credits);
-        this.credits = message.credits;
-        this.updateCreditDisplay();
+      if (message.action === 'extensionReloaded') {
+        document.getElementById('status').textContent = 'Extension reloaded. Please refresh this popup.';
+      } else if (message.action === 'imagesPreDownloaded') {
+        console.log('✅ All images pre-downloaded successfully');
       } else if (message.action === 'vehiclePosted') {
-        console.log('✅ Vehicle posted successfully, moving to next vehicle');
+        console.log('🎉 Vehicle posted successfully, continuing with next...');
+        document.getElementById('status').textContent = 'Vehicle posted! Moving to next...';
         this.moveToNextVehicle();
-      } else if (message.action === 'postingError') {
-        console.log('❌ Posting error received:', message.error);
-        // Move to next vehicle even on error
-        this.moveToNextVehicle();
-      } else if (message.action === 'navigationDetected') {
-        console.log('🔄 Navigation detected:', message.url);
-        document.getElementById('status').textContent = 'Navigation detected, waiting for next posting...';
-      } else if (message.action === 'readyForNext') {
-        console.log('✅ Content script is ready for next vehicle');
+      } else if (message.action === 'readyForNextVehicle') {
+        console.log('🚀 Content script ready for next vehicle');
+        document.getElementById('status').textContent = 'Ready for next vehicle...';
         // Small delay before posting next vehicle
         setTimeout(() => {
           this.postNextVehicle();

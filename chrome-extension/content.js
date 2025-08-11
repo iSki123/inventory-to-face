@@ -3129,21 +3129,25 @@ class SalesonatorAutomator {
       // Check if we've been redirected to vehicles category after posting
       if (newUrl.includes('/marketplace/category/vehicles') && this.isWaitingForNextVehicle) {
         console.log('🚀 DETECTED REDIRECT TO VEHICLES CATEGORY - POSTING COMPLETED');
-        this.log('🎯 Detected redirect to vehicles category after posting - credit already deducted');
+        this.log('🎯 Detected redirect to vehicles category after posting - vehicle posted successfully');
         
-        // Send immediate status update to popup
-        chrome.runtime.sendMessage({
-          action: 'vehiclePosted',
-          oldUrl: oldUrl,
-          newUrl: newUrl,
-          status: 'redirected_to_vehicles_page'
-        });
+        // Send immediate success notification to popup
+        try {
+          chrome.runtime.sendMessage({
+            action: 'vehiclePosted',
+            oldUrl: oldUrl,
+            newUrl: newUrl,
+            status: 'posted_successfully'
+          });
+        } catch (error) {
+          console.log('Extension context invalidated, but posting was successful');
+        }
         
-        // Navigate to create page immediately
+        // Navigate to create page immediately for next vehicle
         setTimeout(() => {
-          console.log('🚀 NAVIGATING TO CREATE PAGE NOW');
+          console.log('🚀 NAVIGATING TO CREATE PAGE FOR NEXT VEHICLE');
           this.navigateToCreateVehiclePage();
-        }, 1500); // Reduced delay for faster flow
+        }, 1500);
       }
       
       // Check if we're on the create vehicle page and ready for next posting
