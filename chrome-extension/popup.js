@@ -689,21 +689,20 @@ class SalesonatorExtension {
   setupMessageListener() {
     // Listen for messages from content script
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      console.log('📨 Popup received message:', message);
+      console.log('🚀 POPUP RECEIVED MESSAGE:', message);
       
       if (message.action === 'creditsUpdated') {
-        console.log('💰 Updating credits from message:', message.credits);
+        console.log('🚀 POPUP: UPDATING CREDITS FROM MESSAGE:', message.credits);
         this.credits = message.credits;
         this.updateCreditDisplay();
       }
       
       if (message.action === 'navigatedToCreate') {
-        console.log('🔄 Content script navigated to create page, will continue posting after delay');
-        // The posting will continue automatically via the existing delay mechanism
+        console.log('🚀 POPUP: Content script navigated to create page');
       }
       
       if (message.action === 'urlChanged') {
-        console.log('🔄 URL changed from:', message.oldUrl, 'to:', message.newUrl);
+        console.log('🚀 POPUP: URL changed from:', message.oldUrl, 'to:', message.newUrl);
         const statusEl = document.getElementById('status');
         
         if (message.status === 'redirected_to_vehicles_page') {
@@ -718,21 +717,29 @@ class SalesonatorExtension {
       }
       
       if (message.action === 'navigatingToCreate') {
-        console.log('🔄 Navigating to create page from:', message.fromUrl, 'to:', message.toUrl);
+        console.log('🚀 POPUP: Navigating to create page from:', message.fromUrl, 'to:', message.toUrl);
         const statusEl = document.getElementById('status');
         statusEl.textContent = 'Navigating to create vehicle page...';
       }
       
       if (message.action === 'readyForNextVehicle') {
-        console.log('✅ Content script ready for next vehicle posting');
+        console.log('🚀 POPUP: Content script ready for next vehicle posting');
+        console.log('🚀 POPUP: Current posting state - isPosting:', this.isPosting, 'currentIndex:', this.currentVehicleIndex, 'totalVehicles:', this.vehicles.length);
+        
         const statusEl = document.getElementById('status');
         statusEl.textContent = 'Ready for next vehicle posting...';
         
         // Continue with next vehicle after a short delay
         setTimeout(() => {
+          console.log('🚀 POPUP: Checking if should continue posting...');
+          console.log('🚀 POPUP: isPosting:', this.isPosting, 'currentIndex:', this.currentVehicleIndex, 'vehiclesLength:', this.vehicles.length);
+          
           if (this.isPosting && this.currentVehicleIndex < this.vehicles.length) {
+            console.log('🚀 POPUP: CONTINUING TO NEXT VEHICLE');
             this.currentVehicleIndex++;
             this.postNextVehicle();
+          } else {
+            console.log('🚀 POPUP: NOT CONTINUING - isPosting:', this.isPosting, 'index check:', this.currentVehicleIndex < this.vehicles.length);
           }
         }, 1000);
       }
