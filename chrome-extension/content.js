@@ -2435,139 +2435,64 @@ class SalesonatorAutomator {
     }
   }
 
-  // Enhanced image upload handling with better error recovery and Facebook compatibility
+  // Simple image upload handling - restored to working version from old-extension
   async handleImageUploads(images) {
     try {
-      this.log('📸 Starting enhanced image upload process...');
-      console.log('[IMAGE UPLOAD DEBUG] Starting upload with', images?.length || 0, 'images');
+      this.log('📸 Starting image upload process...');
       
       if (!images || !Array.isArray(images) || images.length === 0) {
         this.log('📸 No images provided, skipping upload');
         return true;
       }
       
-      // Wait for page to be fully loaded before looking for file input
-      await this.delay(2000);
-      
-      // Find file input with enhanced selectors
+      // Find file input 
       const fileInputSelectors = [
         'input[type="file"][accept*="image"]',
         'input[type="file"][multiple]',
-        'input[type="file"]',
-        'input[accept*="image/*"]',
-        'input[accept*=".jpg"]',
-        'input[accept*=".jpeg"]',
-        'input[accept*=".png"]'
+        'input[type="file"]'
       ];
       
       let fileInput = null;
       for (const selector of fileInputSelectors) {
-        const inputs = document.querySelectorAll(selector);
-        for (const input of inputs) {
-          // Check if input is visible and functional
-          if (input.offsetParent !== null && !input.disabled) {
-            fileInput = input;
-            break;
-          }
-        }
+        fileInput = document.querySelector(selector);
         if (fileInput) break;
       }
       
-      // If no file input found, try clicking on photo upload areas
       if (!fileInput) {
-        this.log('📸 No file input found, looking for photo upload button...');
-        const uploadButtons = [
-          'div[role="button"]', // Generic button that might contain "Add photos"
-          '[aria-label*="Add photos"]',
-          '[aria-label*="Upload"]',
-          '[aria-label*="photo"]',
-          'button[aria-label*="photo"]',
-          'div[data-testid*="photo"]',
-          '.add-photos-button',
-          '[data-test*="photo"]'
-        ];
-        
-        for (const selector of uploadButtons) {
-          try {
-            const button = await this.waitForElement([selector], 2000);
-            if (button && (button.textContent?.toLowerCase().includes('photo') || 
-                          button.getAttribute('aria-label')?.toLowerCase().includes('photo') ||
-                          selector === 'div[role="button"]')) {
-              this.log(`📸 Found upload button, clicking: ${button.textContent?.trim() || button.getAttribute('aria-label') || 'unlabeled button'}`);
-              await this.scrollIntoView(button);
-              button.click();
-              
-              // Wait longer for Facebook to create the file input
-              await this.delay(2000);
-              
-              // Try multiple attempts to find the file input after clicking
-              for (let attempt = 0; attempt < 5; attempt++) {
-                this.log(`📸 Attempt ${attempt + 1} to find file input after upload button click...`);
-                
-                // Look for file inputs more broadly after clicking
-                const allFileInputs = document.querySelectorAll('input[type="file"]');
-                this.log(`📸 Found ${allFileInputs.length} file inputs on page`);
-                
-                for (const input of allFileInputs) {
-                  // Check if this input is newly visible/accessible
-                  const style = window.getComputedStyle(input);
-                  const isVisible = style.display !== 'none' && 
-                                  style.visibility !== 'hidden' && 
-                                  style.opacity !== '0';
-                  
-                  this.log(`📸 Checking file input: visible=${isVisible}, disabled=${input.disabled}, accept=${input.accept}`);
-                  
-                  if (isVisible && !input.disabled) {
-                    fileInput = input;
-                    this.log(`📸 Found accessible file input: ${input.outerHTML.substring(0, 100)}...`);
-                    break;
-                  }
-                }
-                
-                if (fileInput) break;
-                await this.delay(1000); // Wait between attempts
-              }
-              
-              if (fileInput) break;
-            }
-          } catch (error) {
-            this.log(`📸 Error with selector ${selector}:`, error);
+        throw new Error('No file input found on page');
+      }
+      
+      this.log(`📸 Found file input, processing ${images.length} images...`);
+      
+      // Process images one by one using simple fetch
+      const validFiles = [];
+      for (let i = 0; i < Math.min(images.length, 5); i++) {
+        try {
+          const imageUrl = images[i];
+          this.log(`📸 Downloading image ${i + 1}: ${imageUrl}`);
+          
+          const response = await fetch(imageUrl);
+          if (response.ok) {
+            const blob = await response.blob();
+            const file = new File([blob], `image_${i + 1}.jpg`, { type: 'image/jpeg' });
+            validFiles.push(file);
+            this.log(`✅ Successfully downloaded image ${i + 1}`);
+          } else {
+            this.log(`❌ Failed to download image ${i + 1}: ${response.status}`);
           }
+        } catch (error) {
+          this.log(`❌ Error downloading image ${i + 1}:`, error);
         }
       }
       
-      if (!fileInput) {
-        this.log('❌ No accessible file input found on page');
+      if (validFiles.length === 0) {
+        this.log('❌ No valid images to upload');
         return false;
       }
       
-      this.log(`📸 Found file input: ${fileInput.outerHTML.substring(0, 200)}...`);
-      console.log('[IMAGE UPLOAD DEBUG] File input details:', { 
-        type: fileInput.type, 
-        accept: fileInput.accept, 
-        multiple: fileInput.multiple,
-        disabled: fileInput.disabled,
-        visible: fileInput.offsetParent !== null
-      });
-      
-      const imagesToProcess = Math.min(images.length, 4); // Limit to 4 images for Facebook
-      this.log(`📸 Processing ${imagesToProcess} images...`);
-      
-      // Use background script to download images with better CORS handling
-      const validFiles = await this.downloadImagesViaBackground(images.slice(0, imagesToProcess));
-      const successfulFiles = validFiles.filter(f => f !== null);
-      
-      if (successfulFiles.length === 0) {
-        this.log('❌ No valid images could be downloaded');
-        return false;
-      }
-      
-      this.log(`📸 Successfully downloaded ${successfulFiles.length} images`);
-      
-      // Use the SIMPLE approach from old extension that worked
+      // Set files using simple DataTransfer
       const dataTransfer = new DataTransfer();
-      successfulFiles.forEach((file, index) => {
-        this.log(`📸 Adding file ${index + 1}: ${file.name} (${file.size} bytes)`);
+      validFiles.forEach(file => {
         dataTransfer.items.add(file);
       });
       
@@ -2578,7 +2503,7 @@ class SalesonatorAutomator {
       
       await this.delay(2000); // Wait longer for files to process
       
-      this.log(`✅ Successfully uploaded ${successfulFiles.length} images`);
+      this.log(`✅ Successfully uploaded ${validFiles.length} images`);
       return true;
       
     } catch (error) {
