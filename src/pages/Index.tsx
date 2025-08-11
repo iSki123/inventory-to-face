@@ -1,5 +1,5 @@
 import { useAuth } from '@/hooks/useAuth';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Car, Users, MessageSquare, TrendingUp, ArrowRight } from 'lucide-react';
@@ -30,7 +30,7 @@ const Index = () => {
             <span className="text-2xl font-bold text-primary">Salesonator</span>
           </div>
           <Button asChild>
-            <a href="/auth">Get Started</a>
+            <Link to="/auth">Get Started</Link>
           </Button>
         </div>
       </header>
@@ -47,9 +47,9 @@ const Index = () => {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button size="lg" asChild>
-              <a href="/auth">
+              <Link to="/auth">
                 Start Free Trial <ArrowRight className="ml-2 h-5 w-5" />
-              </a>
+              </Link>
             </Button>
             <Button variant="outline" size="lg">
               Watch Demo
@@ -126,9 +126,9 @@ const Index = () => {
             Join hundreds of dealerships already using Salesonator to automate their operations and increase sales.
           </p>
           <Button size="lg" asChild>
-            <a href="/auth">
+            <Link to="/auth">
               Get Started Today <ArrowRight className="ml-2 h-5 w-5" />
-            </a>
+            </Link>
           </Button>
         </div>
       </section>
