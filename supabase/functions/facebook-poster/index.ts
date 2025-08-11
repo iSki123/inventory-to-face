@@ -47,6 +47,9 @@ serve(async (req) => {
       case 'update_vehicle_status':
         const { vehicleId, status, facebookPostId } = await req.json();
         return await updateVehicleStatus(supabaseClient, vehicleId, status, facebookPostId, user.id);
+      case 'deduct_credit':
+        const { vehicle_id, credit_amount } = await req.json();
+        return await deductCredit(supabaseClient, vehicle_id, credit_amount, user.id);
       default:
         throw new Error('Invalid action');
     }
@@ -201,3 +204,56 @@ async function updateVehicleStatus(supabaseClient: any, vehicleId: string, statu
     throw error;
   }
 }
+
+async function deductCredit(supabaseClient: any, vehicleId: string, creditAmount: number, userId: string) {
+  try {
+    console.log(`Deducting ${creditAmount} credit(s) for vehicle ${vehicleId} for user ${userId}`);
+    
+    // Get current user credits and check if sufficient
+    const { data: profile, error: profileError } = await supabaseClient
+      .from('profiles')
+      .select('credits')
+      .eq('user_id', userId)
+      .single();
+
+    if (profileError) {
+      console.error('Error fetching user profile:', profileError);
+      throw new Error('Failed to fetch user profile');
+    }
+
+    if (!profile || profile.credits < creditAmount) {
+      throw new Error(`Insufficient credits. Available: ${profile?.credits || 0}, Required: ${creditAmount}`);
+    }
+
+    // Deduct credits
+    const { data: updatedProfile, error: updateError } = await supabaseClient
+      .from('profiles')
+      .update({ 
+        credits: profile.credits - creditAmount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', userId)
+      .select('credits')
+      .single();
+
+    if (updateError) {
+      console.error('Error updating user credits:', updateError);
+      throw new Error('Failed to deduct credits');
+    }
+
+    console.log(`Credit deduction successful. New balance: ${updatedProfile.credits}`);
+
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        remaining_credits: updatedProfile.credits,
+        deducted_amount: creditAmount,
+        message: `Successfully deducted ${creditAmount} credit(s). ${updatedProfile.credits} credits remaining.`
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+    
+  } catch (error) {
+    console.error('Error in deductCredit:', error);
+    throw error;
+  }
