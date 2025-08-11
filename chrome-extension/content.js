@@ -2636,65 +2636,6 @@ class SalesonatorAutomator {
       return false;
     }
   }
-  async handleImageUploadsFallback(images, fileInput) {
-    try {
-      this.log('📸 Using fallback image upload method...');
-      
-      const validFiles = [];
-      for (let i = 0; i < Math.min(images.length, 5); i++) {
-        try {
-          const imageUrl = images[i];
-          this.log(`📸 Downloading image ${i + 1}: ${imageUrl}`);
-          
-          // Try different approaches to fetch the image
-          const response = await fetch(imageUrl, {
-            mode: 'cors',
-            credentials: 'omit',
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-          });
-          
-          if (response.ok) {
-            const blob = await response.blob();
-            const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
-            validFiles.push(file);
-            this.log(`✅ Successfully downloaded image ${i + 1} via fallback`);
-          } else {
-            this.log(`❌ Failed to download image ${i + 1}: ${response.status}`);
-          }
-        } catch (error) {
-          this.log(`❌ Error downloading image ${i + 1}:`, error);
-        }
-      }
-      
-      if (validFiles.length === 0) {
-        this.log('❌ No valid images to upload via fallback');
-        return false;
-      }
-      
-      // Set files using simple DataTransfer
-      const dataTransfer = new DataTransfer();
-      validFiles.forEach(file => {
-        dataTransfer.items.add(file);
-      });
-      
-      fileInput.files = dataTransfer.files;
-      
-      // Trigger change event
-      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-      fileInput.dispatchEvent(new Event('input', { bubbles: true }));
-      
-      await this.delay(3000);
-      
-      this.log(`✅ Fallback upload completed - ${validFiles.length} files`);
-      return true;
-      
-    } catch (error) {
-      this.log('⚠️ Fallback image upload failed:', error);
-      return false;
-    }
-  }
 
   // Advanced React-compatible file setting with enhanced safeguards
   async setFilesWithReactCompatibility(fileInput, files) {
