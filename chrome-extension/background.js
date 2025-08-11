@@ -14,6 +14,9 @@ class SalesonatorBackground {
     
     // Handle tab updates
     chrome.tabs.onUpdated.addListener(this.onTabUpdated.bind(this));
+    
+    // Initialize posting state detection
+    this.initializePostingStateDetection();
   }
 
   onInstalled(details) {
@@ -370,6 +373,138 @@ class SalesonatorBackground {
     }
   }
 
+  // Initialize posting state detection on extension load
+  async initializePostingStateDetection() {
+    try {
+      console.log('🔍 Initializing posting state detection...');
+      
+      // Check for existing posting state in storage
+      const postingState = await chrome.storage.local.get([
+        'isPosting', 
+        'currentVehicleIndex', 
+        'vehicleQueue', 
+        'lastPostedVehicle',
+        'postingStartTime',
+        'totalVehiclesToPost'
+      ]);
+      
+      console.log('📊 Current posting state:', postingState);
+      
+      // Detect if posting was in progress
+      if (postingState.isPosting) {
+        const currentIndex = postingState.currentVehicleIndex || 0;
+        const totalVehicles = postingState.totalVehiclesToPost || 0;
+        const startTime = postingState.postingStartTime;
+        
+        console.log(`🚀 Detected active posting session: ${currentIndex}/${totalVehicles}`);
+        
+        if (startTime) {
+          const elapsedMinutes = (Date.now() - startTime) / (1000 * 60);
+          console.log(`⏱️ Session has been running for ${elapsedMinutes.toFixed(1)} minutes`);
+        }
+        
+        // Check if posting session completed
+        if (currentIndex >= totalVehicles && totalVehicles > 0) {
+          console.log('✅ Posting session appears to be completed');
+          await this.handlePostingCompletion(postingState);
+        } else {
+          console.log('⏸️ Posting session appears to be in progress or paused');
+          await this.handleInProgressPosting(postingState);
+        }
+      } else {
+        console.log('💤 No active posting session detected');
+      }
+      
+      // Set up periodic state monitoring
+      this.setupPostingStateMonitoring();
+      
+    } catch (error) {
+      console.error('❌ Error initializing posting state detection:', error);
+    }
+  }
+  
+  // Handle completed posting session
+  async handlePostingCompletion(postingState) {
+    console.log('🎉 Processing completed posting session...');
+    
+    const completionData = {
+      completedAt: Date.now(),
+      totalPosted: postingState.currentVehicleIndex || 0,
+      totalPlanned: postingState.totalVehiclesToPost || 0,
+      lastVehicle: postingState.lastPostedVehicle,
+      duration: postingState.postingStartTime ? 
+        (Date.now() - postingState.postingStartTime) / (1000 * 60) : 0
+    };
+    
+    // Store completion record
+    await chrome.storage.local.set({
+      lastCompletedSession: completionData,
+      isPosting: false
+    });
+    
+    console.log('📈 Posting session completion recorded:', completionData);
+    
+    // Update extension badge to show completion
+    this.updateBadgeForCompletion(completionData);
+  }
+  
+  // Handle in-progress posting session
+  async handleInProgressPosting(postingState) {
+    console.log('⚠️ Processing in-progress posting session...');
+    
+    const progressData = {
+      current: postingState.currentVehicleIndex || 0,
+      total: postingState.totalVehiclesToPost || 0,
+      lastVehicle: postingState.lastPostedVehicle,
+      elapsedTime: postingState.postingStartTime ? 
+        (Date.now() - postingState.postingStartTime) / (1000 * 60) : 0
+    };
+    
+    console.log('📊 Progress data:', progressData);
+    
+    // Update extension badge to show progress
+    this.updateBadgeForProgress(progressData);
+  }
+  
+  // Set up periodic monitoring of posting state
+  setupPostingStateMonitoring() {
+    // Check posting state every 30 seconds
+    setInterval(async () => {
+      const postingState = await chrome.storage.local.get(['isPosting', 'currentVehicleIndex', 'totalVehiclesToPost']);
+      
+      if (postingState.isPosting) {
+        const current = postingState.currentVehicleIndex || 0;
+        const total = postingState.totalVehiclesToPost || 0;
+        
+        // Check for completion
+        if (current >= total && total > 0) {
+          await this.handlePostingCompletion(postingState);
+        }
+      }
+    }, 30000); // 30 seconds
+  }
+  
+  // Update extension badge for completed session
+  updateBadgeForCompletion(completionData) {
+    chrome.action.setBadgeText({ text: '✓' });
+    chrome.action.setBadgeBackgroundColor({ color: '#4CAF50' });
+    chrome.action.setTitle({ 
+      title: `Salesonator - Last session: ${completionData.totalPosted} vehicles posted in ${completionData.duration.toFixed(1)} minutes`
+    });
+  }
+  
+  // Update extension badge for progress
+  updateBadgeForProgress(progressData) {
+    const percentage = progressData.total > 0 ? 
+      Math.round((progressData.current / progressData.total) * 100) : 0;
+    
+    chrome.action.setBadgeText({ text: `${percentage}%` });
+    chrome.action.setBadgeBackgroundColor({ color: '#2196F3' });
+    chrome.action.setTitle({ 
+      title: `Salesonator - Posting in progress: ${progressData.current}/${progressData.total} (${percentage}%)`
+    });
+  }
+
   // Simple hash function for consistent storage keys (same as content script)
   hashString(str) {
     let hash = 0;
@@ -380,7 +515,6 @@ class SalesonatorBackground {
     }
     return Math.abs(hash).toString(36);
   }
-}
 
 // Initialize background script
 try {
