@@ -1189,12 +1189,16 @@ class SalesonatorAutomator {
       
       await this.delay(500);
       
-      // Verify value was set - exact same logic as mileage
-      if ((priceInput.value || '').toString() === expectedNum.toString()) {
+      // Verify value was set - handle Facebook's formatted display
+      const currentValue = (priceInput.value || '').toString();
+      const cleanCurrentValue = currentValue.replace(/[^\d]/g, ''); // Remove $, commas, etc.
+      const expectedStr = expectedNum.toString();
+      
+      if (cleanCurrentValue === expectedStr || currentValue === expectedStr) {
         this.log('✅ Successfully filled price:', expectedNum);
         return true;
       } else {
-        this.log('⚠️ Price value verification failed. Expected:', expectedNum.toString(), 'Got:', priceInput.value);
+        this.log('⚠️ Price value verification failed. Expected:', expectedStr, 'Got:', currentValue, 'Cleaned:', cleanCurrentValue);
         // Try typing approach as fallback - exact same as mileage method
         priceInput.focus();
         if (priceInput.select) priceInput.select();
