@@ -457,7 +457,16 @@ class SalesonatorExtension {
 
   async startPosting() {
     if (this.vehicles.length === 0) {
-      alert('No vehicles to post. Please fetch vehicles first.');
+      try {
+        document.getElementById('status').textContent = 'Fetching vehicles before starting...';
+        await this.fetchVehicles();
+      } catch (e) {
+        console.error('Auto-fetch failed:', e);
+      }
+    }
+
+    if (this.vehicles.length === 0) {
+      alert('No vehicles ready to post. Please fetch vehicles first.');
       return;
     }
 
