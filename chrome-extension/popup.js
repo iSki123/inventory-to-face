@@ -548,7 +548,7 @@ class SalesonatorExtension {
 
   async postNextVehicle() {
     // Get current state from storage (in case of reload/redirect)
-    const state = await chrome.storage.local.get(['isPosting', 'postingQueue', 'currentVehicleIndex']);
+    const state = await chrome.storage.local.get(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postedVehicles']);
     
     if (!state.isPosting || !state.postingQueue || state.currentVehicleIndex >= state.postingQueue.length) {
       await this.stopPosting();
@@ -557,6 +557,21 @@ class SalesonatorExtension {
     }
 
     const vehicle = state.postingQueue[state.currentVehicleIndex];
+    const vehicleKey = `${vehicle.id}_${vehicle.year}_${vehicle.make}_${vehicle.model}`;
+    const postedVehicles = state.postedVehicles || [];
+    
+    // Check if this vehicle has already been posted successfully
+    if (postedVehicles.includes(vehicleKey)) {
+      console.log('⏭️ Skipping already posted vehicle:', vehicle.year, vehicle.make, vehicle.model);
+      document.getElementById('status').textContent = `Skipping already posted: ${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+      
+      // Move to next vehicle immediately
+      setTimeout(() => {
+        this.moveToNextVehicle();
+      }, 1000);
+      return;
+    }
+    
     console.log('🚗 Posting vehicle', state.currentVehicleIndex + 1, 'of', state.postingQueue.length, ':', vehicle.year, vehicle.make, vehicle.model);
     
     // Update UI
@@ -1023,6 +1038,22 @@ class SalesonatorExtension {
         }, 4000);
       }
     });
+  }
+
+  async markVehicleAsPosted(vehicle) {
+    try {
+      const vehicleKey = `${vehicle.id}_${vehicle.year}_${vehicle.make}_${vehicle.model}`;
+      const state = await chrome.storage.local.get(['postedVehicles']);
+      const postedVehicles = state.postedVehicles || [];
+      
+      if (!postedVehicles.includes(vehicleKey)) {
+        postedVehicles.push(vehicleKey);
+        await chrome.storage.local.set({ postedVehicles });
+        console.log('✅ Marked vehicle as posted:', vehicleKey);
+      }
+    } catch (error) {
+      console.error('Error marking vehicle as posted:', error);
+    }
   }
 
   // Check for existing posting state on initialization
