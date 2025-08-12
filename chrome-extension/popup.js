@@ -563,14 +563,17 @@ class SalesonatorExtension {
     
     try {
       // CRITICAL: Deduct credit BEFORE posting to ensure it completes before redirect
+      const vehicleLabel = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+      await this.sendLogToContent('💳 Deducting credit and initiating post...', { vehicle: vehicleLabel });
       console.log('💳 Deducting credit before posting...');
       await this.deductCreditForPosting(vehicle);
       console.log('✅ Credit deducted successfully');
-      
+      await this.sendLogToContent('✅ Credit deducted, sending vehicle to content script', { vehicle: vehicleLabel });
       // Now attempt to post the vehicle
       await this.sendVehicleToContentScript(vehicle);
     } catch (error) {
       console.error('Error posting vehicle:', error);
+      await this.sendErrorToContent('❌ Error posting vehicle', { error: error?.message, vehicle });
       document.getElementById('status').textContent = `Error posting vehicle ${state.currentVehicleIndex + 1}: ${error.message}`;
       
       // Continue to next vehicle after error
@@ -803,6 +806,23 @@ class SalesonatorExtension {
     if (creditEl) {
       creditEl.textContent = this.credits;
     }
+  }
+
+  // Helper: send a lightweight log to the active Facebook tab's content script
+  async sendToContent(action, payload) {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) return;
+      chrome.tabs.sendMessage(tab.id, { action, ...payload }, () => void 0);
+    } catch {}
+  }
+
+  async sendLogToContent(message, data) {
+    await this.sendToContent('popupLog', { message, data });
+  }
+
+  async sendErrorToContent(message, data) {
+    await this.sendToContent('popupError', { message, data });
   }
 
   setupMessageListener() {

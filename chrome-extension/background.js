@@ -53,7 +53,8 @@ class SalesonatorBackground {
       }
       
       if (request.action === 'preDownloadImages') {
-        this.preDownloadImagesViaProxy(request.images, sendResponse);
+        const urls = request.imageUrls || request.images;
+        this.preDownloadImagesViaProxy(urls, sendResponse);
         return true; // Keep message channel open for async response
       }
       

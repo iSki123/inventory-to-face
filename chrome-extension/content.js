@@ -3221,6 +3221,20 @@ class SalesonatorAutomator {
         return false; // Synchronous response
       }
       
+      if (request.action === 'popupLog') {
+        console.log('[Popup]', request.message, request.data || '');
+        this.log('🧭 Popup log:', { message: request.message, data: request.data });
+        sendResponse?.({ ok: true });
+        return false;
+      }
+
+      if (request.action === 'popupError') {
+        console.error('[Popup Error]', request.message, request.data || '');
+        this.log('❌ Popup error:', { message: request.message, data: request.data });
+        sendResponse?.({ ok: true });
+        return false;
+      }
+      
       console.log('❓ Unknown action received:', request.action);
       // For unknown actions, don't keep channel open
       sendResponse({ success: false, error: 'Unknown action' });
