@@ -1050,7 +1050,7 @@ class SalesonatorExtension {
           await this.markVehicleAsPosted(vehicle);
         }
         
-        this.moveToNextVehicle();
+        // Don't call moveToNextVehicle here - wait for continueWithNextVehicle message
       } else if (message.action === 'continueWithNextVehicle') {
         console.log('🚀 Content script signaling to continue with next vehicle immediately');
         document.getElementById('status').textContent = 'Preparing next vehicle...';
