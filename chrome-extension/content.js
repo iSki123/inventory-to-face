@@ -2464,23 +2464,29 @@ class SalesonatorAutomator {
       
       this.log(`📸 Found file input, processing ${images.length} images...`);
       
-      // Simple direct fetch approach (like old extension that worked)
+      // Use background script to download images (bypasses CORS)
       const maxImages = Math.min(images.length, 5);
       const validFiles = [];
       
       for (let i = 0; i < maxImages; i++) {
         try {
           const imageUrl = images[i];
-          this.log(`📸 Downloading image ${i + 1}: ${imageUrl}`);
+          this.log(`📸 Downloading image ${i + 1} via background: ${imageUrl}`);
           
-          const response = await fetch(imageUrl);
-          if (response.ok) {
-            const blob = await response.blob();
+          const response = await new Promise((resolve) => {
+            chrome.runtime.sendMessage({ 
+              action: 'fetchImage', 
+              url: imageUrl 
+            }, resolve);
+          });
+          
+          if (response && response.success && response.data) {
+            const blob = this.base64ToBlob(response.data, 'image/jpeg');
             const file = new File([blob], `image_${i + 1}.jpg`, { type: 'image/jpeg' });
             validFiles.push(file);
             this.log(`✅ Successfully downloaded image ${i + 1}`);
           } else {
-            this.log(`❌ Failed to download image ${i + 1}: ${response.status}`);
+            this.log(`❌ Failed to download image ${i + 1}: ${response?.error || 'Unknown error'}`);
           }
         } catch (error) {
           this.log(`❌ Error downloading image ${i + 1}:`, error);
