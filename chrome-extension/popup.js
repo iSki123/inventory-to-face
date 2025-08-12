@@ -882,6 +882,23 @@ class SalesonatorExtension {
     }
   }
 
+  updateStatusMessage(message, type = 'info') {
+    const statusEl = document.getElementById('status');
+    statusEl.textContent = message;
+    
+    // Apply styling based on type
+    if (type === 'info') {
+      statusEl.className = 'status';
+      statusEl.style.background = '#fff3cd';
+      statusEl.style.color = '#856404';
+      statusEl.style.border = '1px solid #ffeaa7';
+    } else if (type === 'success') {
+      statusEl.className = 'status connected';
+    } else if (type === 'error') {
+      statusEl.className = 'status disconnected';
+    }
+  }
+
   // Helper: send a lightweight log to the active Facebook tab's content script
   async sendToContent(action, payload) {
     try {
@@ -908,6 +925,11 @@ class SalesonatorExtension {
         document.getElementById('status').textContent = 'Extension reloaded. Please refresh this popup.';
       } else if (message.action === 'imagesPreDownloaded') {
         console.log('✅ All images pre-downloaded successfully');
+      } else if (message.type === 'imageDownloadProgress') {
+        // Handle real-time progress updates from chunked download
+        const data = message.data;
+        const percentage = Math.round((data.completed / data.total) * 100);
+        this.updateStatusMessage(`Pre-downloading images: ${data.stored}/${data.total} (${percentage}%) - Chunk ${data.chunk}/${data.totalChunks}`, 'info');
       } else if (message.action === 'vehiclePosted') {
         console.log('🎉 Vehicle posted successfully, continuing with next...');
         document.getElementById('status').textContent = 'Vehicle posted! Moving to next...';

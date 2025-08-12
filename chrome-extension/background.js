@@ -337,7 +337,7 @@ class SalesonatorBackground {
     });
   }
 
-  // Pre-download multiple images via Supabase proxy
+  // Pre-download multiple images via Supabase proxy in chunks
   async preDownloadImagesViaProxy(imageUrls, sendResponse) {
     try {
       console.log('🔄 Background: Pre-downloading images via Supabase proxy...');
@@ -349,71 +349,125 @@ class SalesonatorBackground {
         return;
       }
       
-      console.log(`📊 Background: Starting batch download of ${images.length} images`);
+      const CHUNK_SIZE = 20; // Process 20 images at a time
+      const totalImages = images.length;
+      let totalStoredCount = 0;
+      let totalSuccessCount = 0;
+      let allResults = [];
       
-      const endpoint = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/image-proxy';
-      const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ',
-        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
-      };
-
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Batch download timeout after 45 seconds')), 45000);
-      });
-
-      const fetchPromise = fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ imageUrls: images })
-      });
-
-      const response = await Promise.race([fetchPromise, timeoutPromise]);
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        throw new Error(`Proxy request failed: ${response.status}${text ? ` - ${text}` : ''}`);
-      }
-
-      const data = await response.json();
-      console.log(`📦 Background: Received proxy response for ${data.results?.length || 0} images`);
+      console.log(`📊 Background: Starting chunked download of ${totalImages} images (${CHUNK_SIZE} per chunk)`);
       
-      // Store successful downloads in chrome storage with progress tracking
-      let storedCount = 0;
-      for (const result of data.results || []) {
-        if (result.success) {
-          try {
-            const storageKey = `img_${this.hashString(result.url)}`;
-            const base64Data = result.base64 || '';
-            if (base64Data) {
-              await chrome.storage.local.set({ [storageKey]: base64Data });
-              storedCount++;
-              console.log(`💾 Background: Stored image ${storedCount}/${data.summary?.successful || 0}: ${storageKey}`);
+      // Process images in chunks
+      for (let i = 0; i < images.length; i += CHUNK_SIZE) {
+        const chunk = images.slice(i, i + CHUNK_SIZE);
+        const chunkNumber = Math.floor(i / CHUNK_SIZE) + 1;
+        const totalChunks = Math.ceil(images.length / CHUNK_SIZE);
+        
+        console.log(`📦 Background: Processing chunk ${chunkNumber}/${totalChunks} (${chunk.length} images)`);
+        
+        try {
+          const chunkResult = await this.downloadImageChunk(chunk, chunkNumber, totalChunks);
+          
+          allResults.push(...(chunkResult.results || []));
+          totalSuccessCount += chunkResult.successCount || 0;
+          totalStoredCount += chunkResult.storedCount || 0;
+          
+          // Send progress update to popup
+          chrome.runtime.sendMessage({
+            type: 'imageDownloadProgress',
+            data: {
+              completed: i + chunk.length,
+              total: totalImages,
+              stored: totalStoredCount,
+              successful: totalSuccessCount,
+              chunk: chunkNumber,
+              totalChunks: totalChunks
             }
-          } catch (storageError) {
-            console.warn(`⚠️ Background: Failed to store image ${result.url}:`, storageError);
+          }).catch(() => {}); // Ignore if popup is closed
+          
+          // Small delay between chunks to prevent overwhelming the server
+          if (i + CHUNK_SIZE < images.length) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
-        } else {
-          console.warn(`❌ Background: Failed to download image ${result.url}: ${result.error}`);
+          
+        } catch (chunkError) {
+          console.error(`💥 Background: Error processing chunk ${chunkNumber}:`, chunkError);
+          // Continue with next chunk even if one fails
         }
       }
       
-      const successCount = data.summary?.successful || 0;
-      const totalCount = data.summary?.total || images.length;
-      console.log(`✅ Background: Pre-download complete: ${successCount}/${totalCount} downloaded, ${storedCount} stored`);
+      console.log(`✅ Background: All chunks complete: ${totalSuccessCount}/${totalImages} downloaded, ${totalStoredCount} stored`);
       
       sendResponse({ 
         success: true, 
-        results: data.results || [],
-        successCount: successCount,
-        totalCount: totalCount,
-        storedCount: storedCount
+        results: allResults,
+        successCount: totalSuccessCount,
+        totalCount: totalImages,
+        storedCount: totalStoredCount
       });
     } catch (error) {
       console.error('💥 Background: Error pre-downloading images:', error);
       sendResponse({ success: false, error: error.message });
     }
+  }
+
+  // Download a single chunk of images
+  async downloadImageChunk(images, chunkNumber, totalChunks) {
+    const endpoint = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/image-proxy';
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ',
+      'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+    };
+
+    // Timeout for each chunk (30 seconds should be enough for 20 images)
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`Chunk ${chunkNumber} timeout after 30 seconds`)), 30000);
+    });
+
+    const fetchPromise = fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ imageUrls: images })
+    });
+
+    const response = await Promise.race([fetchPromise, timeoutPromise]);
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`Proxy request failed for chunk ${chunkNumber}: ${response.status}${text ? ` - ${text}` : ''}`);
+    }
+
+    const data = await response.json();
+    console.log(`📦 Background: Received proxy response for chunk ${chunkNumber}: ${data.results?.length || 0} images`);
+    
+    // Store successful downloads in chrome storage
+    let storedCount = 0;
+    for (const result of data.results || []) {
+      if (result.success) {
+        try {
+          const storageKey = `img_${this.hashString(result.url)}`;
+          const base64Data = result.base64 || '';
+          if (base64Data) {
+            await chrome.storage.local.set({ [storageKey]: base64Data });
+            storedCount++;
+          }
+        } catch (storageError) {
+          console.warn(`⚠️ Background: Failed to store image ${result.url}:`, storageError);
+        }
+      } else {
+        console.warn(`❌ Background: Failed to download image ${result.url}: ${result.error}`);
+      }
+    }
+    
+    const successCount = data.summary?.successful || 0;
+    console.log(`✅ Background: Chunk ${chunkNumber} complete: ${successCount}/${images.length} downloaded, ${storedCount} stored`);
+    
+    return {
+      results: data.results || [],
+      successCount: successCount,
+      storedCount: storedCount
+    };
   }
 
   // Handle web app authentication
