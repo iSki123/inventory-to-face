@@ -30,8 +30,11 @@ class SalesonatorExtension {
       document.getElementById('login').addEventListener('click', () => this.showLoginForm());
       document.getElementById('openDashboard').addEventListener('click', () => this.openDashboard());
 
-      // Show initial status
-      this.updateStatusMessage('Checking authentication...', 'info');
+      // Show initial status - but only if element exists
+      const statusEl = document.getElementById('status');
+      if (statusEl) {
+        statusEl.textContent = 'Checking authentication...';
+      }
 
       // Check for existing web app authentication first
       console.log('🔍 Starting web app authentication check...');
@@ -62,7 +65,10 @@ class SalesonatorExtension {
       await this.checkPostingState();
     } catch (error) {
       console.error('Error during initialization:', error);
-      this.updateStatusMessage('Initialization error: ' + error.message, 'error');
+      const statusEl = document.getElementById('status');
+      if (statusEl) {
+        statusEl.textContent = 'Initialization error: ' + error.message;
+      }
     }
   }
 
@@ -70,8 +76,11 @@ class SalesonatorExtension {
     try {
       console.log('Checking for web app authentication...');
       
-      // Show connecting status
-      this.updateStatusMessage('Connecting to Salesonator...', 'info');
+      // Show connecting status - but only if element exists
+      const statusEl = document.getElementById('status');
+      if (statusEl) {
+        statusEl.textContent = 'Connecting to Salesonator...';
+      }
       
       // Check all open tabs for Salesonator (much broader search)
       const allTabs = await chrome.tabs.query({});
@@ -178,20 +187,20 @@ class SalesonatorExtension {
                     return { token: authData.token, user: authData.user, credits: profile.credits };
                   } else {
                     console.log('❌ User is not eligible - Active:', profile?.is_active, 'Credits:', profile?.credits);
-                    this.updateStatusMessage('Account not active - please contact support', 'error');
+                    if (statusEl) statusEl.textContent = 'Account not active - please contact support';
                     return null;
                   }
                 } else {
                   const errorText = await response.text();
                   console.log('❌ Failed to verify user eligibility, status:', response.status);
                   console.log('❌ Error response:', errorText);
-                  this.updateStatusMessage('Failed to verify user eligibility', 'error');
+                  if (statusEl) statusEl.textContent = 'Failed to verify user eligibility';
                   return null;
                 }
               } catch (error) {
                 console.error('❌ Error verifying user eligibility:', error);
                 console.error('❌ Error details:', error.message, error.stack);
-                this.updateStatusMessage('Error checking user eligibility: ' + error.message, 'error');
+                if (statusEl) statusEl.textContent = 'Error checking user eligibility: ' + error.message;
                 return null;
               }
             }
@@ -203,11 +212,12 @@ class SalesonatorExtension {
       }
       
       console.log('No web app authentication found');
-      this.updateStatusMessage('No authentication found in web app', 'warning');
+      if (statusEl) statusEl.textContent = 'No authentication found in web app';
       return null;
     } catch (error) {
       console.warn('Error checking web app authentication:', error);
-      this.updateStatusMessage('Error checking web app authentication', 'error');
+      const statusEl = document.getElementById('status');
+      if (statusEl) statusEl.textContent = 'Error checking web app authentication';
       return null;
     }
   }
