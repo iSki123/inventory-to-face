@@ -27,6 +27,31 @@ class SalesonatorAutomator {
     return new Promise(resolve => setTimeout(resolve, actualDelay));
   }
 
+  // Convert base64 string to File object
+  base64ToFile(base64Data, filename) {
+    try {
+      // Remove data URL prefix if present
+      const base64String = base64Data.replace(/^data:image\/[a-z]+;base64,/, '');
+      
+      // Convert base64 to binary
+      const binaryString = atob(base64String);
+      const bytes = new Uint8Array(binaryString.length);
+      
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      // Create blob and file
+      const blob = new Blob([bytes], { type: 'image/jpeg' });
+      const file = new File([blob], filename, { type: 'image/jpeg' });
+      
+      return file;
+    } catch (error) {
+      console.error('Error converting base64 to file:', error);
+      return null;
+    }
+  }
+
   // React-native value setter that forces React to recognize changes
   setNativeValue(element, value) {
     const descriptor = Object.getOwnPropertyDescriptor(element.__proto__, 'value') ||
