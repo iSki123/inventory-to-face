@@ -580,9 +580,19 @@ class SalesonatorAutomator {
               };
               
             } catch (backendError) {
-              this.log('⚠️ Vehicle posted but failed to record in backend:', backendError);
+              this.log('⚠️ CRITICAL: Vehicle posted but failed to record in backend:', backendError);
               this.log('⚠️ Backend error details:', backendError.message);
+              this.log('⚠️ Backend error stack:', backendError.stack);
               console.error('Backend recording error:', backendError);
+              console.error('Full backend error object:', backendError);
+              
+              // IMPORTANT: Send error notification to popup
+              chrome.runtime.sendMessage({
+                action: 'recordingError',
+                vehicleId: vehicleData.id,
+                error: backendError.message,
+                fullError: backendError.toString()
+              });
               
               // Clear posting state even if recording failed
               this.isPosting = false;
@@ -603,7 +613,8 @@ class SalesonatorAutomator {
               
               return { 
                 success: true, 
-                warning: 'Posted but failed to record: ' + backendError.message 
+                warning: 'Posted but failed to record: ' + backendError.message,
+                databaseError: true
               };
             }
           }

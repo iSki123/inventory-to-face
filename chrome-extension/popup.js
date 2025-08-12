@@ -448,13 +448,34 @@ class SalesonatorExtension {
       const data = await response.json();
       
       if (data.success) {
-        this.vehicles = data.vehicles || [];
+        const allVehicles = data.vehicles || [];
+        
+        // Filter out vehicles that are already marked as posted locally
+        const { postedVehicles = [] } = await chrome.storage.local.get(['postedVehicles']);
+        
+        this.vehicles = allVehicles.filter(vehicle => {
+          const vehicleKey = `${vehicle.id}_${vehicle.year}_${vehicle.make}_${vehicle.model}`;
+          const isPostedLocally = postedVehicles.includes(vehicleKey);
+          
+          if (isPostedLocally) {
+            console.log(`🚫 Filtering out locally posted vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+          }
+          
+          return !isPostedLocally;
+        });
+        
+        console.log(`📊 Found ${allVehicles.length} vehicles from database, ${this.vehicles.length} after filtering posted ones`);
+        
         countEl.textContent = `${this.vehicles.length} vehicles ready to post`;
         startBtn.disabled = this.vehicles.length === 0;
         statusEl.className = 'status connected';
-        statusEl.textContent = `✅ Vehicles loaded! Ready to start posting.`;
         
-        console.log(`📊 Loaded ${this.vehicles.length} vehicles for posting`);
+        if (this.vehicles.length !== allVehicles.length) {
+          statusEl.textContent = `✅ ${this.vehicles.length} new vehicles loaded (${allVehicles.length - this.vehicles.length} already posted)`;
+        } else {
+          statusEl.textContent = `✅ ${this.vehicles.length} vehicles loaded! Ready to start posting.`;
+        }
+        
         console.log('🔧 Images will be downloaded per-vehicle before posting');
         
         // Enable start button immediately - no pre-downloading
@@ -1027,7 +1048,7 @@ class SalesonatorExtension {
 
   setupMessageListener() {
     // Listen for messages from the background script and content script
-    chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+      chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       console.log('📨 Popup received message:', message);
       
       if (message.action === 'extensionReloaded') {
@@ -1041,16 +1062,36 @@ class SalesonatorExtension {
         this.updateStatusMessage(`Pre-downloading images: ${data.stored}/${data.total} (${percentage}%) - Chunk ${data.chunk}/${data.totalChunks}`, 'info');
       } else if (message.action === 'vehiclePosted') {
         console.log('🎉 Vehicle posted successfully, continuing with next...');
-        document.getElementById('status').textContent = 'Vehicle posted! Moving to next...';
         
-        // Mark vehicle as posted before moving to next
-        const state = await chrome.storage.local.get(['postingQueue', 'currentVehicleIndex']);
-        if (state.postingQueue && state.currentVehicleIndex < state.postingQueue.length) {
-          const vehicle = state.postingQueue[state.currentVehicleIndex];
-          await this.markVehicleAsPosted(vehicle);
+        // Check if database recording failed
+        if (message.recordingFailed || message.databaseError) {
+          console.error('⚠️ Database recording failed for vehicle:', message.vehicleId);
+          document.getElementById('status').textContent = `Vehicle posted but DB update failed: ${message.error}`;
+          this.updateStatusMessage(`Posted but database error: ${message.error}`, 'error');
+          
+          // Still mark locally to prevent immediate reposting, but show warning
+          const state = await chrome.storage.local.get(['postingQueue', 'currentVehicleIndex']);
+          if (state.postingQueue && state.currentVehicleIndex < state.postingQueue.length) {
+            const vehicle = state.postingQueue[state.currentVehicleIndex];
+            await this.markVehicleAsPosted(vehicle);
+            console.log('⚠️ Marked vehicle as posted locally despite database error');
+          }
+        } else {
+          document.getElementById('status').textContent = 'Vehicle posted! Moving to next...';
+          
+          // Mark vehicle as posted before moving to next
+          const state = await chrome.storage.local.get(['postingQueue', 'currentVehicleIndex']);
+          if (state.postingQueue && state.currentVehicleIndex < state.postingQueue.length) {
+            const vehicle = state.postingQueue[state.currentVehicleIndex];
+            await this.markVehicleAsPosted(vehicle);
+          }
         }
         
         // Don't call moveToNextVehicle here - wait for continueWithNextVehicle message
+      } else if (message.action === 'recordingError') {
+        console.error('💥 Recording error received:', message.error);
+        document.getElementById('status').textContent = `Database error: ${message.error}`;
+        this.updateStatusMessage(`Critical: Database recording failed - ${message.error}`, 'error');
       } else if (message.action === 'continueWithNextVehicle') {
         console.log('🚀 Content script signaling to continue with next vehicle immediately');
         document.getElementById('status').textContent = 'Preparing next vehicle...';
