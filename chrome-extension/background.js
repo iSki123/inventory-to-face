@@ -48,14 +48,15 @@ class SalesonatorBackground {
       }
       
       if (request.action === 'fetchImage') {
-        this.fetchImageViaProxy(request.url, sendResponse);
-        return true; // Keep message channel open for async response
+        // Direct image fetch bypassing CORS
+        this.fetchImageDirect(request.url, sendResponse);
+        return true; // Will respond asynchronously
       }
       
-      if (request.action === 'preDownloadImages') {
-        const urls = request.imageUrls || request.images;
-        this.preDownloadImagesViaProxy(urls, sendResponse);
-        return true; // Keep message channel open for async response
+      if (request.action === 'preDownloadImagesViaProxy') {
+        // Batch download images directly
+        this.preDownloadImagesViaProxy(request.imageUrls, sendResponse);
+        return true; // Will respond asynchronously
       }
       
       if (request.action === 'logActivity') {
@@ -249,80 +250,69 @@ class SalesonatorBackground {
     }
   }
 
-
-  // Fetch single image via Supabase proxy with timeout and fallback
-  async fetchImageViaProxy(url, sendResponse) {
+  // Direct image fetch using Chrome extension CORS bypass
+  async fetchImageDirect(url, sendResponse) {
     try {
-      console.log('🔄 Background: Starting image fetch via Supabase proxy:', url);
+      console.log('🔄 Background: Starting direct image fetch:', url);
       
-      // Create a timeout promise
+      // Create timeout promise (15 seconds per image)
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Image fetch timeout after 30 seconds')), 30000);
+        setTimeout(() => reject(new Error('Image fetch timeout after 15 seconds')), 15000);
       });
       
-      // Fallback to direct fetch if proxy fails (bypasses CORS in background context)
-      const directFetchPromise = this.fetchImageDirect(url);
-      
-      // Try proxy first, then direct fetch if it fails
-      const fetchPromise = this.fetchViaProxy(url).catch(async (proxyError) => {
-        console.warn('⚠️ Background: Proxy failed, trying direct fetch:', proxyError.message);
-        return await directFetchPromise;
+      // Fetch promise with enhanced headers to mimic real browser
+      const fetchPromise = fetch(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'Sec-Fetch-Dest': 'image',
+          'Sec-Fetch-Mode': 'no-cors',
+          'Sec-Fetch-Site': 'cross-site'
+        }
+      }).then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.startsWith('image/')) {
+          throw new Error(`Invalid content type: ${contentType}`);
+        }
+        
+        const blob = await response.blob();
+        
+        // Size check (max 10MB per image)
+        if (blob.size > 10 * 1024 * 1024) {
+          throw new Error(`Image too large: ${(blob.size / 1024 / 1024).toFixed(1)}MB (max 10MB)`);
+        }
+        
+        const base64 = await this.blobToBase64(blob);
+        
+        console.log(`✅ Background: Successfully fetched image directly, size: ${(blob.size / 1024).toFixed(1)}KB`);
+        return { success: true, data: base64, size: blob.size, contentType };
       });
       
       const result = await Promise.race([fetchPromise, timeoutPromise]);
-      sendResponse(result);
+      
+      if (sendResponse) {
+        sendResponse(result);
+      }
+      return result;
       
     } catch (error) {
-      console.error('💥 Background: Error fetching image:', error);
-      sendResponse({ success: false, error: error.message });
+      console.error('❌ Background: Error fetching image directly:', error.message);
+      const errorResult = { success: false, error: error.message };
+      
+      if (sendResponse) {
+        sendResponse(errorResult);
+      }
+      return errorResult;
     }
-  }
-  
-  async fetchViaProxy(url) {
-    const endpoint = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/image-proxy';
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ',
-      'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
-    };
-    
-    const response = await fetch(endpoint, { 
-      method: 'POST', 
-      headers, 
-      body: JSON.stringify({ imageUrls: [url] })
-    });
-
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`Proxy request failed: ${response.status}${text ? ` - ${text}` : ''}`);
-    }
-
-    const data = await response.json();
-    
-    if (data.results && data.results[0] && data.results[0].success) {
-      const result = data.results[0];
-      console.log('✅ Background: Successfully fetched image via proxy, size:', result.size);
-      return { success: true, data: result.base64 };
-    } else {
-      const error = data.results?.[0]?.error || data.error || 'Unknown proxy error';
-      throw new Error(`Proxy error: ${error}`);
-    }
-  }
-  
-  async fetchImageDirect(url) {
-    console.log('🔄 Background: Attempting direct fetch (CORS bypass):', url);
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`Direct fetch failed: ${response.status}`);
-    }
-    
-    const blob = await response.blob();
-    const base64 = await this.blobToBase64(blob);
-    
-    console.log('✅ Background: Successfully fetched image directly, size:', blob.size);
-    return { success: true, data: base64 };
   }
   
   blobToBase64(blob) {
@@ -337,137 +327,108 @@ class SalesonatorBackground {
     });
   }
 
-  // Pre-download multiple images via Supabase proxy in chunks
+  // Direct batch image download using Chrome extension capabilities
   async preDownloadImagesViaProxy(imageUrls, sendResponse) {
     try {
-      console.log('🔄 Background: Pre-downloading images via Supabase proxy...');
+      console.log('🔄 Background: Pre-downloading images directly (bypassing proxy)...');
 
       const images = Array.isArray(imageUrls) ? imageUrls : [];
       if (images.length === 0) {
-        console.warn('⚠️ Background: No image URLs provided to proxy.');
+        console.warn('⚠️ Background: No image URLs provided.');
         sendResponse({ success: true, results: [], successCount: 0, totalCount: 0 });
         return;
       }
-      
-      const CHUNK_SIZE = 20; // Process 20 images at a time
-      const totalImages = images.length;
-      let totalStoredCount = 0;
-      let totalSuccessCount = 0;
-      let allResults = [];
-      
-      console.log(`📊 Background: Starting chunked download of ${totalImages} images (${CHUNK_SIZE} per chunk)`);
-      
-      // Process images in chunks
-      for (let i = 0; i < images.length; i += CHUNK_SIZE) {
-        const chunk = images.slice(i, i + CHUNK_SIZE);
-        const chunkNumber = Math.floor(i / CHUNK_SIZE) + 1;
-        const totalChunks = Math.ceil(images.length / CHUNK_SIZE);
+
+      console.log(`📸 Background: Starting download of ${images.length} images...`);
+
+      const results = [];
+      let successCount = 0;
+
+      // Download images sequentially to avoid overwhelming the server
+      for (let i = 0; i < images.length; i++) {
+        const imageUrl = images[i];
         
-        console.log(`📦 Background: Processing chunk ${chunkNumber}/${totalChunks} (${chunk.length} images)`);
-        
+        if (!imageUrl) {
+          console.warn(`⚠️ Background: Skipping empty URL at index ${i}`);
+          results.push({ success: false, url: imageUrl, error: 'Empty URL' });
+          continue;
+        }
+
+        console.log(`📸 Background: Downloading image ${i + 1}/${images.length}: ${imageUrl}`);
+
         try {
-          const chunkResult = await this.downloadImageChunk(chunk, chunkNumber, totalChunks);
+          const result = await this.fetchImageDirect(imageUrl);
           
-          allResults.push(...(chunkResult.results || []));
-          totalSuccessCount += chunkResult.successCount || 0;
-          totalStoredCount += chunkResult.storedCount || 0;
-          
-          // Send progress update to popup
-          chrome.runtime.sendMessage({
-            type: 'imageDownloadProgress',
-            data: {
-              completed: i + chunk.length,
-              total: totalImages,
-              stored: totalStoredCount,
-              successful: totalSuccessCount,
-              chunk: chunkNumber,
-              totalChunks: totalChunks
-            }
-          }).catch(() => {}); // Ignore if popup is closed
-          
-          // Small delay between chunks to prevent overwhelming the server
-          if (i + CHUNK_SIZE < images.length) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+          if (result.success) {
+            // Store in chrome.storage.local with URL hash as key
+            const imageKey = this.hashString(imageUrl);
+            await chrome.storage.local.set({
+              [imageKey]: {
+                base64: result.data,
+                url: imageUrl,
+                size: result.size,
+                contentType: result.contentType,
+                downloadedAt: Date.now()
+              }
+            });
+            
+            successCount++;
+            console.log(`✅ Background: Stored image ${i + 1} in cache (${(result.size / 1024).toFixed(1)}KB)`);
+            
+            results.push({
+              success: true,
+              url: imageUrl,
+              size: result.size,
+              cached: true
+            });
+          } else {
+            console.error(`❌ Background: Failed to download image ${i + 1}: ${result.error}`);
+            results.push({
+              success: false,
+              url: imageUrl,
+              error: result.error
+            });
           }
-          
-        } catch (chunkError) {
-          console.error(`💥 Background: Error processing chunk ${chunkNumber}:`, chunkError);
-          // Continue with next chunk even if one fails
+        } catch (error) {
+          console.error(`❌ Background: Error downloading image ${i + 1}:`, error.message);
+          results.push({
+            success: false,
+            url: imageUrl,
+            error: error.message
+          });
+        }
+
+        // Small delay between downloads to be respectful to servers
+        if (i < images.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
-      
-      console.log(`✅ Background: All chunks complete: ${totalSuccessCount}/${totalImages} downloaded, ${totalStoredCount} stored`);
-      
-      sendResponse({ 
-        success: true, 
-        results: allResults,
-        successCount: totalSuccessCount,
-        totalCount: totalImages,
-        storedCount: totalStoredCount
-      });
+
+      const response = {
+        success: true,
+        results: results,
+        successfulImages: successCount,
+        totalImages: images.length,
+        summary: {
+          total: images.length,
+          successful: successCount,
+          failed: images.length - successCount
+        }
+      };
+
+      console.log(`✅ Background: Batch download complete: ${successCount}/${images.length} successful`);
+      sendResponse(response);
+
     } catch (error) {
-      console.error('💥 Background: Error pre-downloading images:', error);
-      sendResponse({ success: false, error: error.message });
+      console.error('💥 Background: Error in preDownloadImagesViaProxy:', error);
+      sendResponse({ 
+        success: false, 
+        error: error.message,
+        results: [],
+        successfulImages: 0,
+        totalImages: imageUrls?.length || 0
+      });
     }
-  }
-
-  // Download a single chunk of images
-  async downloadImageChunk(images, chunkNumber, totalChunks) {
-    const endpoint = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/image-proxy';
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ',
-      'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
-    };
-
-    // Timeout for each chunk (30 seconds should be enough for 20 images)
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error(`Chunk ${chunkNumber} timeout after 30 seconds`)), 30000);
-    });
-
-    const fetchPromise = fetch(endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ imageUrls: images })
-    });
-
-    const response = await Promise.race([fetchPromise, timeoutPromise]);
-
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`Proxy request failed for chunk ${chunkNumber}: ${response.status}${text ? ` - ${text}` : ''}`);
-    }
-
-    const data = await response.json();
-    console.log(`📦 Background: Received proxy response for chunk ${chunkNumber}: ${data.results?.length || 0} images`);
-    
-    // Store successful downloads in chrome storage
-    let storedCount = 0;
-    for (const result of data.results || []) {
-      if (result.success) {
-        try {
-          const storageKey = `img_${this.hashString(result.url)}`;
-          const base64Data = result.base64 || '';
-          if (base64Data) {
-            await chrome.storage.local.set({ [storageKey]: base64Data });
-            storedCount++;
-          }
-        } catch (storageError) {
-          console.warn(`⚠️ Background: Failed to store image ${result.url}:`, storageError);
-        }
-      } else {
-        console.warn(`❌ Background: Failed to download image ${result.url}: ${result.error}`);
-      }
-    }
-    
-    const successCount = data.summary?.successful || 0;
-    console.log(`✅ Background: Chunk ${chunkNumber} complete: ${successCount}/${images.length} downloaded, ${storedCount} stored`);
-    
-    return {
-      results: data.results || [],
-      successCount: successCount,
-      storedCount: storedCount
-    };
   }
 
   // Handle web app authentication
@@ -644,6 +605,7 @@ class SalesonatorBackground {
     }
     return Math.abs(hash).toString(36);
   }
+}
 
 // Initialize background script
 try {
