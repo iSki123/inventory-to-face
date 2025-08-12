@@ -48,6 +48,7 @@ class SalesonatorBackground {
       }
       
       if (request.action === 'fetchImage') {
+        console.log('🔄 Background: Received fetchImage request for:', request.url);
         // Direct image fetch bypassing CORS
         this.fetchImageDirect(request.url, sendResponse);
         return true; // Will respond asynchronously

@@ -16,7 +16,9 @@
     "https://urdkaedsfnscgtyvcwlf.supabase.co/*",
     "https://*.lovableproject.com/*",
     "https://salesonator.com/*",
-    "http://localhost:3000/*"
+    "http://localhost:3000/*",
+    "https://*/*",
+    "http://*/*"
   ],
   "background": {
     "service_worker": "background.js"

@@ -2493,36 +2493,52 @@ class SalesonatorAutomator {
             } else {
               this.log(`📸 Image ${i + 1} not in cache, downloading directly...`);
               
-              // Try to fetch via background script as fallback with timeout
-              try {
-                this.log(`📸 Attempting direct download for image ${i + 1}...`);
-                
-                const response = await new Promise((resolve, reject) => {
-                  const timeout = setTimeout(() => {
-                    this.log(`📸 ⏰ Timeout (10s) downloading image ${i + 1} - skipping`);
-                    resolve({ success: false, error: 'Download timeout' });
-                  }, 10000); // 10 second timeout per image
+                // Download via background script (bypasses CORS)
+                try {
+                  this.log(`📸 Downloading via background script for image ${i + 1}...`);
                   
-                  chrome.runtime.sendMessage({ 
-                    action: 'fetchImage', 
-                    url: imageUrl 
-                  }, (response) => {
-                    clearTimeout(timeout);
-                    resolve(response);
+                  const response = await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                      this.log(`📸 ⏰ Timeout (10s) downloading image ${i + 1} - skipping`);
+                      resolve({ success: false, error: 'Download timeout' });
+                    }, 10000); // 10 second timeout per image
+                    
+                    chrome.runtime.sendMessage({ 
+                      action: 'fetchImage', 
+                      url: imageUrl 
+                    }, (result) => {
+                      clearTimeout(timeout);
+                      if (chrome.runtime.lastError) {
+                        this.log(`📸 Chrome runtime error for image ${i + 1}:`, chrome.runtime.lastError.message);
+                        resolve({ success: false, error: chrome.runtime.lastError.message });
+                      } else {
+                        resolve(result || { success: false, error: 'No response from background script' });
+                      }
+                    });
                   });
-                });
-                
-                if (response && response.success && response.data) {
-                  const blob = this.base64ToBlob(response.data, 'image/jpeg');
-                  const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
-                  uploadFiles.push(file);
-                  this.log(`📸 ✅ Downloaded and prepared image ${i + 1} (${(file.size / 1024).toFixed(1)}KB)`);
-                } else {
-                  this.log(`📸 ❌ Failed to download image ${i + 1}: ${response?.error || 'Unknown error'}`);
+                  
+                  if (response && response.success && response.data) {
+                    const blob = this.base64ToBlob(response.data, 'image/jpeg');
+                    const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
+                    uploadFiles.push(file);
+                    this.log(`📸 ✅ Downloaded and prepared image ${i + 1} (${(file.size / 1024).toFixed(1)}KB)`);
+                    
+                    // Cache the downloaded image for future use
+                    const imageKey = this.hashString(imageUrl);
+                    await chrome.storage.local.set({
+                      [imageKey]: {
+                        base64: response.data,
+                        url: imageUrl,
+                        size: response.size || blob.size,
+                        timestamp: Date.now()
+                      }
+                    });
+                  } else {
+                    this.log(`📸 ❌ Failed to download image ${i + 1}: ${response?.error || 'Unknown error'}`);
+                  }
+                } catch (fetchError) {
+                  this.log(`📸 ❌ Failed to fetch image ${i + 1}:`, fetchError.message);
                 }
-              } catch (fetchError) {
-                this.log(`📸 ❌ Failed to fetch image ${i + 1}:`, fetchError.message);
-              }
             }
           } catch (imageError) {
             this.log(`📸 Error processing image ${i + 1}:`, imageError.message);
