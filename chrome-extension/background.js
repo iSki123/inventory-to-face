@@ -252,7 +252,7 @@ class SalesonatorBackground {
   // Fetch single image via Supabase proxy
   async fetchImageViaProxy(url, sendResponse) {
     try {
-      console.log('Fetching image via Supabase proxy:', url);
+      console.log('🔄 Background: Starting image fetch via Supabase proxy:', url);
       const endpoint = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/image-proxy';
       const headers = {
         'Content-Type': 'application/json',
@@ -260,25 +260,35 @@ class SalesonatorBackground {
         'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
       };
       const body = JSON.stringify({ imageUrls: [url] });
+      
+      console.log('🌐 Background: Making fetch request to image-proxy...');
       const response = await fetch(endpoint, { method: 'POST', headers, body });
+      console.log('📡 Background: Received response, status:', response.status);
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
+        console.error('❌ Background: Proxy request failed with status:', response.status, 'text:', text);
         throw new Error(`Proxy request failed: ${response.status}${text ? ` - ${text}` : ''}`);
       }
 
       const data = await response.json();
+      console.log('📦 Background: Parsed response data:', { 
+        hasResults: !!data.results, 
+        resultCount: data.results?.length,
+        firstResultSuccess: data.results?.[0]?.success 
+      });
+      
       if (data.results && data.results[0] && data.results[0].success) {
         const result = data.results[0];
-        console.log('Successfully fetched image via proxy, size:', result.size);
+        console.log('✅ Background: Successfully fetched image via proxy, size:', result.size);
         sendResponse({ success: true, data: result.base64 });
       } else {
         const error = data.results?.[0]?.error || data.error || 'Unknown proxy error';
-        console.error('Proxy returned error:', error);
+        console.error('❌ Background: Proxy returned error:', error);
         sendResponse({ success: false, error });
       }
     } catch (error) {
-      console.error('Error fetching image via proxy:', error);
+      console.error('💥 Background: Error fetching image via proxy:', error);
       sendResponse({ success: false, error: error.message });
     }
   }

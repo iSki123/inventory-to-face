@@ -2471,13 +2471,27 @@ class SalesonatorAutomator {
           const imageUrl = images[i];
           this.log(`📸 Downloading image ${i + 1}: ${imageUrl}`);
           
-          // Use background script to fetch image via proxy
-          const response = await new Promise((resolve) => {
-            chrome.runtime.sendMessage({
-              action: 'fetchImage',
-              url: imageUrl
-            }, resolve);
-          });
+          // Use background script to fetch image via proxy with timeout
+          this.log(`📸 Sending fetchImage request to background script for: ${imageUrl}`);
+          const response = await Promise.race([
+            new Promise((resolve, reject) => {
+              chrome.runtime.sendMessage({
+                action: 'fetchImage',
+                url: imageUrl
+              }, (response) => {
+                if (chrome.runtime.lastError) {
+                  this.log(`❌ Chrome runtime error: ${chrome.runtime.lastError.message}`);
+                  reject(new Error(chrome.runtime.lastError.message));
+                  return;
+                }
+                this.log(`📸 Received response from background script:`, response);
+                resolve(response);
+              });
+            }),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Image fetch timeout after 30 seconds')), 30000)
+            )
+          ]);
           
           if (response && response.success) {
             // Convert base64 back to blob
