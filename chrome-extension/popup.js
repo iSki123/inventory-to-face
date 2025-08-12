@@ -430,20 +430,13 @@ class SalesonatorExtension {
         countEl.textContent = `${this.vehicles.length} vehicles ready to post`;
         startBtn.disabled = this.vehicles.length === 0;
         statusEl.className = 'status connected';
-        statusEl.textContent = 'Vehicles loaded, pre-downloading images...';
+        statusEl.textContent = `✅ Vehicles loaded! Ready to start posting.`;
         
-        // Pre-download all vehicle images
-        try {
-          await this.preDownloadAllImages();
-          // Status is already updated in preDownloadAllImages method
-        } catch (error) {
-          console.warn('[Popup] Pre-download failed, but vehicles are still available:', error);
-          statusEl.textContent = 'Vehicles loaded, but image pre-download failed. You can still try posting.';
-          statusEl.className = 'status';
-          statusEl.style.background = '#fff3cd';
-          statusEl.style.color = '#856404';
-          statusEl.style.border = '1px solid #ffeaa7';
-        }
+        console.log(`📊 Loaded ${this.vehicles.length} vehicles for posting`);
+        console.log('🔧 Images will be downloaded per-vehicle before posting');
+        
+        // Enable start button immediately - no pre-downloading
+        startBtn.disabled = this.vehicles.length === 0;
       } else {
         throw new Error(data.error || 'Failed to fetch vehicles');
       }

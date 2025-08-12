@@ -475,7 +475,7 @@ class SalesonatorAutomator {
           
           // Handle image uploads if images are provided
           if (vehicleData.images && Array.isArray(vehicleData.images) && vehicleData.images.length > 0) {
-            await this.handleImageUploads(vehicleData.images);
+            await this.handleImageUploads(vehicleData);
             await this.delay(1000, attempt);
           } else {
             this.log('📸 No images provided or images array is invalid, skipping image upload');
@@ -2435,15 +2435,98 @@ class SalesonatorAutomator {
     }
   }
 
-  // Image upload handling using background script proxy to avoid CORS issues
-  async handleImageUploads(images) {
+  // Image upload handling with pre-downloaded images from chrome.storage.local
+  async handleImageUploads(vehicleData) {
     try {
       this.log('📸 Starting image upload process...');
       
-      if (!images || !Array.isArray(images) || images.length === 0) {
-        this.log('📸 No images provided, skipping upload');
-        return true;
+      const images = vehicleData.images || [];
+      if (!images || images.length === 0) {
+        this.log('📸 No images to upload');
+        return { success: true, uploadedCount: 0 };
       }
+
+      this.log(`📸 Processing ${images.length} images for upload...`);
+      
+      const uploadFiles = [];
+      
+      // First, try to get images from chrome.storage.local (pre-downloaded)
+      const vehicleKey = `vehicle_images_${vehicleData.id}`;
+      const { [vehicleKey]: cachedImages } = await chrome.storage.local.get([vehicleKey]);
+      
+      if (cachedImages && cachedImages.length > 0) {
+        this.log(`📸 Found ${cachedImages.length} pre-downloaded images in cache`);
+        
+        // Use cached images
+        for (let i = 0; i < cachedImages.length; i++) {
+          const imageData = cachedImages[i];
+          if (imageData && imageData.base64) {
+            const file = this.base64ToFile(imageData.base64, `vehicle_image_${i + 1}.jpg`);
+            if (file) {
+              uploadFiles.push(file);
+              this.log(`📸 Prepared cached image ${i + 1} for upload (${(file.size / 1024).toFixed(1)}KB)`);
+            }
+          }
+        }
+      } else {
+        // Fallback: try individual image cache or direct download
+        this.log('📸 No vehicle-specific cache found, trying individual image cache...');
+        
+        for (let i = 0; i < images.length; i++) {
+          const imageUrl = images[i];
+          if (!imageUrl) continue;
+          
+          this.log(`📸 Processing image ${i + 1}/${images.length}: ${imageUrl}`);
+          
+          try {
+            // Try individual cache first
+            const imageKey = this.hashString(imageUrl);
+            const { [imageKey]: imageData } = await chrome.storage.local.get([imageKey]);
+            
+            if (imageData && imageData.base64) {
+              this.log(`📸 Using individually cached image ${i + 1}`);
+              const file = this.base64ToFile(imageData.base64, `vehicle_image_${i + 1}.jpg`);
+              if (file) {
+                uploadFiles.push(file);
+                this.log(`📸 Prepared cached image ${i + 1} for upload (${(file.size / 1024).toFixed(1)}KB)`);
+              }
+            } else {
+              this.log(`📸 Image ${i + 1} not in cache, downloading directly...`);
+              
+              // Try to fetch via background script as fallback
+              try {
+                const response = await new Promise((resolve) => {
+                  chrome.runtime.sendMessage({ 
+                    action: 'fetchImage', 
+                    url: imageUrl 
+                  }, resolve);
+                });
+                
+                if (response && response.success && response.data) {
+                  const blob = this.base64ToBlob(response.data, 'image/jpeg');
+                  const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
+                  uploadFiles.push(file);
+                  this.log(`📸 Downloaded and prepared image ${i + 1} (${(file.size / 1024).toFixed(1)}KB)`);
+                } else {
+                  this.log(`📸 Failed to download image ${i + 1}: ${response?.error || 'Unknown error'}`);
+                }
+              } catch (fetchError) {
+                this.log(`📸 Failed to fetch image ${i + 1}:`, fetchError.message);
+              }
+            }
+          } catch (imageError) {
+            this.log(`📸 Error processing image ${i + 1}:`, imageError.message);
+            continue;
+          }
+        }
+      }
+
+      if (uploadFiles.length === 0) {
+        this.log('📸 No valid images prepared for upload');
+        return { success: true, uploadedCount: 0 };
+      }
+
+      this.log(`📸 Prepared ${uploadFiles.length} images for upload, looking for file input...`);
       
       // Find file input 
       const fileInputSelectors = [
@@ -2459,48 +2542,15 @@ class SalesonatorAutomator {
       }
       
       if (!fileInput) {
-        throw new Error('No file input found on page');
+        this.log('📸 No file input found, cannot upload images');
+        return { success: false, error: 'File input not found' };
       }
-      
-      this.log(`📸 Found file input, processing ${images.length} images...`);
-      
-      // Use background script to download images (bypasses CORS)
-      const maxImages = Math.min(images.length, 5);
-      const validFiles = [];
-      
-      for (let i = 0; i < maxImages; i++) {
-        try {
-          const imageUrl = images[i];
-          this.log(`📸 Downloading image ${i + 1} via background: ${imageUrl}`);
-          
-          const response = await new Promise((resolve) => {
-            chrome.runtime.sendMessage({ 
-              action: 'fetchImage', 
-              url: imageUrl 
-            }, resolve);
-          });
-          
-          if (response && response.success && response.data) {
-            const blob = this.base64ToBlob(response.data, 'image/jpeg');
-            const file = new File([blob], `image_${i + 1}.jpg`, { type: 'image/jpeg' });
-            validFiles.push(file);
-            this.log(`✅ Successfully downloaded image ${i + 1}`);
-          } else {
-            this.log(`❌ Failed to download image ${i + 1}: ${response?.error || 'Unknown error'}`);
-          }
-        } catch (error) {
-          this.log(`❌ Error downloading image ${i + 1}:`, error);
-        }
-      }
-      
-      if (validFiles.length === 0) {
-        this.log('❌ No valid images to upload');
-        return false;
-      }
+
+      this.log('📸 Found file input, uploading images...');
       
       // Set files using DataTransfer
       const dataTransfer = new DataTransfer();
-      validFiles.forEach(file => {
+      uploadFiles.forEach(file => {
         dataTransfer.items.add(file);
       });
       
@@ -2511,12 +2561,12 @@ class SalesonatorAutomator {
       
       await this.delay(2000); // Wait for files to process
       
-      this.log(`✅ Successfully uploaded ${validFiles.length} images`);
-      return true;
+      this.log(`✅ Successfully uploaded ${uploadFiles.length} images`);
+      return { success: true, uploadedCount: uploadFiles.length };
       
     } catch (error) {
-      this.log('⚠️ Image upload failed:', error);
-      return false;
+      this.log('❌ Image upload error:', error);
+      return { success: false, error: error.message };
     }
   }
 
