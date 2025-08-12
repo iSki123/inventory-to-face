@@ -11,56 +11,67 @@ class SalesonatorExtension {
   async init() {
     console.log('Initializing Salesonator Extension...');
     
-    // Load saved settings
-    const settings = await chrome.storage.sync.get(['apiUrl', 'delay', 'userToken']);
-    
-    if (settings.apiUrl) {
-      document.getElementById('apiUrl').value = settings.apiUrl;
-    }
-    if (settings.delay) {
-      document.getElementById('delay').value = settings.delay;
-    }
-
-    // Set up event listeners
-    document.getElementById('fetchVehicles').addEventListener('click', () => this.fetchVehicles());
-    document.getElementById('startPosting').addEventListener('click', () => this.startPosting());
-    document.getElementById('stopPosting').addEventListener('click', () => this.stopPosting());
-    document.getElementById('delay').addEventListener('change', () => this.saveSettings());
-    document.getElementById('login').addEventListener('click', () => this.showLoginForm());
-    document.getElementById('openDashboard').addEventListener('click', () => this.openDashboard());
-
-    // Check for existing web app authentication first
-    console.log('🔍 Starting web app authentication check...');
-    const webAppAuth = await this.checkWebAppAuthentication();
-    if (webAppAuth) {
-      console.log('✅ Found web app authentication, using it for extension');
-      console.log('🔐 Storing token in extension storage...');
-      await chrome.storage.sync.set({ userToken: webAppAuth.token });
-      console.log('✅ Token stored successfully');
+    try {
+      // Load saved settings
+      const settings = await chrome.storage.sync.get(['apiUrl', 'delay', 'userToken']);
       
-      // Show success immediately and skip further checks
-      this.showWebAppAuthSuccess();
-      document.getElementById('loginSection').style.display = 'none';
-      document.getElementById('mainSection').style.display = 'block';
-      return; // Exit early, don't run checkAuthentication
-    } else {
-      console.log('❌ No web app authentication found');
+      if (settings.apiUrl) {
+        document.getElementById('apiUrl').value = settings.apiUrl;
+      }
+      if (settings.delay) {
+        document.getElementById('delay').value = settings.delay;
+      }
+
+      // Set up event listeners
+      document.getElementById('fetchVehicles').addEventListener('click', () => this.fetchVehicles());
+      document.getElementById('startPosting').addEventListener('click', () => this.startPosting());
+      document.getElementById('stopPosting').addEventListener('click', () => this.stopPosting());
+      document.getElementById('delay').addEventListener('change', () => this.saveSettings());
+      document.getElementById('login').addEventListener('click', () => this.showLoginForm());
+      document.getElementById('openDashboard').addEventListener('click', () => this.openDashboard());
+
+      // Show initial status
+      this.updateStatusMessage('Checking authentication...', 'info');
+
+      // Check for existing web app authentication first
+      console.log('🔍 Starting web app authentication check...');
+      const webAppAuth = await this.checkWebAppAuthentication();
+      if (webAppAuth) {
+        console.log('✅ Found web app authentication, using it for extension');
+        console.log('🔐 Storing token in extension storage...');
+        await chrome.storage.sync.set({ userToken: webAppAuth.token });
+        console.log('✅ Token stored successfully');
+        
+        // Show success immediately and skip further checks
+        this.showWebAppAuthSuccess();
+        document.getElementById('loginSection').style.display = 'none';
+        document.getElementById('mainSection').style.display = 'block';
+        return; // Exit early, don't run checkAuthentication
+      } else {
+        console.log('❌ No web app authentication found');
+      }
+      
+      // Check authentication status (only if web app auth wasn't found)
+      console.log('🔍 Checking stored authentication...');
+      await this.checkAuthentication();
+      
+      // Check connection status
+      this.checkConnection();
+      
+      // Check for existing posting state
+      await this.checkPostingState();
+    } catch (error) {
+      console.error('Error during initialization:', error);
+      this.updateStatusMessage('Initialization error: ' + error.message, 'error');
     }
-    
-    // Check authentication status (only if web app auth wasn't found)
-    console.log('🔍 Checking stored authentication...');
-    await this.checkAuthentication();
-    
-    // Check connection status
-    this.checkConnection();
-    
-    // Check for existing posting state
-    await this.checkPostingState();
   }
 
   async checkWebAppAuthentication() {
     try {
       console.log('Checking for web app authentication...');
+      
+      // Show connecting status
+      this.updateStatusMessage('Connecting to Salesonator...', 'info');
       
       // Check all open tabs for Salesonator (much broader search)
       const allTabs = await chrome.tabs.query({});
@@ -164,24 +175,23 @@ class SalesonatorExtension {
                     console.log('Setting up auto-authentication...');
                     this.credits = profile.credits;
                     this.updateCreditDisplay();
-                    this.showWebAppAuthSuccess();
                     return { token: authData.token, user: authData.user, credits: profile.credits };
                   } else {
                     console.log('❌ User is not eligible - Active:', profile?.is_active, 'Credits:', profile?.credits);
-                    this.showError('Account not active - please contact support');
+                    this.updateStatusMessage('Account not active - please contact support', 'error');
                     return null;
                   }
                 } else {
                   const errorText = await response.text();
                   console.log('❌ Failed to verify user eligibility, status:', response.status);
                   console.log('❌ Error response:', errorText);
-                  this.showError('Failed to verify user eligibility');
+                  this.updateStatusMessage('Failed to verify user eligibility', 'error');
                   return null;
                 }
               } catch (error) {
                 console.error('❌ Error verifying user eligibility:', error);
                 console.error('❌ Error details:', error.message, error.stack);
-                this.showError('Error checking user eligibility: ' + error.message);
+                this.updateStatusMessage('Error checking user eligibility: ' + error.message, 'error');
                 return null;
               }
             }
@@ -192,10 +202,12 @@ class SalesonatorExtension {
         }
       }
       
-      console.log('No admin authentication found');
+      console.log('No web app authentication found');
+      this.updateStatusMessage('No authentication found in web app', 'warning');
       return null;
     } catch (error) {
       console.warn('Error checking web app authentication:', error);
+      this.updateStatusMessage('Error checking web app authentication', 'error');
       return null;
     }
   }
@@ -1005,7 +1017,7 @@ class SalesonatorExtension {
 
   setupMessageListener() {
     // Listen for messages from the background script and content script
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       console.log('📨 Popup received message:', message);
       
       if (message.action === 'extensionReloaded') {
