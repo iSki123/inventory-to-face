@@ -433,9 +433,17 @@ class SalesonatorExtension {
         statusEl.textContent = 'Vehicles loaded, pre-downloading images...';
         
         // Pre-download all vehicle images
-        await this.preDownloadAllImages();
-        
-        statusEl.textContent = 'Vehicles and images ready for posting';
+        try {
+          await this.preDownloadAllImages();
+          // Status is already updated in preDownloadAllImages method
+        } catch (error) {
+          console.warn('[Popup] Pre-download failed, but vehicles are still available:', error);
+          statusEl.textContent = 'Vehicles loaded, but image pre-download failed. You can still try posting.';
+          statusEl.className = 'status';
+          statusEl.style.background = '#fff3cd';
+          statusEl.style.color = '#856404';
+          statusEl.style.border = '1px solid #ffeaa7';
+        }
       } else {
         throw new Error(data.error || 'Failed to fetch vehicles');
       }
@@ -752,23 +760,89 @@ class SalesonatorExtension {
       
       if (allImageUrls.length === 0) {
         console.log('📸 No images to pre-download');
-        return;
+        return { success: true, successCount: 0, totalCount: 0 };
       }
       
-      // Use background script to pre-download images
-      const response = await chrome.runtime.sendMessage({
-        action: 'preDownloadImages',
-        imageUrls: allImageUrls
+      // Update UI to show pre-download progress
+      const statusEl = document.getElementById('status');
+      const startBtn = document.getElementById('startPosting');
+      const fetchBtn = document.getElementById('fetchVehicles');
+      
+      // Disable buttons during pre-download
+      startBtn.disabled = true;
+      fetchBtn.disabled = true;
+      statusEl.textContent = `Pre-downloading images: 0/${allImageUrls.length} (0%)`;
+      statusEl.className = 'status';
+      statusEl.style.background = '#fff3cd';
+      statusEl.style.color = '#856404';
+      statusEl.style.border = '1px solid #ffeaa7';
+      
+      // Use background script to pre-download images with timeout
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          statusEl.textContent = 'Image pre-download timed out. You can still try posting.';
+          statusEl.className = 'status disconnected';
+          startBtn.disabled = false;
+          fetchBtn.disabled = false;
+          reject(new Error('Pre-download timeout after 60 seconds'));
+        }, 60000);
+        
+        chrome.runtime.sendMessage({
+          action: 'preDownloadImages',
+          imageUrls: allImageUrls
+        }, (response) => {
+          clearTimeout(timeout);
+          
+          if (chrome.runtime.lastError) {
+            console.error('Chrome runtime error:', chrome.runtime.lastError);
+            statusEl.textContent = 'Pre-download failed. You can still try posting.';
+            statusEl.className = 'status disconnected';
+            startBtn.disabled = false;
+            fetchBtn.disabled = false;
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          
+          if (response && response.success) {
+            const successCount = response.successCount || 0;
+            const totalCount = response.totalCount || allImageUrls.length;
+            const percentage = Math.round((successCount / totalCount) * 100);
+            
+            console.log(`✅ Pre-download completed: ${successCount}/${totalCount} images (${percentage}%)`);
+            
+            if (successCount === totalCount) {
+              statusEl.textContent = `✅ All ${totalCount} images downloaded successfully!`;
+              statusEl.className = 'status connected';
+            } else if (successCount > 0) {
+              statusEl.textContent = `⚠️ ${successCount}/${totalCount} images downloaded (${percentage}%). You can still post.`;
+              statusEl.className = 'status';
+              statusEl.style.background = '#fff3cd';
+              statusEl.style.color = '#856404';
+              statusEl.style.border = '1px solid #ffeaa7';
+            } else {
+              statusEl.textContent = '❌ No images downloaded. Posts may fail without images.';
+              statusEl.className = 'status disconnected';
+            }
+            
+            // Re-enable buttons
+            startBtn.disabled = this.vehicles.length === 0;
+            fetchBtn.disabled = false;
+            
+            resolve(response);
+          } else {
+            console.error('Pre-download failed:', response?.error);
+            statusEl.textContent = `Pre-download failed: ${response?.error || 'Unknown error'}`;
+            statusEl.className = 'status disconnected';
+            startBtn.disabled = false;
+            fetchBtn.disabled = false;
+            reject(new Error(response?.error || 'Pre-download failed'));
+          }
+        });
       });
-      
-      if (response.success) {
-        console.log('✅ Successfully pre-downloaded', response.downloaded, 'images');
-      } else {
-        console.warn('⚠️ Some images failed to pre-download:', response.failed);
-      }
       
     } catch (error) {
       console.error('Error pre-downloading images:', error);
+      throw error;
     }
   }
 

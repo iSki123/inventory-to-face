@@ -340,14 +340,16 @@ class SalesonatorBackground {
   // Pre-download multiple images via Supabase proxy
   async preDownloadImagesViaProxy(imageUrls, sendResponse) {
     try {
-      console.log('Pre-downloading images via Supabase proxy...');
+      console.log('🔄 Background: Pre-downloading images via Supabase proxy...');
 
       const images = Array.isArray(imageUrls) ? imageUrls : [];
       if (images.length === 0) {
-        console.warn('No image URLs provided to proxy.');
+        console.warn('⚠️ Background: No image URLs provided to proxy.');
         sendResponse({ success: true, results: [], successCount: 0, totalCount: 0 });
         return;
       }
+      
+      console.log(`📊 Background: Starting batch download of ${images.length} images`);
       
       const endpoint = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/image-proxy';
       const headers = {
@@ -356,11 +358,18 @@ class SalesonatorBackground {
         'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
       };
 
-      const response = await fetch(endpoint, {
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Batch download timeout after 45 seconds')), 45000);
+      });
+
+      const fetchPromise = fetch(endpoint, {
         method: 'POST',
         headers,
         body: JSON.stringify({ imageUrls: images })
       });
+
+      const response = await Promise.race([fetchPromise, timeoutPromise]);
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
@@ -368,29 +377,41 @@ class SalesonatorBackground {
       }
 
       const data = await response.json();
+      console.log(`📦 Background: Received proxy response for ${data.results?.length || 0} images`);
       
-      // Store successful downloads in chrome storage
+      // Store successful downloads in chrome storage with progress tracking
+      let storedCount = 0;
       for (const result of data.results || []) {
         if (result.success) {
-          const storageKey = `img_${this.hashString(result.url)}`;
-          // Store the full base64 data URL (not just the base64 part)
-          const base64Data = result.base64 || '';
-          if (base64Data) {
-            await chrome.storage.local.set({ [storageKey]: base64Data });
-            console.log(`Stored image with key: ${storageKey}, size: ${result.size || 'unknown'} bytes`);
+          try {
+            const storageKey = `img_${this.hashString(result.url)}`;
+            const base64Data = result.base64 || '';
+            if (base64Data) {
+              await chrome.storage.local.set({ [storageKey]: base64Data });
+              storedCount++;
+              console.log(`💾 Background: Stored image ${storedCount}/${data.summary?.successful || 0}: ${storageKey}`);
+            }
+          } catch (storageError) {
+            console.warn(`⚠️ Background: Failed to store image ${result.url}:`, storageError);
           }
+        } else {
+          console.warn(`❌ Background: Failed to download image ${result.url}: ${result.error}`);
         }
       }
       
-      console.log(`Pre-download complete: ${data.summary?.successful || 0}/${data.summary?.total || images.length} successful`);
+      const successCount = data.summary?.successful || 0;
+      const totalCount = data.summary?.total || images.length;
+      console.log(`✅ Background: Pre-download complete: ${successCount}/${totalCount} downloaded, ${storedCount} stored`);
+      
       sendResponse({ 
         success: true, 
         results: data.results || [],
-        successCount: data.summary?.successful || 0,
-        totalCount: data.summary?.total || images.length
+        successCount: successCount,
+        totalCount: totalCount,
+        storedCount: storedCount
       });
     } catch (error) {
-      console.error('Error pre-downloading images:', error);
+      console.error('💥 Background: Error pre-downloading images:', error);
       sendResponse({ success: false, error: error.message });
     }
   }
