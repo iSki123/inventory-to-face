@@ -2493,25 +2493,35 @@ class SalesonatorAutomator {
             } else {
               this.log(`📸 Image ${i + 1} not in cache, downloading directly...`);
               
-              // Try to fetch via background script as fallback
+              // Try to fetch via background script as fallback with timeout
               try {
-                const response = await new Promise((resolve) => {
+                this.log(`📸 Attempting direct download for image ${i + 1}...`);
+                
+                const response = await new Promise((resolve, reject) => {
+                  const timeout = setTimeout(() => {
+                    this.log(`📸 ⏰ Timeout (10s) downloading image ${i + 1} - skipping`);
+                    resolve({ success: false, error: 'Download timeout' });
+                  }, 10000); // 10 second timeout per image
+                  
                   chrome.runtime.sendMessage({ 
                     action: 'fetchImage', 
                     url: imageUrl 
-                  }, resolve);
+                  }, (response) => {
+                    clearTimeout(timeout);
+                    resolve(response);
+                  });
                 });
                 
                 if (response && response.success && response.data) {
                   const blob = this.base64ToBlob(response.data, 'image/jpeg');
                   const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
                   uploadFiles.push(file);
-                  this.log(`📸 Downloaded and prepared image ${i + 1} (${(file.size / 1024).toFixed(1)}KB)`);
+                  this.log(`📸 ✅ Downloaded and prepared image ${i + 1} (${(file.size / 1024).toFixed(1)}KB)`);
                 } else {
-                  this.log(`📸 Failed to download image ${i + 1}: ${response?.error || 'Unknown error'}`);
+                  this.log(`📸 ❌ Failed to download image ${i + 1}: ${response?.error || 'Unknown error'}`);
                 }
               } catch (fetchError) {
-                this.log(`📸 Failed to fetch image ${i + 1}:`, fetchError.message);
+                this.log(`📸 ❌ Failed to fetch image ${i + 1}:`, fetchError.message);
               }
             }
           } catch (imageError) {

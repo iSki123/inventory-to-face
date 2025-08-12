@@ -563,14 +563,32 @@ class SalesonatorExtension {
     document.getElementById('status').textContent = `Posting ${state.currentVehicleIndex + 1} of ${state.postingQueue.length}: ${vehicle.year} ${vehicle.make} ${vehicle.model}`;
     
     try {
-      // CRITICAL: Deduct credit BEFORE posting to ensure it completes before redirect
+      // Step 1: Download images for this vehicle first
       const vehicleLabel = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+      
+      if (vehicle.images && Array.isArray(vehicle.images) && vehicle.images.length > 0) {
+        console.log(`📸 Downloading images for ${vehicleLabel} (${vehicle.images.length} images)...`);
+        document.getElementById('status').textContent = `Downloading images for ${vehicleLabel}...`;
+        
+        try {
+          await this.downloadImagesForVehicle(vehicle);
+          console.log(`📸 ✅ All images downloaded for ${vehicleLabel}`);
+        } catch (imageError) {
+          console.warn(`📸 ⚠️ Image download failed for ${vehicleLabel}:`, imageError.message, '- continuing with post anyway');
+          await this.sendLogToContent(`📸 ⚠️ Image download failed: ${imageError.message} - continuing anyway`, { vehicle: vehicleLabel });
+        }
+      } else {
+        console.log(`📸 No images to download for ${vehicleLabel}`);
+      }
+      
+      // Step 2: Deduct credit BEFORE posting to ensure it completes before redirect
       await this.sendLogToContent('💳 Deducting credit and initiating post...', { vehicle: vehicleLabel });
       console.log('💳 Deducting credit before posting...');
       await this.deductCreditForPosting(vehicle);
       console.log('✅ Credit deducted successfully');
       await this.sendLogToContent('✅ Credit deducted, sending vehicle to content script', { vehicle: vehicleLabel });
-      // Now attempt to post the vehicle
+      
+      // Step 3: Send vehicle to content script for posting
       await this.sendVehicleToContentScript(vehicle);
     } catch (error) {
       console.error('Error posting vehicle:', error);
@@ -619,6 +637,67 @@ class SalesonatorExtension {
     this.updateCreditDisplay();
     
     return data;
+  }
+
+  // Download images for a specific vehicle before posting
+  async downloadImagesForVehicle(vehicle) {
+    if (!vehicle.images || !Array.isArray(vehicle.images) || vehicle.images.length === 0) {
+      console.log('📸 No images to download for vehicle');
+      return;
+    }
+
+    const vehicleKey = `vehicle_images_${vehicle.id}`;
+    const vehicleLabel = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+    
+    // Check if already cached
+    const { [vehicleKey]: existingCache } = await chrome.storage.local.get([vehicleKey]);
+    if (existingCache && existingCache.length > 0) {
+      console.log(`📸 Images already cached for ${vehicleLabel} (${existingCache.length} images)`);
+      return;
+    }
+
+    console.log(`📸 Starting download of ${vehicle.images.length} images for ${vehicleLabel}...`);
+    
+    return new Promise((resolve, reject) => {
+      // Set a timeout for the entire download process
+      const downloadTimeout = setTimeout(() => {
+        console.warn(`📸 ⏰ Image download timeout (30s) for ${vehicleLabel} - continuing anyway`);
+        resolve(); // Don't reject, just continue
+      }, 30000);
+
+      chrome.runtime.sendMessage({
+        action: 'preDownloadImagesViaProxy',
+        imageUrls: vehicle.images,
+        vehicleId: vehicle.id,
+        vehicleLabel: vehicleLabel
+      }, (response) => {
+        clearTimeout(downloadTimeout);
+        
+        if (chrome.runtime.lastError) {
+          console.error(`📸 Runtime error downloading images for ${vehicleLabel}:`, chrome.runtime.lastError.message);
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+
+        if (response && response.success) {
+          const successCount = response.successfulImages || 0;
+          const totalCount = vehicle.images.length;
+          
+          if (successCount > 0) {
+            console.log(`📸 ✅ Downloaded ${successCount}/${totalCount} images for ${vehicleLabel}`);
+            document.getElementById('status').textContent = `Downloaded ${successCount}/${totalCount} images for ${vehicleLabel}`;
+            resolve();
+          } else {
+            console.warn(`📸 ⚠️ No images downloaded for ${vehicleLabel} - continuing anyway`);
+            resolve(); // Don't fail the entire process for image issues
+          }
+        } else {
+          const error = response?.error || 'Unknown error';
+          console.error(`📸 ❌ Failed to download images for ${vehicleLabel}:`, error);
+          reject(new Error(error));
+        }
+      });
+    });
   }
 
   // New method to move to next vehicle and update storage
