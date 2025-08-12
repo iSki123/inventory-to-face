@@ -2464,60 +2464,27 @@ class SalesonatorAutomator {
       
       this.log(`📸 Found file input, processing ${images.length} images...`);
       
-      // Prefer robust background-assisted bulk download with fast timeout, then fall back per-image and finally direct fetch
+      // Simple direct fetch approach (like old extension that worked)
       const maxImages = Math.min(images.length, 5);
-      let validFiles = [];
-      try {
-        this.log(`📸 Pre-downloading up to ${maxImages} images via background...`);
-        const bulkFiles = await Promise.race([
-          this.downloadImagesViaBackground(images.slice(0, maxImages)),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Bulk image pre-download timeout after 12s')), 12000))
-        ]);
-        validFiles = bulkFiles.filter(Boolean);
-        this.log(`📦 Bulk stage produced ${validFiles.length}/${maxImages} files`);
-
-        // Fill gaps with per-image background fetch (short timeout)
-        for (let i = 0; i < maxImages; i++) {
-          if (bulkFiles[i]) continue; // already have
+      const validFiles = [];
+      
+      for (let i = 0; i < maxImages; i++) {
+        try {
           const imageUrl = images[i];
-          this.log(`📸 Background fetch fallback for image ${i + 1}: ${imageUrl}`);
-          try {
-            const resp = await Promise.race([
-              new Promise((resolve) => {
-                chrome.runtime.sendMessage({ action: 'fetchImage', url: imageUrl }, resolve);
-              }),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('Per-image proxy timeout after 8s')), 8000))
-            ]);
-            if (resp && resp.success) {
-              const file = new File([this.base64ToBlob(resp.data, 'image/jpeg')], `image_${i + 1}.jpg`, { type: 'image/jpeg' });
-              validFiles.push(file);
-              this.log(`✅ Proxy fallback succeeded for image ${i + 1}`);
-            } else {
-              this.log(`⚠️ Proxy fallback failed for image ${i + 1}: ${resp?.error || 'Unknown'}`);
-            }
-          } catch (e) {
-            this.log(`⚠️ Proxy fallback error for image ${i + 1}:`, e);
-          }
-        }
-
-        // Final fallback: direct fetch for any remaining slots
-        for (let i = validFiles.length; i < maxImages; i++) {
-          const imageUrl = images[i];
-          if (!imageUrl) continue;
-          try {
-            this.log(`🌐 Direct fetch fallback for image ${i + 1}`);
-            const res = await fetch(imageUrl, { cache: 'no-store' });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const blob = await res.blob();
-            const file = new File([blob], `image_${i + 1}.jpg`, { type: blob.type || 'image/jpeg' });
+          this.log(`📸 Downloading image ${i + 1}: ${imageUrl}`);
+          
+          const response = await fetch(imageUrl);
+          if (response.ok) {
+            const blob = await response.blob();
+            const file = new File([blob], `image_${i + 1}.jpg`, { type: 'image/jpeg' });
             validFiles.push(file);
-            this.log(`✅ Direct fetch succeeded for image ${i + 1}`);
-          } catch (e) {
-            this.log(`❌ Direct fetch failed for image ${i + 1}:`, e);
+            this.log(`✅ Successfully downloaded image ${i + 1}`);
+          } else {
+            this.log(`❌ Failed to download image ${i + 1}: ${response.status}`);
           }
+        } catch (error) {
+          this.log(`❌ Error downloading image ${i + 1}:`, error);
         }
-      } catch (e) {
-        this.log('❌ Bulk pre-download stage error:', e);
       }
       
       if (validFiles.length === 0) {
