@@ -3440,53 +3440,60 @@ class SalesonatorAutomator {
     }
   }
 
-  // Record vehicle posting in backend and deduct credits
+  // Record vehicle posting in backend and deduct credits using proper endpoint
   async recordVehiclePosting(vehicleId) {
     try {
       this.log('📝 Starting vehicle posting record process for ID:', vehicleId);
       
-      // Get user token from extension storage
+      // Get user token from extension storage using direct access
       this.log('🔍 Getting user token from storage...');
-      const result = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({ action: 'getStorageData', key: 'userToken' }, resolve);
-      });
+      const storageResult = await chrome.storage.local.get(['userToken']);
+      const userToken = storageResult.userToken;
       
-      this.log('🗂️ Storage result:', result);
-      const userToken = result?.value;
       if (!userToken) {
         this.log('❌ No user token found in storage');
         throw new Error('User not authenticated - no token found');
       }
       
-      this.log('🔑 Token found, length:', userToken.length);
+      this.log('🔑 Token found, proceeding with recording...');
       
-      // Generate a fake Facebook post ID (since we can't easily extract the real one)
-      const facebookPostId = `fb_${Date.now()}_${vehicleId.substring(0, 8)}`;
-      this.log('🆔 Generated Facebook post ID:', facebookPostId);
+      // Generate Facebook post ID
+      const facebookPostId = this.extractFacebookPostId();
+      this.log('🆔 Facebook post ID:', facebookPostId);
       
-      const requestPayload = {
-        action: 'update_vehicle_status',
-        vehicleId: vehicleId,
-        status: 'posted',
-        facebookPostId: facebookPostId
+      // Call the database function directly via Supabase REST API
+      const updateData = {
+        facebook_post_status: 'posted',
+        last_posted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
       
-      this.log('📤 Sending request to backend with payload:', JSON.stringify(requestPayload, null, 2));
+      this.log('📤 Calling database function with data:', JSON.stringify({
+        p_vehicle_id: vehicleId,
+        p_user_id: 'from_auth',
+        p_facebook_post_id: facebookPostId,
+        p_update_data: updateData
+      }, null, 2));
       
-      const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster';
+      const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/rpc/deduct_credit_and_update_vehicle';
       this.log('🌐 API URL:', apiUrl);
       
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userToken}`
+          'Authorization': `Bearer ${userToken}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
         },
-        body: JSON.stringify(requestPayload)
+        body: JSON.stringify({
+          p_vehicle_id: vehicleId,
+          p_user_id: null, // Let function use auth.uid()
+          p_facebook_post_id: facebookPostId,
+          p_update_data: updateData
+        })
       });
       
       this.log('📨 Backend response status:', response.status);
-      this.log('📨 Backend response headers:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -3495,27 +3502,26 @@ class SalesonatorAutomator {
       }
       
       const data = await response.json();
-      this.log('📋 Full backend response data:', JSON.stringify(data, null, 2));
+      this.log('📋 Database function response:', JSON.stringify(data, null, 2));
       
-      if (!data.success) {
-        this.log('❌ Backend returned success=false with error:', data.error);
-        throw new Error(data.error || 'Failed to record posting');
+      // The RPC response is the direct result of the function
+      if (!data || (data.error && !data.vehicle)) {
+        this.log('❌ Database function failed:', data?.error || 'No data returned');
+        throw new Error(data?.error || 'Failed to record posting');
       }
       
-      const credits = data.data?.credits || data.credits;
+      const credits = data.credits;
       this.log('✅ Successfully recorded posting!');
       this.log('💰 Credits remaining:', credits);
-      this.log('📝 Response message:', data.message);
       
       return {
         success: true,
         credits: credits,
-        message: data.message || 'Vehicle posted and recorded successfully'
+        message: 'Vehicle posted and credits deducted successfully'
       };
       
     } catch (error) {
       this.log('❌ Error in recordVehiclePosting:', error.message);
-      this.log('❌ Full error object:', error);
       console.error('Full recording error:', error);
       throw error;
     }
@@ -3823,18 +3829,21 @@ class SalesonatorAutomator {
         // Extract Facebook post ID from current URL or page
         const facebookPostId = this.extractFacebookPostId();
         
-        // Call the facebook-poster edge function to update vehicle status
-        const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster', {
+        // Call the correct scrape-vehicle edge function with proper data structure
+        const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/scrape-vehicle', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${result.userToken}`
           },
           body: JSON.stringify({
-            action: 'update_vehicle_status',
-            vehicleId: this.currentVehicle.id,
-            status: 'posted',
-            facebookPostId: facebookPostId
+            vehicles: [{
+              id: this.currentVehicle.id,
+              facebook_post_status: 'posted',
+              facebook_post_id: facebookPostId,
+              last_posted_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }]
           })
         });
 
@@ -3847,7 +3856,8 @@ class SalesonatorAutomator {
             this.retrievePostingUrl();
           }, 5000);
         } else {
-          console.log('Failed to notify web app:', response.status);
+          const errorText = await response.text();
+          console.log('Failed to notify web app:', response.status, errorText);
         }
       }
     } catch (error) {
