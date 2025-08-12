@@ -482,7 +482,26 @@ class SalesonatorAutomator {
       // Check if we're on the correct page first
       if (!window.location.href.includes('/marketplace/create/vehicle')) {
         this.log('⚠️ Not on create vehicle page, current URL:', window.location.href);
-        throw new Error('Not on create vehicle page. Please navigate to the Facebook Marketplace create vehicle page first.');
+        this.log('🧭 Navigating to create vehicle page...');
+        
+        // Navigate to the create vehicle page
+        window.location.href = 'https://www.facebook.com/marketplace/create/vehicle';
+        
+        // Wait for page to load and try again
+        return new Promise((resolve, reject) => {
+          const checkPageReady = () => {
+            if (window.location.href.includes('/marketplace/create/vehicle')) {
+              this.log('✅ Successfully navigated to create vehicle page');
+              // Wait a bit more for the page to fully load
+              setTimeout(() => {
+                this.postVehicle(vehicleData).then(resolve).catch(reject);
+              }, 2000);
+            } else {
+              setTimeout(checkPageReady, 500);
+            }
+          };
+          setTimeout(checkPageReady, 1000);
+        });
       }
       
       this.isPosting = true;

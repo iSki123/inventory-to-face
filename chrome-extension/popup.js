@@ -1020,6 +1020,14 @@ class SalesonatorExtension {
       } else if (message.action === 'vehiclePosted') {
         console.log('🎉 Vehicle posted successfully, continuing with next...');
         document.getElementById('status').textContent = 'Vehicle posted! Moving to next...';
+        
+        // Mark vehicle as posted before moving to next
+        const state = await chrome.storage.local.get(['postingQueue', 'currentVehicleIndex']);
+        if (state.postingQueue && state.currentVehicleIndex < state.postingQueue.length) {
+          const vehicle = state.postingQueue[state.currentVehicleIndex];
+          await this.markVehicleAsPosted(vehicle);
+        }
+        
         this.moveToNextVehicle();
       } else if (message.action === 'continueWithNextVehicle') {
         console.log('🚀 Content script signaling to continue with next vehicle immediately');
