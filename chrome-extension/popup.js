@@ -1095,11 +1095,8 @@ class SalesonatorExtension {
       } else if (message.action === 'continueWithNextVehicle') {
         console.log('🚀 Content script signaling to continue with next vehicle immediately');
         document.getElementById('status').textContent = 'Preparing next vehicle...';
-        // Move to next vehicle and continue posting
+        // Move to next vehicle and continue posting - moveToNextVehicle already calls postNextVehicle
         this.moveToNextVehicle();
-        setTimeout(() => {
-          this.postNextVehicle();
-        }, 5000); // Wait longer for navigation to complete
       } else if (message.action === 'readyForNextVehicle') {
         console.log('🚀 Content script ready for next vehicle');
         document.getElementById('status').textContent = 'Ready for next vehicle...';
