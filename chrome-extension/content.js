@@ -535,49 +535,27 @@ class SalesonatorAutomator {
           if (success) {
             this.log('✅ Vehicle posted successfully');
             
-            // Record the posting in backend and deduct credits
-            try {
-              console.log('🚀 CREDIT DEDUCTION ATTEMPT STARTING');
-              console.log('🚀 Vehicle ID for recording:', vehicleData.id);
-              this.log('📝 Recording vehicle posting in backend...');
-              this.log('🔍 Current URL before recording:', window.location.href);
-              
-              const recordResult = await this.recordVehiclePosting(vehicleData.id);
-              
-              console.log('🚀 CREDIT DEDUCTION RESULT:', recordResult);
-              console.log('🚀 Credits after posting:', recordResult.credits);
-              this.log('✅ Vehicle posting recorded in backend', recordResult);
-              this.log('💰 Credits after posting:', recordResult.credits);
-              
-              // Send credit update to popup immediately
-              console.log('🚀 SENDING CREDITS UPDATE TO POPUP:', recordResult.credits);
-              chrome.runtime.sendMessage({
-                action: 'creditsUpdated',
-                credits: recordResult.credits
-              });
-              
-              // Clear posting state first
-              this.isPosting = false;
-              this.currentVehicleData = null;
-              this.uploadedImages = [];
-              this.log('🔄 Reset posting flags and uploaded images');
-              
-              // Wait a moment for any page processing
-              await this.delay(2000);
-              
-              // Set flag that we're waiting for the next vehicle posting
-              console.log('🚀 SETTING WAITING FOR NEXT VEHICLE FLAG');
-              this.isWaitingForNextVehicle = true;
-              
-              // Navigate to create page immediately for next vehicle (same as error path)
-              this.log('🔄 Posting complete, navigating to create page...');
-              this.log('📍 Current URL before navigation:', window.location.href);
-              
-              const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
-              this.log('🎯 Navigation to:', createVehicleUrl);
-              window.location.href = createVehicleUrl;
-              
-              console.log('🚀 POSTING FLOW COMPLETE - NAVIGATED TO CREATE PAGE');
+            // DON'T record posting here - Facebook hasn't assigned post ID yet
+            // The recording will happen after URL redirect is detected
+            
+            // Clear posting state flags but keep vehicle data for later recording
+            this.isPosting = false;
+            // NOTE: Keep this.currentVehicleData for later database update
+            this.uploadedImages = [];
+            this.log('🔄 Reset posting flags but keeping vehicle data for later recording');
+            
+            // Wait a moment for any page processing
+            await this.delay(2000);
+            
+            // Set flag that we're waiting for the next vehicle posting
+            console.log('🚀 SETTING WAITING FOR NEXT VEHICLE FLAG');
+            this.isWaitingForNextVehicle = true;
+            
+            // Don't navigate yet - let Facebook's natural redirect happen first
+            // Navigation will occur after successful database recording
+            this.log('⏳ Waiting for Facebook redirect to complete posting...');
+            
+            console.log('🚀 POSTING SUBMITTED - WAITING FOR FACEBOOK REDIRECT');
               console.log('🚀 Current URL after posting:', window.location.href);
               
               // Return success with credits info to popup for processing next vehicle
@@ -3766,26 +3744,64 @@ class SalesonatorAutomator {
         console.log('🚀 DETECTED REDIRECT TO VEHICLES CATEGORY - POSTING COMPLETED');
         this.log('🎯 Detected redirect to vehicles category after posting - vehicle posted successfully');
         
-        // Send immediate success notification to popup
-        try {
-          chrome.runtime.sendMessage({
-            action: 'vehiclePosted',
-            oldUrl: oldUrl,
-            newUrl: newUrl,
-            status: 'posted_successfully'
-          });
-          
-          // Also notify web app of successful posting (non-blocking)
-          this.notifyWebAppOfPosting();
-          
-          // Signal popup to continue with next vehicle immediately
-          chrome.runtime.sendMessage({
-            action: 'continueWithNextVehicle',
-            message: 'Vehicle posted successfully, ready for next vehicle'
-          });
-        } catch (error) {
-          console.log('Extension context invalidated, but posting was successful');
+        // NOW record the posting in backend with the proper Facebook post ID
+        if (this.currentVehicleData && this.currentVehicleData.id) {
+          try {
+            console.log('🚀 CREDIT DEDUCTION ATTEMPT STARTING (AFTER REDIRECT)');
+            console.log('🚀 Vehicle ID for recording:', this.currentVehicleData.id);
+            this.log('📝 Recording vehicle posting in backend...');
+            this.log('🔍 Current URL after redirect:', window.location.href);
+            
+            const recordResult = await this.recordVehiclePosting(this.currentVehicleData.id);
+            
+            console.log('🚀 CREDIT DEDUCTION RESULT:', recordResult);
+            console.log('🚀 Credits after posting:', recordResult.credits);
+            this.log('✅ Vehicle posting recorded in backend', recordResult);
+            this.log('💰 Credits after posting:', recordResult.credits);
+            
+            // Send credit update to popup immediately
+            console.log('🚀 SENDING CREDITS UPDATE TO POPUP:', recordResult.credits);
+            chrome.runtime.sendMessage({
+              action: 'creditsUpdated',
+              credits: recordResult.credits
+            });
+            
+            // Clear vehicle data now that recording is complete
+            this.currentVehicleData = null;
+            
+            // Send immediate success notification to popup
+            chrome.runtime.sendMessage({
+              action: 'vehiclePosted',
+              oldUrl: oldUrl,
+              newUrl: newUrl,
+              status: 'posted_successfully',
+              credits: recordResult.credits
+            });
+            
+          } catch (recordingError) {
+            console.error('🚀 CREDIT DEDUCTION FAILED:', recordingError);
+            this.log('❌ Failed to record vehicle posting:', recordingError.message);
+            
+            // Send error notification to popup but still continue
+            chrome.runtime.sendMessage({
+              action: 'vehiclePosted',
+              oldUrl: oldUrl,
+              newUrl: newUrl,
+              status: 'posted_successfully',
+              recordingFailed: true,
+              error: recordingError.message
+            });
+          }
         }
+        
+        // Also notify web app of successful posting (non-blocking)
+        this.notifyWebAppOfPosting();
+        
+        // Signal popup to continue with next vehicle immediately
+        chrome.runtime.sendMessage({
+          action: 'continueWithNextVehicle',
+          message: 'Vehicle posted successfully, ready for next vehicle'
+        });
         
         // Navigate to create page immediately for next vehicle
         setTimeout(() => {
