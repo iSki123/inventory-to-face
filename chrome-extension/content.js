@@ -3309,10 +3309,32 @@ class SalesonatorAutomator {
   
   async getAuthToken() {
     return new Promise((resolve) => {
+      // First try background script
       chrome.runtime.sendMessage({
         action: 'GET_AUTH_TOKEN'
-      }, (response) => {
-        resolve(response?.token || null);
+      }, async (response) => {
+        if (response?.token) {
+          resolve(response.token);
+          return;
+        }
+        
+        // Fallback to storage if background script doesn't have token
+        try {
+          const result = await chrome.storage.sync.get(['userToken']);
+          if (result.userToken) {
+            // Store in background script for next time
+            chrome.runtime.sendMessage({
+              action: 'SET_AUTH_TOKEN',
+              token: result.userToken
+            });
+            resolve(result.userToken);
+          } else {
+            resolve(null);
+          }
+        } catch (error) {
+          console.error('Error getting auth token from storage:', error);
+          resolve(null);
+        }
       });
     });
   }

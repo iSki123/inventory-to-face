@@ -68,6 +68,12 @@ class SalesonatorExtension {
         await chrome.storage.sync.set({ userToken: webAppAuth.token });
         console.log('✅ Token stored successfully');
         
+        // Also store in background script for console logging
+        chrome.runtime.sendMessage({
+          action: 'SET_AUTH_TOKEN',
+          token: webAppAuth.token
+        });
+        
         // Show success immediately and skip further checks
         this.showWebAppAuthSuccess();
         document.getElementById('loginSection').style.display = 'none';
@@ -343,6 +349,12 @@ class SalesonatorExtension {
         await chrome.storage.sync.set({ userToken: webAppAuth.token });
         this.credits = webAppAuth.credits || 0;
         this.updateCreditDisplay();
+        
+        // Also store in background script for console logging
+        chrome.runtime.sendMessage({
+          action: 'SET_AUTH_TOKEN',
+          token: webAppAuth.token
+        });
         this.showWebAppAuthSuccess();
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('mainSection').style.display = 'block';
@@ -391,6 +403,12 @@ class SalesonatorExtension {
         await chrome.storage.sync.set({
           userToken: data.access_token,
           userEmail: email
+        });
+        
+        // Also store in background script for console logging
+        chrome.runtime.sendMessage({
+          action: 'SET_AUTH_TOKEN',
+          token: data.access_token
         });
         
         statusEl.textContent = 'Authentication successful!';

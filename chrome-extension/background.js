@@ -1,6 +1,6 @@
 // Background script for Salesonator Chrome Extension
 
-// Store authentication token
+// Store authentication token - persist to chrome.storage
 let authToken = null;
 
 class SalesonatorBackground {
@@ -20,6 +20,29 @@ class SalesonatorBackground {
     
     // Initialize posting state detection
     this.initializePostingStateDetection();
+    
+    // Load persisted auth token on startup
+    this.loadAuthToken();
+  }
+
+  async loadAuthToken() {
+    try {
+      const result = await chrome.storage.local.get(['authToken']);
+      authToken = result.authToken || null;
+      console.log('📋 Auth token loaded:', authToken ? 'present' : 'not found');
+    } catch (error) {
+      console.error('Error loading auth token:', error);
+    }
+  }
+
+  async saveAuthToken(token) {
+    try {
+      await chrome.storage.local.set({ authToken: token });
+      authToken = token;
+      console.log('💾 Auth token saved to storage');
+    } catch (error) {
+      console.error('Error saving auth token:', error);
+    }
   }
 
   onInstalled(details) {
@@ -40,9 +63,12 @@ class SalesonatorBackground {
   onMessage(request, sender, sendResponse) {
     try {
       if (request.action === 'SET_AUTH_TOKEN') {
-        authToken = request.token;
-        console.log('Auth token stored in background script');
-        sendResponse({ success: true });
+        this.saveAuthToken(request.token).then(() => {
+          sendResponse({ success: true });
+        }).catch(error => {
+          console.error('Error setting auth token:', error);
+          sendResponse({ success: false, error: error.message });
+        });
         return true;
       }
       
