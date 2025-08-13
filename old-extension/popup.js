@@ -1,23 +1,3 @@
-// Store auth token when popup loads
-async function storeAuthToken() {
-  try {
-    // Try to get token from localStorage (set by web app)
-    const token = localStorage.getItem('sb-urdkaedsfnscgtyvcwlf-auth-token');
-    if (token) {
-      const authData = JSON.parse(token);
-      if (authData?.access_token) {
-        chrome.runtime.sendMessage({
-          action: 'SET_AUTH_TOKEN',
-          token: authData.access_token
-        });
-        console.log('Auth token sent to background script');
-      }
-    }
-  } catch (error) {
-    console.log('No auth token found or error:', error);
-  }
-}
-
 class SalesonatorExtension {
   constructor() {
     this.isPosting = false;
@@ -31,85 +11,56 @@ class SalesonatorExtension {
   async init() {
     console.log('Initializing Salesonator Extension...');
     
-    // Store auth token when popup opens
-    await storeAuthToken();
+    // Load saved settings
+    const settings = await chrome.storage.sync.get(['apiUrl', 'delay', 'userToken']);
     
-    try {
-      // Load saved settings
-      const settings = await chrome.storage.sync.get(['apiUrl', 'delay', 'userToken']);
-      
-      if (settings.apiUrl) {
-        document.getElementById('apiUrl').value = settings.apiUrl;
-      }
-      if (settings.delay) {
-        document.getElementById('delay').value = settings.delay;
-      }
-
-      // Set up event listeners
-      document.getElementById('fetchVehicles').addEventListener('click', () => this.fetchVehicles());
-      document.getElementById('startPosting').addEventListener('click', () => this.startPosting());
-      document.getElementById('stopPosting').addEventListener('click', () => this.stopPosting());
-      document.getElementById('delay').addEventListener('change', () => this.saveSettings());
-      document.getElementById('login').addEventListener('click', () => this.showLoginForm());
-      document.getElementById('openDashboard').addEventListener('click', () => this.openDashboard());
-
-      // Show initial status - but only if element exists
-      const statusEl = document.getElementById('status');
-      if (statusEl) {
-        statusEl.textContent = 'Checking authentication...';
-      }
-
-      // Check for existing web app authentication first
-      console.log('🔍 Starting web app authentication check...');
-      const webAppAuth = await this.checkWebAppAuthentication();
-      if (webAppAuth) {
-        console.log('✅ Found web app authentication, using it for extension');
-        console.log('🔐 Storing token in extension storage...');
-        await chrome.storage.sync.set({ userToken: webAppAuth.token });
-        console.log('✅ Token stored successfully');
-        
-        // Also store in background script for console logging
-        chrome.runtime.sendMessage({
-          action: 'SET_AUTH_TOKEN',
-          token: webAppAuth.token
-        });
-        
-        // Show success immediately and skip further checks
-        this.showWebAppAuthSuccess();
-        document.getElementById('loginSection').style.display = 'none';
-        document.getElementById('mainSection').style.display = 'block';
-        return; // Exit early, don't run checkAuthentication
-      } else {
-        console.log('❌ No web app authentication found');
-      }
-      
-      // Check authentication status (only if web app auth wasn't found)
-      console.log('🔍 Checking stored authentication...');
-      await this.checkAuthentication();
-      
-      // Check connection status
-      this.checkConnection();
-      
-      // Check for existing posting state
-      await this.checkPostingState();
-    } catch (error) {
-      console.error('Error during initialization:', error);
-      const statusEl = document.getElementById('status');
-      if (statusEl) {
-        statusEl.textContent = 'Initialization error: ' + error.message;
-      }
+    if (settings.apiUrl) {
+      document.getElementById('apiUrl').value = settings.apiUrl;
     }
+    if (settings.delay) {
+      document.getElementById('delay').value = settings.delay;
+    }
+
+    // Set up event listeners
+    document.getElementById('fetchVehicles').addEventListener('click', () => this.fetchVehicles());
+    document.getElementById('startPosting').addEventListener('click', () => this.startPosting());
+    document.getElementById('stopPosting').addEventListener('click', () => this.stopPosting());
+    document.getElementById('delay').addEventListener('change', () => this.saveSettings());
+    document.getElementById('login').addEventListener('click', () => this.showLoginForm());
+    document.getElementById('openDashboard').addEventListener('click', () => this.openDashboard());
+
+    // Check for existing web app authentication first
+    console.log('🔍 Starting web app authentication check...');
+    const webAppAuth = await this.checkWebAppAuthentication();
+    if (webAppAuth) {
+      console.log('✅ Found web app authentication, using it for extension');
+      console.log('🔐 Storing token in extension storage...');
+      await chrome.storage.sync.set({ userToken: webAppAuth.token });
+      console.log('✅ Token stored successfully');
+      
+      // Show success immediately and skip further checks
+      this.showWebAppAuthSuccess();
+      document.getElementById('loginSection').style.display = 'none';
+      document.getElementById('mainSection').style.display = 'block';
+      return; // Exit early, don't run checkAuthentication
+    } else {
+      console.log('❌ No web app authentication found');
+    }
+    
+    // Check authentication status (only if web app auth wasn't found)
+    console.log('🔍 Checking stored authentication...');
+    await this.checkAuthentication();
+    
+    // Check connection status
+    this.checkConnection();
+    
+    // Check for existing posting state
+    await this.checkPostingState();
   }
 
   async checkWebAppAuthentication() {
     try {
       console.log('Checking for web app authentication...');
-      
-      // Show connecting status - but only if element exists
-      const statusEl = document.getElementById('status');
-      if (statusEl) {
-        statusEl.textContent = 'Connecting to Salesonator...';
-      }
       
       // Check all open tabs for Salesonator (much broader search)
       const allTabs = await chrome.tabs.query({});
@@ -208,28 +159,29 @@ class SalesonatorExtension {
                   const profile = profileData[0];
                   console.log('Extracted profile:', profile);
                   
-                  if (profile && profile.is_active) {
+                  if (profile && profile.is_active && profile.credits > 0) {
                     console.log('✅ User is eligible with credits:', profile.credits);
                     console.log('Setting up auto-authentication...');
                     this.credits = profile.credits;
                     this.updateCreditDisplay();
+                    this.showWebAppAuthSuccess();
                     return { token: authData.token, user: authData.user, credits: profile.credits };
                   } else {
                     console.log('❌ User is not eligible - Active:', profile?.is_active, 'Credits:', profile?.credits);
-                    if (statusEl) statusEl.textContent = 'Account not active - please contact support';
+                    this.showError('Active account with credits required for extension');
                     return null;
                   }
                 } else {
                   const errorText = await response.text();
                   console.log('❌ Failed to verify user eligibility, status:', response.status);
                   console.log('❌ Error response:', errorText);
-                  if (statusEl) statusEl.textContent = 'Failed to verify user eligibility';
+                  this.showError('Failed to verify user eligibility');
                   return null;
                 }
               } catch (error) {
                 console.error('❌ Error verifying user eligibility:', error);
                 console.error('❌ Error details:', error.message, error.stack);
-                if (statusEl) statusEl.textContent = 'Error checking user eligibility: ' + error.message;
+                this.showError('Error checking user eligibility: ' + error.message);
                 return null;
               }
             }
@@ -240,13 +192,10 @@ class SalesonatorExtension {
         }
       }
       
-      console.log('No web app authentication found');
-      if (statusEl) statusEl.textContent = 'No authentication found in web app';
+      console.log('No admin authentication found');
       return null;
     } catch (error) {
       console.warn('Error checking web app authentication:', error);
-      const statusEl = document.getElementById('status');
-      if (statusEl) statusEl.textContent = 'Error checking web app authentication';
       return null;
     }
   }
@@ -301,26 +250,8 @@ class SalesonatorExtension {
 
   async openDashboard() {
     try {
-      // Try to find existing Salesonator tab first
-      const tabs = await chrome.tabs.query({});
-      const salesonatorTab = tabs.find(tab => 
-        tab.url && (
-          tab.url.includes('salesonator.com') ||
-          tab.url.includes('lovable.app') ||
-          tab.url.includes('lovableproject.com')
-        )
-      );
-      
-      let dashboardUrl;
-      if (salesonatorTab) {
-        // Use the same domain as existing tab
-        const url = new URL(salesonatorTab.url);
-        dashboardUrl = `${url.protocol}//${url.host}/`;
-      } else {
-        // Default to the custom domain
-        dashboardUrl = 'https://salesonator.com/';
-      }
-      
+      // Open Salesonator dashboard in new tab
+      const dashboardUrl = 'https://preview--inventory-to-face.lovable.app/';
       await chrome.tabs.create({ url: dashboardUrl, active: true });
       
       // Show message that we're waiting for auto-login
@@ -349,12 +280,6 @@ class SalesonatorExtension {
         await chrome.storage.sync.set({ userToken: webAppAuth.token });
         this.credits = webAppAuth.credits || 0;
         this.updateCreditDisplay();
-        
-        // Also store in background script for console logging
-        chrome.runtime.sendMessage({
-          action: 'SET_AUTH_TOKEN',
-          token: webAppAuth.token
-        });
         this.showWebAppAuthSuccess();
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('mainSection').style.display = 'block';
@@ -403,12 +328,6 @@ class SalesonatorExtension {
         await chrome.storage.sync.set({
           userToken: data.access_token,
           userEmail: email
-        });
-        
-        // Also store in background script for console logging
-        chrome.runtime.sendMessage({
-          action: 'SET_AUTH_TOKEN',
-          token: data.access_token
         });
         
         statusEl.textContent = 'Authentication successful!';
@@ -489,38 +408,16 @@ class SalesonatorExtension {
       const data = await response.json();
       
       if (data.success) {
-        const allVehicles = data.vehicles || [];
-        
-        // Filter out vehicles that are already marked as posted locally
-        const { postedVehicles = [] } = await chrome.storage.local.get(['postedVehicles']);
-        
-        this.vehicles = allVehicles.filter(vehicle => {
-          const vehicleKey = `${vehicle.id}_${vehicle.year}_${vehicle.make}_${vehicle.model}`;
-          const isPostedLocally = postedVehicles.includes(vehicleKey);
-          
-          if (isPostedLocally) {
-            console.log(`🚫 Filtering out locally posted vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
-          }
-          
-          return !isPostedLocally;
-        });
-        
-        console.log(`📊 Found ${allVehicles.length} vehicles from database, ${this.vehicles.length} after filtering posted ones`);
-        
+        this.vehicles = data.vehicles || [];
         countEl.textContent = `${this.vehicles.length} vehicles ready to post`;
         startBtn.disabled = this.vehicles.length === 0;
         statusEl.className = 'status connected';
+        statusEl.textContent = 'Vehicles loaded, pre-downloading images...';
         
-        if (this.vehicles.length !== allVehicles.length) {
-          statusEl.textContent = `✅ ${this.vehicles.length} new vehicles loaded (${allVehicles.length - this.vehicles.length} already posted)`;
-        } else {
-          statusEl.textContent = `✅ ${this.vehicles.length} vehicles loaded! Ready to start posting.`;
-        }
+        // Pre-download all vehicle images
+        await this.preDownloadAllImages();
         
-        console.log('🔧 Images will be downloaded per-vehicle before posting');
-        
-        // Enable start button immediately - no pre-downloading
-        startBtn.disabled = this.vehicles.length === 0;
+        statusEl.textContent = 'Vehicles and images ready for posting';
       } else {
         throw new Error(data.error || 'Failed to fetch vehicles');
       }
@@ -542,28 +439,8 @@ class SalesonatorExtension {
 
   async startPosting() {
     if (this.vehicles.length === 0) {
-      try {
-        document.getElementById('status').textContent = 'Fetching vehicles before starting...';
-        await this.fetchVehicles();
-      } catch (e) {
-        console.error('Auto-fetch failed:', e);
-      }
-    }
-
-    if (this.vehicles.length === 0) {
-      alert('No vehicles ready to post. Please fetch vehicles first.');
+      alert('No vehicles to post. Please fetch vehicles first.');
       return;
-    }
-
-    // Limit posting to prevent rate limiting - max 10 vehicles per session
-    const maxVehiclesPerSession = 10;
-    let vehiclesToPost = this.vehicles;
-    
-    if (this.vehicles.length > maxVehiclesPerSession) {
-      const proceed = confirm(`You have ${this.vehicles.length} vehicles ready to post. To avoid Facebook rate limiting, this session will post the first ${maxVehiclesPerSession} vehicles. Continue?`);
-      if (!proceed) return;
-      
-      vehiclesToPost = this.vehicles.slice(0, maxVehiclesPerSession);
     }
 
     // Check if we're on the right page
@@ -575,35 +452,12 @@ class SalesonatorExtension {
       return;
     }
 
-    // Check if we're on the correct vehicle creation URL
-    const targetUrl = 'https://www.facebook.com/marketplace/create/vehicle';
-    
-    if (tab.url !== targetUrl) {
-      document.getElementById('status').textContent = 'Redirecting to Facebook Marketplace vehicle creation page...';
-      
-      try {
-        // Navigate to the correct URL
-        await chrome.tabs.update(tab.id, { url: targetUrl });
-        
-        // Wait for the page to load completely
-        await this.waitForPageLoad(tab.id, targetUrl);
-        
-        document.getElementById('status').textContent = 'Page loaded successfully...';
-      } catch (error) {
-        console.error('Error redirecting to vehicle creation page:', error);
-        document.getElementById('status').textContent = 'Error: Unable to navigate to vehicle creation page';
-        return;
-      }
-    }
-
     // Store posting state in Chrome Storage for persistence across redirects
     await chrome.storage.local.set({
       isPosting: true,
-      postingQueue: vehiclesToPost,
+      postingQueue: this.vehicles,
       currentVehicleIndex: 0,
-      postingStartTime: Date.now(),
-      totalVehiclesInSession: vehiclesToPost.length,
-      rateLimitingEnabled: true
+      postingStartTime: Date.now()
     });
 
     this.isPosting = true;
@@ -611,12 +465,9 @@ class SalesonatorExtension {
     
     document.getElementById('startPosting').style.display = 'none';
     document.getElementById('stopPosting').style.display = 'inline-block';
-    document.getElementById('status').textContent = `Starting posting process for ${vehiclesToPost.length} vehicles with rate limiting...`;
+    document.getElementById('status').textContent = 'Posting in progress...';
     
-    // Start with a longer initial delay to ensure clean start
-    setTimeout(() => {
-      this.postNextVehicle();
-    }, 2000);
+    await this.postNextVehicle();
   }
 
   async stopPosting() {
@@ -632,7 +483,7 @@ class SalesonatorExtension {
 
   async postNextVehicle() {
     // Get current state from storage (in case of reload/redirect)
-    const state = await chrome.storage.local.get(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postedVehicles']);
+    const state = await chrome.storage.local.get(['isPosting', 'postingQueue', 'currentVehicleIndex']);
     
     if (!state.isPosting || !state.postingQueue || state.currentVehicleIndex >= state.postingQueue.length) {
       await this.stopPosting();
@@ -641,57 +492,21 @@ class SalesonatorExtension {
     }
 
     const vehicle = state.postingQueue[state.currentVehicleIndex];
-    const vehicleKey = `${vehicle.id}_${vehicle.year}_${vehicle.make}_${vehicle.model}`;
-    const postedVehicles = state.postedVehicles || [];
-    
-    // Check if this vehicle has already been posted successfully
-    if (postedVehicles.includes(vehicleKey)) {
-      console.log('⏭️ Skipping already posted vehicle:', vehicle.year, vehicle.make, vehicle.model);
-      document.getElementById('status').textContent = `Skipping already posted: ${vehicle.year} ${vehicle.make} ${vehicle.model}`;
-      
-      // Move to next vehicle immediately
-      setTimeout(() => {
-        this.moveToNextVehicle();
-      }, 1000);
-      return;
-    }
-    
     console.log('🚗 Posting vehicle', state.currentVehicleIndex + 1, 'of', state.postingQueue.length, ':', vehicle.year, vehicle.make, vehicle.model);
     
     // Update UI
     document.getElementById('status').textContent = `Posting ${state.currentVehicleIndex + 1} of ${state.postingQueue.length}: ${vehicle.year} ${vehicle.make} ${vehicle.model}`;
     
     try {
-      // Step 1: Download images for this vehicle first
-      const vehicleLabel = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
-      
-      if (vehicle.images && Array.isArray(vehicle.images) && vehicle.images.length > 0) {
-        console.log(`📸 Downloading images for ${vehicleLabel} (${vehicle.images.length} images)...`);
-        document.getElementById('status').textContent = `Downloading images for ${vehicleLabel}...`;
-        
-        try {
-          await this.downloadImagesForVehicle(vehicle);
-          console.log(`📸 ✅ All images downloaded for ${vehicleLabel}`);
-        } catch (imageError) {
-          console.warn(`📸 ⚠️ Image download failed for ${vehicleLabel}:`, imageError.message, '- continuing with post anyway');
-          await this.sendLogToContent(`📸 ⚠️ Image download failed: ${imageError.message} - continuing anyway`, { vehicle: vehicleLabel });
-        }
-      } else {
-        console.log(`📸 No images to download for ${vehicleLabel}`);
-      }
-      
-      // Step 2: Deduct credit BEFORE posting to ensure it completes before redirect
-      await this.sendLogToContent('💳 Deducting credit and initiating post...', { vehicle: vehicleLabel });
+      // CRITICAL: Deduct credit BEFORE posting to ensure it completes before redirect
       console.log('💳 Deducting credit before posting...');
       await this.deductCreditForPosting(vehicle);
       console.log('✅ Credit deducted successfully');
-      await this.sendLogToContent('✅ Credit deducted, sending vehicle to content script', { vehicle: vehicleLabel });
       
-      // Step 3: Send vehicle to content script for posting
+      // Now attempt to post the vehicle
       await this.sendVehicleToContentScript(vehicle);
     } catch (error) {
       console.error('Error posting vehicle:', error);
-      await this.sendErrorToContent('❌ Error posting vehicle', { error: error?.message, vehicle });
       document.getElementById('status').textContent = `Error posting vehicle ${state.currentVehicleIndex + 1}: ${error.message}`;
       
       // Continue to next vehicle after error
@@ -738,67 +553,6 @@ class SalesonatorExtension {
     return data;
   }
 
-  // Download images for a specific vehicle before posting
-  async downloadImagesForVehicle(vehicle) {
-    if (!vehicle.images || !Array.isArray(vehicle.images) || vehicle.images.length === 0) {
-      console.log('📸 No images to download for vehicle');
-      return;
-    }
-
-    const vehicleKey = `vehicle_images_${vehicle.id}`;
-    const vehicleLabel = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
-    
-    // Check if already cached
-    const { [vehicleKey]: existingCache } = await chrome.storage.local.get([vehicleKey]);
-    if (existingCache && existingCache.length > 0) {
-      console.log(`📸 Images already cached for ${vehicleLabel} (${existingCache.length} images)`);
-      return;
-    }
-
-    console.log(`📸 Starting download of ${vehicle.images.length} images for ${vehicleLabel}...`);
-    
-    return new Promise((resolve, reject) => {
-      // Set a timeout for the entire download process
-      const downloadTimeout = setTimeout(() => {
-        console.warn(`📸 ⏰ Image download timeout (30s) for ${vehicleLabel} - continuing anyway`);
-        resolve(); // Don't reject, just continue
-      }, 30000);
-
-      chrome.runtime.sendMessage({
-        action: 'preDownloadImagesViaProxy',
-        imageUrls: vehicle.images,
-        vehicleId: vehicle.id,
-        vehicleLabel: vehicleLabel
-      }, (response) => {
-        clearTimeout(downloadTimeout);
-        
-        if (chrome.runtime.lastError) {
-          console.error(`📸 Runtime error downloading images for ${vehicleLabel}:`, chrome.runtime.lastError.message);
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-
-        if (response && response.success) {
-          const successCount = response.successfulImages || 0;
-          const totalCount = vehicle.images.length;
-          
-          if (successCount > 0) {
-            console.log(`📸 ✅ Downloaded ${successCount}/${totalCount} images for ${vehicleLabel}`);
-            document.getElementById('status').textContent = `Downloaded ${successCount}/${totalCount} images for ${vehicleLabel}`;
-            resolve();
-          } else {
-            console.warn(`📸 ⚠️ No images downloaded for ${vehicleLabel} - continuing anyway`);
-            resolve(); // Don't fail the entire process for image issues
-          }
-        } else {
-          const error = response?.error || 'Unknown error';
-          console.error(`📸 ❌ Failed to download images for ${vehicleLabel}:`, error);
-          reject(new Error(error));
-        }
-      });
-    });
-  }
-
   // New method to move to next vehicle and update storage
   async moveToNextVehicle() {
     const state = await chrome.storage.local.get(['currentVehicleIndex', 'postingQueue']);
@@ -807,16 +561,11 @@ class SalesonatorExtension {
     await chrome.storage.local.set({ currentVehicleIndex: newIndex });
     this.currentVehicleIndex = newIndex;
     
-    // Enhanced delay with rate limiting - minimum 30 seconds between posts
-    const baseDelay = parseInt(document.getElementById('delay').value) || 5;
-    const rateLimitDelay = Math.max(baseDelay, 30); // Minimum 30 seconds
-    
-    console.log(`⏱️ Waiting ${rateLimitDelay} seconds before next vehicle to avoid rate limiting...`);
-    document.getElementById('status').textContent = `Waiting ${rateLimitDelay} seconds before next vehicle...`;
-    
+    // Small delay before continuing
+    const delay = parseInt(document.getElementById('delay').value) || 5;
     setTimeout(() => {
       this.postNextVehicle();
-    }, rateLimitDelay * 1000);
+    }, delay * 1000);
   }
 
   async sendVehicleToContentScript(vehicle) {
@@ -841,19 +590,6 @@ class SalesonatorExtension {
         
         const checkContentScript = () => {
           console.log(`Attempting to ping content script (attempt ${retries + 1}/${maxRetries})...`);
-          console.log('Current tab:', currentTab.url, 'Tab ID:', currentTab.id);
-          
-          // Try to inject content script if not already present
-          if (retries === 0) {
-            console.log('Attempting to inject content script...');
-            chrome.scripting.executeScript({
-              target: { tabId: currentTab.id },
-              files: ['content.js']
-            }).catch(err => {
-              console.log('Content script injection failed (may already be injected):', err.message);
-            });
-          }
-          
           chrome.tabs.sendMessage(currentTab.id, { action: 'ping' }, (response) => {
             if (chrome.runtime.lastError) {
               console.log(`Ping failed with error: ${chrome.runtime.lastError.message}`);
@@ -862,7 +598,7 @@ class SalesonatorExtension {
                 console.log(`Content script not ready, retrying... (${retries}/${maxRetries})`);
                 setTimeout(checkContentScript, 1000);
               } else {
-                reject(new Error(`Content script not responding after multiple attempts. Current page: ${currentTab.url}. Please reload the extension and refresh the Facebook page.`));
+                reject(new Error('Content script not responding after multiple attempts. Please refresh the Facebook page and try again.'));
               }
             } else if (!response) {
               console.log('Ping returned no response');
@@ -871,7 +607,7 @@ class SalesonatorExtension {
                 console.log(`No response from content script, retrying... (${retries}/${maxRetries})`);
                 setTimeout(checkContentScript, 1000);
               } else {
-                reject(new Error(`Content script not responding after multiple attempts. Current page: ${currentTab.url}. Please reload the extension and refresh the Facebook page.`));
+                reject(new Error('Content script not responding after multiple attempts. Please refresh the Facebook page and try again.'));
               }
             } else {
               console.log('✅ Content script is ready, received response:', response);
@@ -885,10 +621,13 @@ class SalesonatorExtension {
                   return reject(new Error(chrome.runtime.lastError.message));
                 }
                 
-                // Don't wait for response - the content script will notify us via message when done
-                console.log('✅ Vehicle posting command sent, waiting for notification...');
-                document.getElementById('status').textContent = 'Posting vehicle...';
-                resolve({ success: true, message: 'Posting initiated' });
+                if (response && response.success) {
+                  console.log('✅ Vehicle posting successful:', response);
+                  resolve(response);
+                } else {
+                  console.error('Vehicle posting failed:', response);
+                  reject(new Error(response?.error || 'Unknown error from content script'));
+                }
               });
             }
           });
@@ -931,119 +670,24 @@ class SalesonatorExtension {
       
       if (allImageUrls.length === 0) {
         console.log('📸 No images to pre-download');
-        return { success: true, successCount: 0, totalCount: 0 };
+        return;
       }
       
-      // Update UI to show pre-download progress
-      const statusEl = document.getElementById('status');
-      const startBtn = document.getElementById('startPosting');
-      const fetchBtn = document.getElementById('fetchVehicles');
-      
-      // Disable buttons during pre-download
-      startBtn.disabled = true;
-      fetchBtn.disabled = true;
-      statusEl.textContent = `Pre-downloading images: 0/${allImageUrls.length} (0%)`;
-      statusEl.className = 'status';
-      statusEl.style.background = '#fff3cd';
-      statusEl.style.color = '#856404';
-      statusEl.style.border = '1px solid #ffeaa7';
-      
-      // Use background script to pre-download images with timeout
-      return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          statusEl.textContent = 'Image pre-download timed out. You can still try posting.';
-          statusEl.className = 'status disconnected';
-          startBtn.disabled = false;
-          fetchBtn.disabled = false;
-          reject(new Error('Pre-download timeout after 60 seconds'));
-        }, 60000);
-        
-        chrome.runtime.sendMessage({
-          action: 'preDownloadImages',
-          imageUrls: allImageUrls
-        }, (response) => {
-          clearTimeout(timeout);
-          
-          if (chrome.runtime.lastError) {
-            console.error('Chrome runtime error:', chrome.runtime.lastError);
-            statusEl.textContent = 'Pre-download failed. You can still try posting.';
-            statusEl.className = 'status disconnected';
-            startBtn.disabled = false;
-            fetchBtn.disabled = false;
-            reject(new Error(chrome.runtime.lastError.message));
-            return;
-          }
-          
-          if (response && response.success) {
-            const successCount = response.successCount || 0;
-            const totalCount = response.totalCount || allImageUrls.length;
-            const percentage = Math.round((successCount / totalCount) * 100);
-            
-            console.log(`✅ Pre-download completed: ${successCount}/${totalCount} images (${percentage}%)`);
-            
-            if (successCount === totalCount) {
-              statusEl.textContent = `✅ All ${totalCount} images downloaded successfully!`;
-              statusEl.className = 'status connected';
-            } else if (successCount > 0) {
-              statusEl.textContent = `⚠️ ${successCount}/${totalCount} images downloaded (${percentage}%). You can still post.`;
-              statusEl.className = 'status';
-              statusEl.style.background = '#fff3cd';
-              statusEl.style.color = '#856404';
-              statusEl.style.border = '1px solid #ffeaa7';
-            } else {
-              statusEl.textContent = '❌ No images downloaded. Posts may fail without images.';
-              statusEl.className = 'status disconnected';
-            }
-            
-            // Re-enable buttons
-            startBtn.disabled = this.vehicles.length === 0;
-            fetchBtn.disabled = false;
-            
-            resolve(response);
-          } else {
-            console.error('Pre-download failed:', response?.error);
-            statusEl.textContent = `Pre-download failed: ${response?.error || 'Unknown error'}`;
-            statusEl.className = 'status disconnected';
-            startBtn.disabled = false;
-            fetchBtn.disabled = false;
-            reject(new Error(response?.error || 'Pre-download failed'));
-          }
-        });
+      // Use background script to pre-download images
+      const response = await chrome.runtime.sendMessage({
+        action: 'preDownloadImages',
+        imageUrls: allImageUrls
       });
+      
+      if (response.success) {
+        console.log('✅ Successfully pre-downloaded', response.downloaded, 'images');
+      } else {
+        console.warn('⚠️ Some images failed to pre-download:', response.failed);
+      }
       
     } catch (error) {
       console.error('Error pre-downloading images:', error);
-      throw error;
     }
-  }
-
-  // Wait for page to load completely
-  async waitForPageLoad(tabId, expectedUrl) {
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Page load timeout'));
-      }, 15000); // 15 second timeout
-
-      const checkComplete = () => {
-        chrome.tabs.get(tabId, (tab) => {
-          if (chrome.runtime.lastError) {
-            clearTimeout(timeout);
-            reject(new Error(chrome.runtime.lastError.message));
-            return;
-          }
-          
-          if (tab.status === 'complete' && tab.url === expectedUrl) {
-            clearTimeout(timeout);
-            // Additional delay to ensure DOM is ready for Facebook's dynamic content
-            setTimeout(resolve, 3000);
-          } else {
-            setTimeout(checkComplete, 500);
-          }
-        });
-      };
-      
-      checkComplete();
-    });
   }
 
   updateCreditDisplay() {
@@ -1053,116 +697,32 @@ class SalesonatorExtension {
     }
   }
 
-  updateStatusMessage(message, type = 'info') {
-    const statusEl = document.getElementById('status');
-    statusEl.textContent = message;
-    
-    // Apply styling based on type
-    if (type === 'info') {
-      statusEl.className = 'status';
-      statusEl.style.background = '#fff3cd';
-      statusEl.style.color = '#856404';
-      statusEl.style.border = '1px solid #ffeaa7';
-    } else if (type === 'success') {
-      statusEl.className = 'status connected';
-    } else if (type === 'error') {
-      statusEl.className = 'status disconnected';
-    }
-  }
-
-  // Helper: send a lightweight log to the active Facebook tab's content script
-  async sendToContent(action, payload) {
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tab?.id) return;
-      chrome.tabs.sendMessage(tab.id, { action, ...payload }, () => void 0);
-    } catch {}
-  }
-
-  async sendLogToContent(message, data) {
-    await this.sendToContent('popupLog', { message, data });
-  }
-
-  async sendErrorToContent(message, data) {
-    await this.sendToContent('popupError', { message, data });
-  }
-
   setupMessageListener() {
-    // Listen for messages from the background script and content script
-      chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
-      console.log('📨 Popup received message:', message);
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      console.log('📩 Popup received message:', message);
       
-      if (message.action === 'extensionReloaded') {
-        document.getElementById('status').textContent = 'Extension reloaded. Please refresh this popup.';
-      } else if (message.action === 'imagesPreDownloaded') {
-        console.log('✅ All images pre-downloaded successfully');
-      } else if (message.type === 'imageDownloadProgress') {
-        // Handle real-time progress updates from chunked download
-        const data = message.data;
-        const percentage = Math.round((data.completed / data.total) * 100);
-        this.updateStatusMessage(`Pre-downloading images: ${data.stored}/${data.total} (${percentage}%) - Chunk ${data.chunk}/${data.totalChunks}`, 'info');
+      if (message.action === 'updateCredits') {
+        console.log('💳 Updating credits from', this.credits, 'to', message.credits);
+        this.credits = message.credits;
+        this.updateCreditDisplay();
       } else if (message.action === 'vehiclePosted') {
-        console.log('🎉 Vehicle posted successfully, continuing with next...');
-        
-        // Check if database recording failed
-        if (message.recordingFailed || message.databaseError) {
-          console.error('⚠️ Database recording failed for vehicle:', message.vehicleId);
-          document.getElementById('status').textContent = `Vehicle posted but DB update failed: ${message.error}`;
-          this.updateStatusMessage(`Posted but database error: ${message.error}`, 'error');
-          
-          // Still mark locally to prevent immediate reposting, but show warning
-          const state = await chrome.storage.local.get(['postingQueue', 'currentVehicleIndex']);
-          if (state.postingQueue && state.currentVehicleIndex < state.postingQueue.length) {
-            const vehicle = state.postingQueue[state.currentVehicleIndex];
-            await this.markVehicleAsPosted(vehicle);
-            console.log('⚠️ Marked vehicle as posted locally despite database error');
-          }
-        } else {
-          document.getElementById('status').textContent = 'Vehicle posted! Moving to next...';
-          
-          // Mark vehicle as posted before moving to next
-          const state = await chrome.storage.local.get(['postingQueue', 'currentVehicleIndex']);
-          if (state.postingQueue && state.currentVehicleIndex < state.postingQueue.length) {
-            const vehicle = state.postingQueue[state.currentVehicleIndex];
-            await this.markVehicleAsPosted(vehicle);
-          }
-        }
-        
-        // Don't call moveToNextVehicle here - wait for continueWithNextVehicle message
-      } else if (message.action === 'recordingError') {
-        console.error('💥 Recording error received:', message.error);
-        document.getElementById('status').textContent = `Database error: ${message.error}`;
-        this.updateStatusMessage(`Critical: Database recording failed - ${message.error}`, 'error');
-      } else if (message.action === 'continueWithNextVehicle') {
-        console.log('🚀 Content script signaling to continue with next vehicle immediately');
-        document.getElementById('status').textContent = 'Preparing next vehicle...';
-        // Move to next vehicle and continue posting - moveToNextVehicle already calls postNextVehicle
+        console.log('✅ Vehicle posted successfully, moving to next vehicle');
         this.moveToNextVehicle();
-      } else if (message.action === 'readyForNextVehicle') {
-        console.log('🚀 Content script ready for next vehicle');
-        document.getElementById('status').textContent = 'Ready for next vehicle...';
-        // Longer delay to ensure page is fully loaded before posting next vehicle
+      } else if (message.action === 'postingError') {
+        console.log('❌ Posting error received:', message.error);
+        // Move to next vehicle even on error
+        this.moveToNextVehicle();
+      } else if (message.action === 'navigationDetected') {
+        console.log('🔄 Navigation detected:', message.url);
+        document.getElementById('status').textContent = 'Navigation detected, waiting for next posting...';
+      } else if (message.action === 'readyForNext') {
+        console.log('✅ Content script is ready for next vehicle');
+        // Small delay before posting next vehicle
         setTimeout(() => {
           this.postNextVehicle();
-        }, 4000);
+        }, 2000);
       }
     });
-  }
-
-  async markVehicleAsPosted(vehicle) {
-    try {
-      const vehicleKey = `${vehicle.id}_${vehicle.year}_${vehicle.make}_${vehicle.model}`;
-      const state = await chrome.storage.local.get(['postedVehicles']);
-      const postedVehicles = state.postedVehicles || [];
-      
-      if (!postedVehicles.includes(vehicleKey)) {
-        postedVehicles.push(vehicleKey);
-        await chrome.storage.local.set({ postedVehicles });
-        console.log('✅ Marked vehicle as posted:', vehicleKey);
-      }
-    } catch (error) {
-      console.error('Error marking vehicle as posted:', error);
-    }
   }
 
   // Check for existing posting state on initialization

@@ -1,8 +1,5 @@
 // Background script for Salesonator Chrome Extension
 
-// Store authentication token - persist to chrome.storage
-let authToken = null;
-
 class SalesonatorBackground {
   constructor() {
     this.init();
@@ -17,32 +14,6 @@ class SalesonatorBackground {
     
     // Handle tab updates
     chrome.tabs.onUpdated.addListener(this.onTabUpdated.bind(this));
-    
-    // Initialize posting state detection
-    this.initializePostingStateDetection();
-    
-    // Load persisted auth token on startup
-    this.loadAuthToken();
-  }
-
-  async loadAuthToken() {
-    try {
-      const result = await chrome.storage.local.get(['authToken']);
-      authToken = result.authToken || null;
-      console.log('📋 Auth token loaded:', authToken ? 'present' : 'not found');
-    } catch (error) {
-      console.error('Error loading auth token:', error);
-    }
-  }
-
-  async saveAuthToken(token) {
-    try {
-      await chrome.storage.local.set({ authToken: token });
-      authToken = token;
-      console.log('💾 Auth token saved to storage');
-    } catch (error) {
-      console.error('Error saving auth token:', error);
-    }
   }
 
   onInstalled(details) {
@@ -62,21 +33,6 @@ class SalesonatorBackground {
 
   onMessage(request, sender, sendResponse) {
     try {
-      if (request.action === 'SET_AUTH_TOKEN') {
-        this.saveAuthToken(request.token).then(() => {
-          sendResponse({ success: true });
-        }).catch(error => {
-          console.error('Error setting auth token:', error);
-          sendResponse({ success: false, error: error.message });
-        });
-        return true;
-      }
-      
-      if (request.action === 'GET_AUTH_TOKEN') {
-        sendResponse({ token: authToken });
-        return true;
-      }
-      
       if (request.action === 'authenticateUser') {
         // Handle user authentication with Salesonator
         this.authenticateUser(request.credentials)
@@ -89,16 +45,13 @@ class SalesonatorBackground {
       }
       
       if (request.action === 'fetchImage') {
-        console.log('🔄 Background: Received fetchImage request for:', request.url);
-        // Direct image fetch bypassing CORS
-        this.fetchImageDirect(request.url, sendResponse);
-        return true; // Will respond asynchronously
+        this.fetchImageViaProxy(request.url, sendResponse);
+        return true; // Keep message channel open for async response
       }
       
-      if (request.action === 'preDownloadImagesViaProxy') {
-        // Batch download images directly
-        this.preDownloadImagesViaProxy(request.imageUrls, sendResponse);
-        return true; // Will respond asynchronously
+      if (request.action === 'preDownloadImages') {
+        this.preDownloadImagesViaProxy(request.images, sendResponse);
+        return true; // Keep message channel open for async response
       }
       
       if (request.action === 'logActivity') {
@@ -292,184 +245,96 @@ class SalesonatorBackground {
     }
   }
 
-  // Direct image fetch using Chrome extension CORS bypass
-  async fetchImageDirect(url, sendResponse) {
+
+  // Fetch single image via Supabase proxy
+  async fetchImageViaProxy(url, sendResponse) {
     try {
-      console.log('🔄 Background: Starting direct image fetch:', url);
-      
-      // Create timeout promise (15 seconds per image)
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Image fetch timeout after 15 seconds')), 15000);
-      });
-      
-      // Fetch promise with enhanced headers to mimic real browser
-      const fetchPromise = fetch(url, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-          'Sec-Fetch-Dest': 'image',
-          'Sec-Fetch-Mode': 'no-cors',
-          'Sec-Fetch-Site': 'cross-site'
-        }
-      }).then(async (response) => {
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.startsWith('image/')) {
-          throw new Error(`Invalid content type: ${contentType}`);
-        }
-        
-        const blob = await response.blob();
-        
-        // Size check (max 10MB per image)
-        if (blob.size > 10 * 1024 * 1024) {
-          throw new Error(`Image too large: ${(blob.size / 1024 / 1024).toFixed(1)}MB (max 10MB)`);
-        }
-        
-        const base64 = await this.blobToBase64(blob);
-        
-        console.log(`✅ Background: Successfully fetched image directly, size: ${(blob.size / 1024).toFixed(1)}KB`);
-        return { success: true, data: base64, size: blob.size, contentType };
-      });
-      
-      const result = await Promise.race([fetchPromise, timeoutPromise]);
-      
-      if (sendResponse) {
-        sendResponse(result);
+      console.log('Fetching image via Supabase proxy:', url);
+      const endpoint = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/image-proxy';
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ',
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+      };
+      const body = JSON.stringify({ imageUrls: [url] });
+      const response = await fetch(endpoint, { method: 'POST', headers, body });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`Proxy request failed: ${response.status}${text ? ` - ${text}` : ''}`);
       }
-      return result;
-      
+
+      const data = await response.json();
+      if (data.results && data.results[0] && data.results[0].success) {
+        const result = data.results[0];
+        console.log('Successfully fetched image via proxy, size:', result.size);
+        sendResponse({ success: true, data: result.base64 });
+      } else {
+        const error = data.results?.[0]?.error || data.error || 'Unknown proxy error';
+        console.error('Proxy returned error:', error);
+        sendResponse({ success: false, error });
+      }
     } catch (error) {
-      console.error('❌ Background: Error fetching image directly:', error.message);
-      const errorResult = { success: false, error: error.message };
-      
-      if (sendResponse) {
-        sendResponse(errorResult);
-      }
-      return errorResult;
+      console.error('Error fetching image via proxy:', error);
+      sendResponse({ success: false, error: error.message });
     }
   }
-  
-  blobToBase64(blob) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = reader.result.split(',')[1]; // Remove data:image/... prefix
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }
 
-  // Direct batch image download using Chrome extension capabilities
+  // Pre-download multiple images via Supabase proxy
   async preDownloadImagesViaProxy(imageUrls, sendResponse) {
     try {
-      console.log('🔄 Background: Pre-downloading images directly (bypassing proxy)...');
+      console.log('Pre-downloading images via Supabase proxy...');
 
       const images = Array.isArray(imageUrls) ? imageUrls : [];
       if (images.length === 0) {
-        console.warn('⚠️ Background: No image URLs provided.');
+        console.warn('No image URLs provided to proxy.');
         sendResponse({ success: true, results: [], successCount: 0, totalCount: 0 });
         return;
       }
-
-      console.log(`📸 Background: Starting download of ${images.length} images...`);
-
-      const results = [];
-      let successCount = 0;
-
-      // Download images sequentially to avoid overwhelming the server
-      for (let i = 0; i < images.length; i++) {
-        const imageUrl = images[i];
-        
-        if (!imageUrl) {
-          console.warn(`⚠️ Background: Skipping empty URL at index ${i}`);
-          results.push({ success: false, url: imageUrl, error: 'Empty URL' });
-          continue;
-        }
-
-        console.log(`📸 Background: Downloading image ${i + 1}/${images.length}: ${imageUrl}`);
-
-        try {
-          const result = await this.fetchImageDirect(imageUrl);
-          
-          if (result.success) {
-            // Store in chrome.storage.local with URL hash as key
-            const imageKey = this.hashString(imageUrl);
-            await chrome.storage.local.set({
-              [imageKey]: {
-                base64: result.data,
-                url: imageUrl,
-                size: result.size,
-                contentType: result.contentType,
-                downloadedAt: Date.now()
-              }
-            });
-            
-            successCount++;
-            console.log(`✅ Background: Stored image ${i + 1} in cache (${(result.size / 1024).toFixed(1)}KB)`);
-            
-            results.push({
-              success: true,
-              url: imageUrl,
-              size: result.size,
-              cached: true
-            });
-          } else {
-            console.error(`❌ Background: Failed to download image ${i + 1}: ${result.error}`);
-            results.push({
-              success: false,
-              url: imageUrl,
-              error: result.error
-            });
-          }
-        } catch (error) {
-          console.error(`❌ Background: Error downloading image ${i + 1}:`, error.message);
-          results.push({
-            success: false,
-            url: imageUrl,
-            error: error.message
-          });
-        }
-
-        // Small delay between downloads to be respectful to servers
-        if (i < images.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
-
-      const response = {
-        success: true,
-        results: results,
-        successfulImages: successCount,
-        totalImages: images.length,
-        summary: {
-          total: images.length,
-          successful: successCount,
-          failed: images.length - successCount
-        }
+      
+      const endpoint = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/image-proxy';
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ',
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
       };
 
-      console.log(`✅ Background: Batch download complete: ${successCount}/${images.length} successful`);
-      sendResponse(response);
-
-    } catch (error) {
-      console.error('💥 Background: Error in preDownloadImagesViaProxy:', error);
-      sendResponse({ 
-        success: false, 
-        error: error.message,
-        results: [],
-        successfulImages: 0,
-        totalImages: imageUrls?.length || 0
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ imageUrls: images })
       });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`Proxy request failed: ${response.status}${text ? ` - ${text}` : ''}`);
+      }
+
+      const data = await response.json();
+      
+      // Store successful downloads in chrome storage
+      for (const result of data.results || []) {
+        if (result.success) {
+          const storageKey = `img_${this.hashString(result.url)}`;
+          // Store the full base64 data URL (not just the base64 part)
+          const base64Data = result.base64 || '';
+          if (base64Data) {
+            await chrome.storage.local.set({ [storageKey]: base64Data });
+            console.log(`Stored image with key: ${storageKey}, size: ${result.size || 'unknown'} bytes`);
+          }
+        }
+      }
+      
+      console.log(`Pre-download complete: ${data.summary?.successful || 0}/${data.summary?.total || images.length} successful`);
+      sendResponse({ 
+        success: true, 
+        results: data.results || [],
+        successCount: data.summary?.successful || 0,
+        totalCount: data.summary?.total || images.length
+      });
+    } catch (error) {
+      console.error('Error pre-downloading images:', error);
+      sendResponse({ success: false, error: error.message });
     }
   }
 
@@ -503,138 +368,6 @@ class SalesonatorBackground {
       console.error('Web app authentication failed:', error);
       throw error;
     }
-  }
-
-  // Initialize posting state detection on extension load
-  async initializePostingStateDetection() {
-    try {
-      console.log('🔍 Initializing posting state detection...');
-      
-      // Check for existing posting state in storage
-      const postingState = await chrome.storage.local.get([
-        'isPosting', 
-        'currentVehicleIndex', 
-        'vehicleQueue', 
-        'lastPostedVehicle',
-        'postingStartTime',
-        'totalVehiclesToPost'
-      ]);
-      
-      console.log('📊 Current posting state:', postingState);
-      
-      // Detect if posting was in progress
-      if (postingState.isPosting) {
-        const currentIndex = postingState.currentVehicleIndex || 0;
-        const totalVehicles = postingState.totalVehiclesToPost || 0;
-        const startTime = postingState.postingStartTime;
-        
-        console.log(`🚀 Detected active posting session: ${currentIndex}/${totalVehicles}`);
-        
-        if (startTime) {
-          const elapsedMinutes = (Date.now() - startTime) / (1000 * 60);
-          console.log(`⏱️ Session has been running for ${elapsedMinutes.toFixed(1)} minutes`);
-        }
-        
-        // Check if posting session completed
-        if (currentIndex >= totalVehicles && totalVehicles > 0) {
-          console.log('✅ Posting session appears to be completed');
-          await this.handlePostingCompletion(postingState);
-        } else {
-          console.log('⏸️ Posting session appears to be in progress or paused');
-          await this.handleInProgressPosting(postingState);
-        }
-      } else {
-        console.log('💤 No active posting session detected');
-      }
-      
-      // Set up periodic state monitoring
-      this.setupPostingStateMonitoring();
-      
-    } catch (error) {
-      console.error('❌ Error initializing posting state detection:', error);
-    }
-  }
-  
-  // Handle completed posting session
-  async handlePostingCompletion(postingState) {
-    console.log('🎉 Processing completed posting session...');
-    
-    const completionData = {
-      completedAt: Date.now(),
-      totalPosted: postingState.currentVehicleIndex || 0,
-      totalPlanned: postingState.totalVehiclesToPost || 0,
-      lastVehicle: postingState.lastPostedVehicle,
-      duration: postingState.postingStartTime ? 
-        (Date.now() - postingState.postingStartTime) / (1000 * 60) : 0
-    };
-    
-    // Store completion record
-    await chrome.storage.local.set({
-      lastCompletedSession: completionData,
-      isPosting: false
-    });
-    
-    console.log('📈 Posting session completion recorded:', completionData);
-    
-    // Update extension badge to show completion
-    this.updateBadgeForCompletion(completionData);
-  }
-  
-  // Handle in-progress posting session
-  async handleInProgressPosting(postingState) {
-    console.log('⚠️ Processing in-progress posting session...');
-    
-    const progressData = {
-      current: postingState.currentVehicleIndex || 0,
-      total: postingState.totalVehiclesToPost || 0,
-      lastVehicle: postingState.lastPostedVehicle,
-      elapsedTime: postingState.postingStartTime ? 
-        (Date.now() - postingState.postingStartTime) / (1000 * 60) : 0
-    };
-    
-    console.log('📊 Progress data:', progressData);
-    
-    // Update extension badge to show progress
-    this.updateBadgeForProgress(progressData);
-  }
-  
-  // Set up periodic monitoring of posting state
-  setupPostingStateMonitoring() {
-    // Check posting state every 30 seconds
-    setInterval(async () => {
-      const postingState = await chrome.storage.local.get(['isPosting', 'currentVehicleIndex', 'totalVehiclesToPost']);
-      
-      if (postingState.isPosting) {
-        const current = postingState.currentVehicleIndex || 0;
-        const total = postingState.totalVehiclesToPost || 0;
-        
-        // Check for completion
-        if (current >= total && total > 0) {
-          await this.handlePostingCompletion(postingState);
-        }
-      }
-    }, 30000); // 30 seconds
-  }
-  
-  // Update extension badge for completed session
-  updateBadgeForCompletion(completionData) {
-    chrome.action.setBadgeText({ text: '✓' });
-    chrome.action.setBadgeBackgroundColor({ color: '#4CAF50' });
-    chrome.action.setTitle({ 
-      title: `Salesonator - Last session: ${completionData.totalPosted} vehicles posted in ${completionData.duration.toFixed(1)} minutes`
-    });
-  }
-  
-  // Update extension badge for progress
-  updateBadgeForProgress(progressData) {
-    const percentage = progressData.total > 0 ? 
-      Math.round((progressData.current / progressData.total) * 100) : 0;
-    
-    chrome.action.setBadgeText({ text: `${percentage}%` });
-    chrome.action.setBadgeBackgroundColor({ color: '#2196F3' });
-    chrome.action.setTitle({ 
-      title: `Salesonator - Posting in progress: ${progressData.current}/${progressData.total} (${percentage}%)`
-    });
   }
 
   // Simple hash function for consistent storage keys (same as content script)

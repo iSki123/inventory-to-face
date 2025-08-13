@@ -9,10 +9,6 @@ class SalesonatorAutomator {
     this.uploadedImages = []; // Track uploaded images to prevent duplicates
     this.currentUrl = window.location.href;
     this.isWaitingForNextVehicle = false;
-    
-    // Initialize console logging
-    this.initializeConsoleLogging();
-    
     this.setupMessageListener();
     this.installNavigationGuards();
     this.setupUrlChangeDetection();
@@ -29,31 +25,6 @@ class SalesonatorAutomator {
     const backoffMultiplier = Math.pow(1.5, attempt);
     const actualDelay = ms * backoffMultiplier + this.randomDelay(50, 200);
     return new Promise(resolve => setTimeout(resolve, actualDelay));
-  }
-
-  // Convert base64 string to File object
-  base64ToFile(base64Data, filename) {
-    try {
-      // Remove data URL prefix if present
-      const base64String = base64Data.replace(/^data:image\/[a-z]+;base64,/, '');
-      
-      // Convert base64 to binary
-      const binaryString = atob(base64String);
-      const bytes = new Uint8Array(binaryString.length);
-      
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      
-      // Create blob and file
-      const blob = new Blob([bytes], { type: 'image/jpeg' });
-      const file = new File([blob], filename, { type: 'image/jpeg' });
-      
-      return file;
-    } catch (error) {
-      console.error('Error converting base64 to file:', error);
-      return null;
-    }
   }
 
   // React-native value setter that forces React to recognize changes
@@ -482,32 +453,6 @@ class SalesonatorAutomator {
   async postVehicle(vehicleData) {
     try {
       this.log('🚗 Starting enhanced vehicle posting process...', vehicleData);
-      
-      // Check if we're on the correct page first
-      if (!window.location.href.includes('/marketplace/create/vehicle')) {
-        this.log('⚠️ Not on create vehicle page, current URL:', window.location.href);
-        this.log('🧭 Navigating to create vehicle page...');
-        
-        // Navigate to the create vehicle page
-        window.location.href = 'https://www.facebook.com/marketplace/create/vehicle';
-        
-        // Wait for page to load and try again
-        return new Promise((resolve, reject) => {
-          const checkPageReady = () => {
-            if (window.location.href.includes('/marketplace/create/vehicle')) {
-              this.log('✅ Successfully navigated to create vehicle page');
-              // Wait a bit more for the page to fully load
-              setTimeout(() => {
-                this.postVehicle(vehicleData).then(resolve).catch(reject);
-              }, 2000);
-            } else {
-              setTimeout(checkPageReady, 500);
-            }
-          };
-          setTimeout(checkPageReady, 1000);
-        });
-      }
-      
       this.isPosting = true;
       this.uploadedImages = []; // Reset uploaded images tracking for new posting session
       
@@ -523,7 +468,7 @@ class SalesonatorAutomator {
           
           // Handle image uploads if images are provided
           if (vehicleData.images && Array.isArray(vehicleData.images) && vehicleData.images.length > 0) {
-            await this.handleImageUploads(vehicleData);
+            await this.handleImageUploads(vehicleData.images);
             await this.delay(1000, attempt);
           } else {
             this.log('📸 No images provided or images array is invalid, skipping image upload');
@@ -569,15 +514,11 @@ class SalesonatorAutomator {
               console.log('🚀 SETTING WAITING FOR NEXT VEHICLE FLAG');
               this.isWaitingForNextVehicle = true;
               
-              // Navigate to create page immediately for next vehicle (same as error path)
-              this.log('🔄 Posting complete, navigating to create page...');
-              this.log('📍 Current URL before navigation:', window.location.href);
+              // Let URL change detection handle navigation after Facebook redirects
+              this.log('🔄 Posting complete, waiting for Facebook redirects...');
+              this.log('📡 URL change detection will handle navigation to create page automatically');
               
-              const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
-              this.log('🎯 Navigation to:', createVehicleUrl);
-              window.location.href = createVehicleUrl;
-              
-              console.log('🚀 POSTING FLOW COMPLETE - NAVIGATED TO CREATE PAGE');
+              console.log('🚀 POSTING FLOW COMPLETE - WAITING FOR REDIRECTS');
               console.log('🚀 Current URL after posting:', window.location.href);
               
               // Return success with credits info to popup for processing next vehicle
@@ -588,19 +529,9 @@ class SalesonatorAutomator {
               };
               
             } catch (backendError) {
-              this.log('⚠️ CRITICAL: Vehicle posted but failed to record in backend:', backendError);
+              this.log('⚠️ Vehicle posted but failed to record in backend:', backendError);
               this.log('⚠️ Backend error details:', backendError.message);
-              this.log('⚠️ Backend error stack:', backendError.stack);
               console.error('Backend recording error:', backendError);
-              console.error('Full backend error object:', backendError);
-              
-              // IMPORTANT: Send error notification to popup
-              chrome.runtime.sendMessage({
-                action: 'recordingError',
-                vehicleId: vehicleData.id,
-                error: backendError.message,
-                fullError: backendError.toString()
-              });
               
               // Clear posting state even if recording failed
               this.isPosting = false;
@@ -621,8 +552,7 @@ class SalesonatorAutomator {
               
               return { 
                 success: true, 
-                warning: 'Posted but failed to record: ' + backendError.message,
-                databaseError: true
+                warning: 'Posted but failed to record: ' + backendError.message 
               };
             }
           }
@@ -665,16 +595,12 @@ class SalesonatorAutomator {
     }
     
     if (currentUrl.includes('facebook.com/marketplace/create/vehicle')) {
-      this.log('✅ Already on vehicle creation page, waiting for it to fully load...');
-      await this.waitForPageToLoad();
+      this.log('✅ Already on vehicle creation page');
       return;
     }
     
     if (currentUrl.includes('facebook.com/marketplace/create')) {
       this.log('📝 On marketplace create page, checking for vehicle category...');
-      
-      // Wait for page to load first
-      await this.waitForPageToLoad();
       
       // Look for vehicle category button/option WITHOUT any navigation
       const vehicleCategorySelectors = [
@@ -687,14 +613,11 @@ class SalesonatorAutomator {
       ];
       
       try {
-        const vehicleCategory = await this.waitForElement(vehicleCategorySelectors, 5000);
+        const vehicleCategory = await this.waitForElement(vehicleCategorySelectors, 3000);
         await this.scrollIntoView(vehicleCategory);
         await this.delay(this.randomDelay(300, 600));
         vehicleCategory.click();
-        await this.delay(this.randomDelay(2000, 3000));
-        
-        // Wait for the new page to load after clicking vehicle category
-        await this.waitForPageToLoad();
+        await this.delay(this.randomDelay(1000, 2000));
         return;
       } catch (error) {
         this.log('⚠️ Could not find vehicle category, proceeding anyway');
@@ -709,80 +632,9 @@ class SalesonatorAutomator {
     }
   }
 
-  // Enhanced page loading detection with multiple strategies
-  async waitForPageToLoad() {
-    this.log('⏳ Waiting for page to fully load...');
-    
-    try {
-      // Strategy 1: Wait for document ready state
-      if (document.readyState !== 'complete') {
-        this.log('📄 Document not ready, waiting...');
-        await new Promise(resolve => {
-          if (document.readyState === 'complete') {
-            resolve();
-          } else {
-            const listener = () => {
-              if (document.readyState === 'complete') {
-                document.removeEventListener('readystatechange', listener);
-                resolve();
-              }
-            };
-            document.addEventListener('readystatechange', listener);
-          }
-        });
-      }
-      
-      // Strategy 2: Wait for React/Facebook components to load
-      const pageLoadIndicators = [
-        'form', // Facebook forms
-        '[role="main"]', // Main content area
-        'input[type="text"]', // Any input field
-        '[data-testid]', // Facebook test ids
-        '.marketplace', // Marketplace specific
-        '[aria-label]' // Any labeled element
-      ];
-      
-      this.log('🔍 Waiting for page elements to appear...');
-      await this.waitForElement(pageLoadIndicators, 10000);
-      
-      // Strategy 3: Wait for no loading spinners
-      this.log('🔄 Checking for loading indicators...');
-      let loadingCount = 0;
-      while (loadingCount < 5) { // Max 5 attempts
-        const loadingElements = document.querySelectorAll(
-          '[role="progressbar"], .loading, .spinner, [aria-label*="Loading"], [aria-label*="loading"]'
-        );
-        
-        if (loadingElements.length === 0) {
-          this.log('✅ No loading indicators found');
-          break;
-        } else {
-          this.log(`⏳ Found ${loadingElements.length} loading indicators, waiting...`);
-          await this.delay(1000);
-          loadingCount++;
-        }
-      }
-      
-      // Strategy 4: Additional delay for React hydration
-      this.log('⚡ Final delay for React hydration...');
-      await this.delay(2000);
-      
-      this.log('✅ Page fully loaded and ready for interaction');
-      
-    } catch (error) {
-      this.log('⚠️ Page loading detection failed, continuing anyway:', error);
-      // Even if detection fails, wait a bit before continuing
-      await this.delay(3000);
-    }
-  }
-
   // Enhanced form filling with React-native value setting
   async fillVehicleForm(vehicleData) {
     this.log('📝 Filling vehicle form with enhanced automation...');
-    
-    // FIRST: Ensure page is fully loaded before starting form fill
-    this.log('⏳ Ensuring page is ready before form filling...');
-    await this.waitForPageToLoad();
     
     // Sequential field completion with proper closure verification
     this.log('🔄 Starting sequential form completion...');
@@ -2498,124 +2350,15 @@ class SalesonatorAutomator {
     }
   }
 
-  // Image upload handling with pre-downloaded images from chrome.storage.local
-  async handleImageUploads(vehicleData) {
+  // Simple image upload handling - restored to working version
+  async handleImageUploads(images) {
     try {
       this.log('📸 Starting image upload process...');
       
-      const images = vehicleData.images || [];
-      if (!images || images.length === 0) {
-        this.log('📸 No images to upload');
-        return { success: true, uploadedCount: 0 };
+      if (!images || !Array.isArray(images) || images.length === 0) {
+        this.log('📸 No images provided, skipping upload');
+        return true;
       }
-
-      this.log(`📸 Processing ${images.length} images for upload...`);
-      
-      const uploadFiles = [];
-      
-      // First, try to get images from chrome.storage.local (pre-downloaded)
-      const vehicleKey = `vehicle_images_${vehicleData.id}`;
-      const { [vehicleKey]: cachedImages } = await chrome.storage.local.get([vehicleKey]);
-      
-      if (cachedImages && cachedImages.length > 0) {
-        this.log(`📸 Found ${cachedImages.length} pre-downloaded images in cache`);
-        
-        // Use cached images
-        for (let i = 0; i < cachedImages.length; i++) {
-          const imageData = cachedImages[i];
-          if (imageData && imageData.base64) {
-            const file = this.base64ToFile(imageData.base64, `vehicle_image_${i + 1}.jpg`);
-            if (file) {
-              uploadFiles.push(file);
-              this.log(`📸 Prepared cached image ${i + 1} for upload (${(file.size / 1024).toFixed(1)}KB)`);
-            }
-          }
-        }
-      } else {
-        // Fallback: try individual image cache or direct download
-        this.log('📸 No vehicle-specific cache found, trying individual image cache...');
-        
-        for (let i = 0; i < images.length; i++) {
-          const imageUrl = images[i];
-          if (!imageUrl) continue;
-          
-          this.log(`📸 Processing image ${i + 1}/${images.length}: ${imageUrl}`);
-          
-          try {
-            // Try individual cache first
-            const imageKey = this.hashString(imageUrl);
-            const { [imageKey]: imageData } = await chrome.storage.local.get([imageKey]);
-            
-            if (imageData && imageData.base64) {
-              this.log(`📸 Using individually cached image ${i + 1}`);
-              const file = this.base64ToFile(imageData.base64, `vehicle_image_${i + 1}.jpg`);
-              if (file) {
-                uploadFiles.push(file);
-                this.log(`📸 Prepared cached image ${i + 1} for upload (${(file.size / 1024).toFixed(1)}KB)`);
-              }
-            } else {
-              this.log(`📸 Image ${i + 1} not in cache, downloading directly...`);
-              
-                // Download via background script (bypasses CORS)
-                try {
-                  this.log(`📸 Downloading via background script for image ${i + 1}...`);
-                  
-                  const response = await new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => {
-                      this.log(`📸 ⏰ Timeout (10s) downloading image ${i + 1} - skipping`);
-                      resolve({ success: false, error: 'Download timeout' });
-                    }, 10000); // 10 second timeout per image
-                    
-                    chrome.runtime.sendMessage({ 
-                      action: 'fetchImage', 
-                      url: imageUrl 
-                    }, (result) => {
-                      clearTimeout(timeout);
-                      if (chrome.runtime.lastError) {
-                        this.log(`📸 Chrome runtime error for image ${i + 1}:`, chrome.runtime.lastError.message);
-                        resolve({ success: false, error: chrome.runtime.lastError.message });
-                      } else {
-                        resolve(result || { success: false, error: 'No response from background script' });
-                      }
-                    });
-                  });
-                  
-                  if (response && response.success && response.data) {
-                    const blob = this.base64ToBlob(response.data, 'image/jpeg');
-                    const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
-                    uploadFiles.push(file);
-                    this.log(`📸 ✅ Downloaded and prepared image ${i + 1} (${(file.size / 1024).toFixed(1)}KB)`);
-                    
-                    // Cache the downloaded image for future use
-                    const imageKey = this.hashString(imageUrl);
-                    await chrome.storage.local.set({
-                      [imageKey]: {
-                        base64: response.data,
-                        url: imageUrl,
-                        size: response.size || blob.size,
-                        timestamp: Date.now()
-                      }
-                    });
-                  } else {
-                    this.log(`📸 ❌ Failed to download image ${i + 1}: ${response?.error || 'Unknown error'}`);
-                  }
-                } catch (fetchError) {
-                  this.log(`📸 ❌ Failed to fetch image ${i + 1}:`, fetchError.message);
-                }
-            }
-          } catch (imageError) {
-            this.log(`📸 Error processing image ${i + 1}:`, imageError.message);
-            continue;
-          }
-        }
-      }
-
-      if (uploadFiles.length === 0) {
-        this.log('📸 No valid images prepared for upload');
-        return { success: true, uploadedCount: 0 };
-      }
-
-      this.log(`📸 Prepared ${uploadFiles.length} images for upload, looking for file input...`);
       
       // Find file input 
       const fileInputSelectors = [
@@ -2631,15 +2374,40 @@ class SalesonatorAutomator {
       }
       
       if (!fileInput) {
-        this.log('📸 No file input found, cannot upload images');
-        return { success: false, error: 'File input not found' };
+        throw new Error('No file input found on page');
       }
-
-      this.log('📸 Found file input, uploading images...');
       
-      // Set files using DataTransfer
+      this.log(`📸 Found file input, processing ${images.length} images...`);
+      
+      // Process images one by one using simple fetch
+      const validFiles = [];
+      for (let i = 0; i < Math.min(images.length, 5); i++) {
+        try {
+          const imageUrl = images[i];
+          this.log(`📸 Downloading image ${i + 1}: ${imageUrl}`);
+          
+          const response = await fetch(imageUrl);
+          if (response.ok) {
+            const blob = await response.blob();
+            const file = new File([blob], `image_${i + 1}.jpg`, { type: 'image/jpeg' });
+            validFiles.push(file);
+            this.log(`✅ Successfully downloaded image ${i + 1}`);
+          } else {
+            this.log(`❌ Failed to download image ${i + 1}: ${response.status}`);
+          }
+        } catch (error) {
+          this.log(`❌ Error downloading image ${i + 1}:`, error);
+        }
+      }
+      
+      if (validFiles.length === 0) {
+        this.log('❌ No valid images to upload');
+        return false;
+      }
+      
+      // Set files using simple DataTransfer
       const dataTransfer = new DataTransfer();
-      uploadFiles.forEach(file => {
+      validFiles.forEach(file => {
         dataTransfer.items.add(file);
       });
       
@@ -2648,63 +2416,13 @@ class SalesonatorAutomator {
       // Trigger change event
       fileInput.dispatchEvent(new Event('change', { bubbles: true }));
       
-      await this.delay(2000); // Wait for files to process
+      await this.delay(2000); // Wait longer for files to process
       
-      this.log(`✅ Successfully uploaded ${uploadFiles.length} images`);
-      return { success: true, uploadedCount: uploadFiles.length };
-      
-    } catch (error) {
-      this.log('❌ Image upload error:', error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  // Fallback image upload method
-  async handleImageUploadsFallback(images, fileInput) {
-    try {
-      this.log('📸 Starting fallback image upload method...');
-      
-      if (!images || !Array.isArray(images) || images.length === 0) {
-        this.log('📸 No images to upload in fallback');
-        return true;
-      }
-      
-      if (!fileInput) {
-        this.log('❌ No file input provided for fallback');
-        return false;
-      }
-      
-      // Simple fallback approach - just try to set files directly
-      const imagesToProcess = Math.min(images.length, 4);
-      const validFiles = [];
-      
-      for (let i = 0; i < imagesToProcess; i++) {
-        try {
-          const response = await fetch(images[i]);
-          const blob = await response.blob();
-          const file = new File([blob], `vehicle_image_${i + 1}.jpg`, { type: 'image/jpeg' });
-          validFiles.push(file);
-        } catch (error) {
-          this.log(`⚠️ Failed to fetch image ${i + 1} in fallback:`, error);
-        }
-      }
-      
-      if (validFiles.length === 0) {
-        this.log('❌ No valid images could be processed in fallback');
-        return false;
-      }
-      
-      // Use simple DataTransfer approach
-      const dataTransfer = new DataTransfer();
-      validFiles.forEach(file => dataTransfer.items.add(file));
-      fileInput.files = dataTransfer.files;
-      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-      
-      this.log(`✅ Fallback upload completed - ${validFiles.length} files`);
+      this.log(`✅ Successfully uploaded ${validFiles.length} images`);
       return true;
       
     } catch (error) {
-      this.log('⚠️ Fallback image upload failed:', error);
+      this.log('⚠️ Image upload failed:', error);
       return false;
     }
   }
@@ -2713,170 +2431,58 @@ class SalesonatorAutomator {
   async setFilesWithReactCompatibility(fileInput, files) {
     try {
       this.log('📸 Setting files with React compatibility...');
-      console.log(`[FILE SETTING DEBUG] About to set ${files.length} files on input element`);
-      console.log('[FILE SETTING DEBUG] Files details:', files.map(f => ({ name: f.name, size: f.size, type: f.type })));
+      this.log(`📸 About to set ${files.length} files on input element`);
       
-      // Validate files before setting - filter out null/undefined
-      const validFiles = files.filter(file => {
-        const isValid = file && file.size > 0 && file.size < 50 * 1024 * 1024; // Max 50MB per file
-        if (!isValid) {
-          console.log('[FILE SETTING DEBUG] Invalid file filtered out:', file);
-        }
-        return isValid;
+      // Clear any existing files first to prevent accumulation
+      const emptyDataTransfer = new DataTransfer();
+      fileInput.files = emptyDataTransfer.files;
+      
+      // Brief delay to ensure clearing takes effect
+      await this.delay(200);
+      
+      // Method 1: Single DataTransfer with all files to prevent duplication
+      const dataTransfer = new DataTransfer();
+      files.forEach((file, index) => {
+        this.log(`📸 Adding file ${index + 1}: ${file.name} (${file.size} bytes)`);
+        dataTransfer.items.add(file);
       });
       
-      if (validFiles.length === 0) {
-        throw new Error('No valid files to upload');
+      // Set the files property directly only once
+      fileInput.files = dataTransfer.files;
+      
+      // Method 2: React-specific value setting (from reverse engineering) - only once
+      const fileSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')?.set;
+      
+      if (fileSetter) {
+        fileSetter.call(fileInput, dataTransfer.files);
       }
       
-      console.log(`[FILE SETTING DEBUG] Using ${validFiles.length} valid files out of ${files.length}`);
+      // Brief delay before triggering events
+      await this.delay(300);
       
-      // CRITICAL: Ensure input supports multiple files
-      if (!fileInput.hasAttribute('multiple') && validFiles.length > 1) {
-        console.log('[FILE SETTING DEBUG] Setting multiple attribute on file input');
-        fileInput.setAttribute('multiple', 'multiple');
-        fileInput.multiple = true;
-      }
+      // Method 3: Trigger React events in sequence - only once each
+      fileInput.focus();
+      await this.delay(100);
       
-      // Clear any existing files first
-      try {
-        const emptyDataTransfer = new DataTransfer();
-        fileInput.files = emptyDataTransfer.files;
-        await this.delay(200);
-        console.log('[FILE SETTING DEBUG] Cleared existing files');
-      } catch (e) {
-        console.log('[FILE SETTING DEBUG] Failed to clear existing files:', e);
-      }
+      // Single change event to prevent duplication
+      const changeEvent = new Event('change', { bubbles: true });
+      Object.defineProperty(changeEvent, 'target', {
+        value: fileInput,
+        enumerable: true
+      });
+      Object.defineProperty(changeEvent, 'currentTarget', {
+        value: fileInput,
+        enumerable: true
+      });
       
-      // Create new DataTransfer with ALL valid files at once
-      const dataTransfer = new DataTransfer();
+      fileInput.dispatchEvent(changeEvent);
       
-      // Add all files to the same DataTransfer object
-      for (let i = 0; i < validFiles.length; i++) {
-        const file = validFiles[i];
-        try {
-          console.log(`[FILE SETTING DEBUG] Adding file ${i + 1}/${validFiles.length}: ${file.name} (${file.size} bytes, ${file.type})`);
-          dataTransfer.items.add(file);
-          console.log(`[FILE SETTING DEBUG] Successfully added file ${i + 1}, DataTransfer now has ${dataTransfer.files.length} files`);
-        } catch (e) {
-          console.log(`[FILE SETTING DEBUG] Failed to add file ${i + 1}:`, e);
-        }
-      }
+      // Wait longer to ensure Facebook processes the single event
+      await this.delay(1000);
       
-      console.log(`[FILE SETTING DEBUG] Final DataTransfer created with ${dataTransfer.files.length} files`);
-      
-      // CRITICAL: Set ALL files at once using multiple methods for maximum compatibility
-      let fileSetSuccess = false;
-      
-      // Method 1: Use Object.defineProperty for React compatibility (most reliable)
-      try {
-        Object.defineProperty(fileInput, 'files', {
-          value: dataTransfer.files,
-          configurable: true
-        });
-        console.log('[FILE SETTING DEBUG] Set files via Object.defineProperty');
-        fileSetSuccess = true;
-      } catch (e) {
-        console.log('[FILE SETTING DEBUG] Object.defineProperty method failed:', e);
-      }
-      
-      // Method 2: Direct assignment as backup
-      if (!fileSetSuccess) {
-        try {
-          fileInput.files = dataTransfer.files;
-          console.log('[FILE SETTING DEBUG] Set files via direct assignment');
-          fileSetSuccess = true;
-        } catch (e) {
-          console.log('[FILE SETTING DEBUG] Direct assignment failed:', e);
-        }
-      }
-      
-      // Method 3: Property descriptor setter as final backup
-      if (!fileSetSuccess) {
-        try {
-          const fileSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')?.set;
-          if (fileSetter) {
-            fileSetter.call(fileInput, dataTransfer.files);
-            console.log('[FILE SETTING DEBUG] Set files via property descriptor');
-            fileSetSuccess = true;
-          }
-        } catch (e) {
-          console.log('[FILE SETTING DEBUG] Property descriptor method failed:', e);
-        }
-      }
-      
-      if (!fileSetSuccess) {
-        throw new Error('All file setting methods failed');
-      }
-      
-      // Brief delay before events
-      await this.delay(500);
-      
-      // Verify files were set BEFORE triggering events
-      const preEventFileCount = fileInput.files ? fileInput.files.length : 0;
-      console.log(`[FILE SETTING DEBUG] Pre-event verification: ${preEventFileCount} files in input`);
-      
-      if (preEventFileCount !== validFiles.length) {
-        console.log(`[FILE SETTING DEBUG] WARNING: Expected ${validFiles.length} files but input has ${preEventFileCount}`);
-      }
-      
-      // Focus and trigger events for React
-      try {
-        fileInput.focus();
-        await this.delay(200);
-        
-        // Create change event with proper target references
-        const changeEvent = new Event('change', { bubbles: true, cancelable: true });
-        Object.defineProperty(changeEvent, 'target', { 
-          value: fileInput, 
-          enumerable: true,
-          configurable: true 
-        });
-        Object.defineProperty(changeEvent, 'currentTarget', { 
-          value: fileInput, 
-          enumerable: true,
-          configurable: true 
-        });
-        
-        fileInput.dispatchEvent(changeEvent);
-        console.log('[FILE SETTING DEBUG] Dispatched change event');
-        
-        await this.delay(100);
-        
-        // Also trigger input event for React
-        const inputEvent = new Event('input', { bubbles: true, cancelable: true });
-        Object.defineProperty(inputEvent, 'target', { 
-          value: fileInput, 
-          enumerable: true,
-          configurable: true 
-        });
-        fileInput.dispatchEvent(inputEvent);
-        console.log('[FILE SETTING DEBUG] Dispatched input event');
-        
-      } catch (e) {
-        console.log('[FILE SETTING DEBUG] Event dispatching failed:', e);
-      }
-      
-      // Wait for React to process the files
-      await this.delay(3000);
-      
-      // Final verification
-      const finalFileCount = fileInput.files ? fileInput.files.length : 0;
-      console.log(`[FILE SETTING DEBUG] Final verification: ${finalFileCount} files in input`);
-      
-      if (finalFileCount === validFiles.length) {
-        this.log(`✅ Successfully set ALL ${finalFileCount} files in input!`);
-        return true;
-      } else if (finalFileCount > 0) {
-        this.log(`⚠️ Partial success: ${finalFileCount}/${validFiles.length} files set in input`);
-        return true; // Still consider this a success
-      } else {
-        this.log(`❌ No files detected in input after setting`);
-        return false;
-      }
+      this.log('📸 React-compatible file setting completed');
       
     } catch (error) {
-      console.log('[FILE SETTING DEBUG] Error in file setting:', error);
       this.log('⚠️ Error in React-compatible file setting:', error);
       throw error;
     }
@@ -2997,50 +2603,15 @@ class SalesonatorAutomator {
     return files;
   }
 
-  // Enhanced utility function to convert base64 to blob with better error handling
-  base64ToBlob(base64Data, contentType = 'image/jpeg') {
-    try {
-      console.log('[BASE64 DEBUG] Converting base64 to blob, contentType:', contentType);
-      console.log('[BASE64 DEBUG] Base64 data length:', base64Data?.length || 0);
-      
-      // Handle data URLs (data:image/jpeg;base64,xxxxx) vs raw base64
-      let base64String = base64Data;
-      if (base64Data.includes(',')) {
-        base64String = base64Data.split(',')[1];
-        console.log('[BASE64 DEBUG] Extracted base64 from data URL');
-      }
-      
-      // Validate base64 string
-      if (!base64String || base64String.length === 0) {
-        throw new Error('Empty base64 string');
-      }
-      
-      // Decode base64 to binary
-      const byteCharacters = atob(base64String);
-      console.log('[BASE64 DEBUG] Decoded byte characters length:', byteCharacters.length);
-      
-      if (byteCharacters.length === 0) {
-        throw new Error('Base64 decode resulted in empty data');
-      }
-      
-      // Convert to byte array
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      
-      // Create blob with proper MIME type
-      const blob = new Blob([byteArray], { type: contentType });
-      console.log('[BASE64 DEBUG] Created blob:', { size: blob.size, type: blob.type });
-      
-      return blob;
-    } catch (error) {
-      console.log('[BASE64 DEBUG] Error converting base64 to blob:', error);
-      this.log('⚠️ Error converting base64 to blob:', error);
-      // Return empty blob as fallback
-      return new Blob([], { type: contentType });
+  // Utility function to convert base64 to blob
+  base64ToBlob(base64Data, contentType) {
+    const byteCharacters = atob(base64Data.split(',')[1] || base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
     }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: contentType });
   }
 
   // Helper function to find associated label for an input
@@ -3202,143 +2773,6 @@ class SalesonatorAutomator {
   }
 
   // Navigation guards to prevent accidental redirects during posting
-  initializeConsoleLogging() {
-    this.consoleBuffer = [];
-    this.sessionId = this.generateSessionId();
-    this.maxBufferSize = 100;
-    this.logBatchInterval = 30000; // 30 seconds
-    
-    // Override console methods to capture logs
-    this.originalConsole = {
-      log: console.log,
-      info: console.info,
-      warn: console.warn,
-      error: console.error,
-      debug: console.debug
-    };
-    
-    ['log', 'info', 'warn', 'error', 'debug'].forEach(level => {
-      console[level] = (...args) => {
-        // Call original console method
-        this.originalConsole[level](...args);
-        
-        // Capture the log
-        this.captureLog(level, args);
-      };
-    });
-    
-    // Start periodic log transmission
-    this.startLogTransmission();
-    
-    console.log('📊 Console logging initialized', { sessionId: this.sessionId });
-  }
-  
-  generateSessionId() {
-    return 'ext_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-  }
-  
-  captureLog(level, args) {
-    try {
-      const message = args.map(arg => {
-        if (typeof arg === 'object') {
-          return JSON.stringify(arg, null, 2);
-        }
-        return String(arg);
-      }).join(' ');
-      
-      const logEntry = {
-        session_id: this.sessionId,
-        timestamp: new Date().toISOString(),
-        level: level,
-        message: message,
-        data: args.length > 1 ? args.slice(1) : null,
-        url: window.location.href,
-        source: 'content_script',
-        user_agent: navigator.userAgent
-      };
-      
-      this.consoleBuffer.push(logEntry);
-      
-      // Trim buffer if it gets too large
-      if (this.consoleBuffer.length > this.maxBufferSize) {
-        this.consoleBuffer = this.consoleBuffer.slice(-this.maxBufferSize);
-      }
-    } catch (error) {
-      this.originalConsole.error('Failed to capture log:', error);
-    }
-  }
-  
-  async startLogTransmission() {
-    const transmitLogs = async () => {
-      if (this.consoleBuffer.length === 0) return;
-      
-      try {
-        // Get current authentication token
-        const token = await this.getAuthToken();
-        if (!token) return;
-        
-        const logsToSend = [...this.consoleBuffer];
-        this.consoleBuffer = [];
-        
-        const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/console-logger', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ logs: logsToSend })
-        });
-        
-        if (!response.ok) {
-          this.originalConsole.warn('Failed to send console logs:', response.status);
-          // Put logs back in buffer if send failed
-          this.consoleBuffer.unshift(...logsToSend);
-        } else {
-          const result = await response.json();
-          this.originalConsole.debug('Console logs sent successfully:', result.message);
-        }
-      } catch (error) {
-        this.originalConsole.error('Error sending console logs:', error);
-      }
-    };
-    
-    // Send logs immediately, then on interval
-    transmitLogs();
-    setInterval(transmitLogs, this.logBatchInterval);
-  }
-  
-  async getAuthToken() {
-    return new Promise((resolve) => {
-      // First try background script
-      chrome.runtime.sendMessage({
-        action: 'GET_AUTH_TOKEN'
-      }, async (response) => {
-        if (response?.token) {
-          resolve(response.token);
-          return;
-        }
-        
-        // Fallback to storage if background script doesn't have token
-        try {
-          const result = await chrome.storage.sync.get(['userToken']);
-          if (result.userToken) {
-            // Store in background script for next time
-            chrome.runtime.sendMessage({
-              action: 'SET_AUTH_TOKEN',
-              token: result.userToken
-            });
-            resolve(result.userToken);
-          } else {
-            resolve(null);
-          }
-        } catch (error) {
-          console.error('Error getting auth token from storage:', error);
-          resolve(null);
-        }
-      });
-    });
-  }
-
   installNavigationGuards() {
     if (this._navGuardsInstalled) return;
     this._navGuardsInstalled = true;
@@ -3470,20 +2904,6 @@ class SalesonatorAutomator {
         return false; // Synchronous response
       }
       
-      if (request.action === 'popupLog') {
-        console.log('[Popup]', request.message, request.data || '');
-        this.log('🧭 Popup log:', { message: request.message, data: request.data });
-        sendResponse?.({ ok: true });
-        return false;
-      }
-
-      if (request.action === 'popupError') {
-        console.error('[Popup Error]', request.message, request.data || '');
-        this.log('❌ Popup error:', { message: request.message, data: request.data });
-        sendResponse?.({ ok: true });
-        return false;
-      }
-      
       console.log('❓ Unknown action received:', request.action);
       // For unknown actions, don't keep channel open
       sendResponse({ success: false, error: 'Unknown action' });
@@ -3585,60 +3005,53 @@ class SalesonatorAutomator {
     }
   }
 
-  // Record vehicle posting in backend and deduct credits using proper endpoint
+  // Record vehicle posting in backend and deduct credits
   async recordVehiclePosting(vehicleId) {
     try {
       this.log('📝 Starting vehicle posting record process for ID:', vehicleId);
       
-      // Get user token from extension storage using direct access
+      // Get user token from extension storage
       this.log('🔍 Getting user token from storage...');
-      const storageResult = await chrome.storage.sync.get(['userToken']);
-      const userToken = storageResult.userToken;
+      const result = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: 'getStorageData', key: 'userToken' }, resolve);
+      });
       
+      this.log('🗂️ Storage result:', result);
+      const userToken = result?.value;
       if (!userToken) {
         this.log('❌ No user token found in storage');
         throw new Error('User not authenticated - no token found');
       }
       
-      this.log('🔑 Token found, proceeding with recording...');
+      this.log('🔑 Token found, length:', userToken.length);
       
-      // Generate Facebook post ID
-      const facebookPostId = this.extractFacebookPostId();
-      this.log('🆔 Facebook post ID:', facebookPostId);
+      // Generate a fake Facebook post ID (since we can't easily extract the real one)
+      const facebookPostId = `fb_${Date.now()}_${vehicleId.substring(0, 8)}`;
+      this.log('🆔 Generated Facebook post ID:', facebookPostId);
       
-      // Call the database function directly via Supabase REST API
-      const updateData = {
-        facebook_post_status: 'posted',
-        last_posted_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+      const requestPayload = {
+        action: 'update_vehicle_status',
+        vehicleId: vehicleId,
+        status: 'posted',
+        facebookPostId: facebookPostId
       };
       
-      this.log('📤 Calling database function with data:', JSON.stringify({
-        p_vehicle_id: vehicleId,
-        p_user_id: 'from_auth',
-        p_facebook_post_id: facebookPostId,
-        p_update_data: updateData
-      }, null, 2));
+      this.log('📤 Sending request to backend with payload:', JSON.stringify(requestPayload, null, 2));
       
-      const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/rpc/deduct_credit_and_update_vehicle';
+      const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster';
       this.log('🌐 API URL:', apiUrl);
       
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userToken}`,
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+          'Authorization': `Bearer ${userToken}`
         },
-        body: JSON.stringify({
-          p_vehicle_id: vehicleId,
-          p_user_id: null, // Let function use auth.uid()
-          p_facebook_post_id: facebookPostId,
-          p_update_data: updateData
-        })
+        body: JSON.stringify(requestPayload)
       });
       
       this.log('📨 Backend response status:', response.status);
+      this.log('📨 Backend response headers:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -3647,26 +3060,27 @@ class SalesonatorAutomator {
       }
       
       const data = await response.json();
-      this.log('📋 Database function response:', JSON.stringify(data, null, 2));
+      this.log('📋 Full backend response data:', JSON.stringify(data, null, 2));
       
-      // The RPC response is the direct result of the function
-      if (!data || (data.error && !data.vehicle)) {
-        this.log('❌ Database function failed:', data?.error || 'No data returned');
-        throw new Error(data?.error || 'Failed to record posting');
+      if (!data.success) {
+        this.log('❌ Backend returned success=false with error:', data.error);
+        throw new Error(data.error || 'Failed to record posting');
       }
       
-      const credits = data.credits;
+      const credits = data.data?.credits || data.credits;
       this.log('✅ Successfully recorded posting!');
       this.log('💰 Credits remaining:', credits);
+      this.log('📝 Response message:', data.message);
       
       return {
         success: true,
         credits: credits,
-        message: 'Vehicle posted and credits deducted successfully'
+        message: data.message || 'Vehicle posted and recorded successfully'
       };
       
     } catch (error) {
       this.log('❌ Error in recordVehiclePosting:', error.message);
+      this.log('❌ Full error object:', error);
       console.error('Full recording error:', error);
       throw error;
     }
@@ -3715,34 +3129,21 @@ class SalesonatorAutomator {
       // Check if we've been redirected to vehicles category after posting
       if (newUrl.includes('/marketplace/category/vehicles') && this.isWaitingForNextVehicle) {
         console.log('🚀 DETECTED REDIRECT TO VEHICLES CATEGORY - POSTING COMPLETED');
-        this.log('🎯 Detected redirect to vehicles category after posting - vehicle posted successfully');
+        this.log('🎯 Detected redirect to vehicles category after posting - credit already deducted');
         
-        // Send immediate success notification to popup
-        try {
-          chrome.runtime.sendMessage({
-            action: 'vehiclePosted',
-            oldUrl: oldUrl,
-            newUrl: newUrl,
-            status: 'posted_successfully'
-          });
-          
-          // Also notify web app of successful posting (non-blocking)
-          this.notifyWebAppOfPosting();
-          
-          // Signal popup to continue with next vehicle immediately
-          chrome.runtime.sendMessage({
-            action: 'continueWithNextVehicle',
-            message: 'Vehicle posted successfully, ready for next vehicle'
-          });
-        } catch (error) {
-          console.log('Extension context invalidated, but posting was successful');
-        }
+        // Send immediate status update to popup
+        chrome.runtime.sendMessage({
+          action: 'vehiclePosted',
+          oldUrl: oldUrl,
+          newUrl: newUrl,
+          status: 'redirected_to_vehicles_page'
+        });
         
-        // Navigate to create page immediately for next vehicle
+        // Navigate to create page immediately
         setTimeout(() => {
-          console.log('🚀 NAVIGATING TO CREATE PAGE FOR NEXT VEHICLE');
+          console.log('🚀 NAVIGATING TO CREATE PAGE NOW');
           this.navigateToCreateVehiclePage();
-        }, 1500);
+        }, 1500); // Reduced delay for faster flow
       }
       
       // Check if we're on the create vehicle page and ready for next posting
@@ -3841,8 +3242,7 @@ class SalesonatorAutomator {
       // Check if we're on the Salesonator domain
       const salesonatorDomains = [
         'urdkaedsfnscgtyvcwlf.supabase.co',
-        'salesonator.com',
-        'salesonator.lovable.app', 
+        'salesonator.lovable.app',
         'preview--inventory-to-face.lovable.app'
       ];
       
@@ -3957,160 +3357,6 @@ class SalesonatorAutomator {
           setTimeout(() => banner.remove(), 300);
         }
       }, 5000);
-    }
-  }
-
-  // Notify web app of successful posting without blocking the extension flow
-  async notifyWebAppOfPosting() {
-    try {
-      if (this.currentVehicle && this.currentVehicle.id) {
-        // Get stored authentication
-        const result = await chrome.storage.sync.get(['userToken']);
-        if (!result.userToken) {
-          console.log('No auth token available for web app notification');
-          return;
-        }
-
-        // Extract Facebook post ID from current URL or page
-        const facebookPostId = this.extractFacebookPostId();
-        
-        // Call the correct scrape-vehicle edge function with proper data structure
-        const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/scrape-vehicle', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${result.userToken}`
-          },
-          body: JSON.stringify({
-            vehicles: [{
-              id: this.currentVehicle.id,
-              facebook_post_status: 'posted',
-              facebook_post_id: facebookPostId,
-              last_posted_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            }]
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          console.log('✅ Web app notified of successful posting:', data);
-          
-          // Schedule URL retrieval for later (after redirect settles)
-          setTimeout(() => {
-            this.retrievePostingUrl();
-          }, 5000);
-        } else {
-          const errorText = await response.text();
-          console.log('Failed to notify web app:', response.status, errorText);
-        }
-      }
-    } catch (error) {
-      console.log('Error notifying web app (non-blocking):', error);
-    }
-  }
-
-  // Extract Facebook post ID from the current page
-  extractFacebookPostId() {
-    try {
-      // Try to get post ID from URL parameters
-      const urlParams = new URLSearchParams(window.location.search);
-      let postId = urlParams.get('id') || urlParams.get('post_id');
-      
-      if (!postId) {
-        // Try to extract from current URL path
-        const pathMatch = window.location.pathname.match(/\/([0-9]+)/);
-        if (pathMatch) {
-          postId = pathMatch[1];
-        }
-      }
-      
-      return postId || `marketplace_${Date.now()}`;
-    } catch (error) {
-      console.log('Could not extract Facebook post ID:', error);
-      return `marketplace_${Date.now()}`;
-    }
-  }
-
-  // Retrieve the actual posting URL from Facebook's selling page
-  async retrievePostingUrl() {
-    try {
-      console.log('🔍 Attempting to retrieve posting URL...');
-      
-      // Navigate to the selling page to find the posted vehicle
-      const sellingPageUrl = 'https://www.facebook.com/marketplace/you/selling';
-      
-      // Only navigate if we're not already there
-      if (!window.location.href.includes('/marketplace/you/selling')) {
-        window.location.href = sellingPageUrl;
-        
-        // Wait for page to load, then look for the posted vehicle
-        setTimeout(() => {
-          this.findPostedVehicleUrl();
-        }, 3000);
-      } else {
-        this.findPostedVehicleUrl();
-      }
-    } catch (error) {
-      console.log('Error retrieving posting URL (non-blocking):', error);
-    }
-  }
-
-  // Find the URL of the posted vehicle on the selling page
-  async findPostedVehicleUrl() {
-    try {
-      if (!this.currentVehicle) return;
-
-      // Look for vehicle listings on the selling page
-      const vehicleLinks = document.querySelectorAll('a[href*="/marketplace/item/"]');
-      
-      for (const link of vehicleLinks) {
-        const linkText = link.textContent || '';
-        const vehicleTitle = `${this.currentVehicle.year} ${this.currentVehicle.make} ${this.currentVehicle.model}`;
-        
-        // Check if this link matches our vehicle
-        if (linkText.includes(this.currentVehicle.year.toString()) && 
-            linkText.includes(this.currentVehicle.make) && 
-            linkText.includes(this.currentVehicle.model)) {
-          
-          const postingUrl = link.href;
-          console.log('🎯 Found posting URL:', postingUrl);
-          
-          // Store the URL in the web app
-          await this.storePostingUrl(postingUrl);
-          break;
-        }
-      }
-    } catch (error) {
-      console.log('Error finding posted vehicle URL (non-blocking):', error);
-    }
-  }
-
-  // Store the posting URL in the web app database
-  async storePostingUrl(postingUrl) {
-    try {
-      const result = await chrome.storage.local.get(['userToken']);
-      if (!result.userToken || !this.currentVehicle) return;
-
-      // Update the vehicle with the posting URL (would need a new database field)
-      const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${result.userToken}`
-        },
-        body: JSON.stringify({
-          action: 'store_posting_url',
-          vehicleId: this.currentVehicle.id,
-          postingUrl: postingUrl
-        })
-      });
-
-      if (response.ok) {
-        console.log('✅ Posting URL stored successfully');
-      }
-    } catch (error) {
-      console.log('Error storing posting URL (non-blocking):', error);
     }
   }
 }

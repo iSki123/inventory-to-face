@@ -27,6 +27,3 @@ verify_jwt = false
 
 [functions.scrape-vehicle]
 verify_jwt = false
-
-[functions.get-pending-vehicles]
-verify_jwt = false

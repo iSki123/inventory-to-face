@@ -483,11 +483,6 @@ class SalesonatorAutomator {
     try {
       this.log('🚗 Starting enhanced vehicle posting process...', vehicleData);
       
-      // Store current vehicle data for later reference
-      this.currentVehicleData = vehicleData;
-      this.currentVehicle = vehicleData;
-      this.isWaitingForNextVehicle = true;
-      
       // Check if we're on the correct page first
       if (!window.location.href.includes('/marketplace/create/vehicle')) {
         this.log('⚠️ Not on create vehicle page, current URL:', window.location.href);
@@ -540,34 +535,96 @@ class SalesonatorAutomator {
           if (success) {
             this.log('✅ Vehicle posted successfully');
             
-            // DON'T record posting here - Facebook hasn't assigned post ID yet
-            // The recording will happen after URL redirect is detected
-            
-            // Clear posting state flags but keep vehicle data for later recording
-            this.isPosting = false;
-            // NOTE: Keep this.currentVehicleData for later database update
-            this.uploadedImages = [];
-            this.log('🔄 Reset posting flags but keeping vehicle data for later recording');
-            
-            // Wait a moment for any page processing
-            await this.delay(2000);
-            
-            // Set flag that we're waiting for the next vehicle posting
-            console.log('🚀 SETTING WAITING FOR NEXT VEHICLE FLAG');
-            this.isWaitingForNextVehicle = true;
-            
-            // Don't navigate yet - let Facebook's natural redirect happen first
-            // Navigation will occur after successful database recording
-            this.log('⏳ Waiting for Facebook redirect to complete posting...');
-            
-            console.log('🚀 POSTING SUBMITTED - WAITING FOR FACEBOOK REDIRECT');
-            console.log('🚀 Current URL after posting:', window.location.href);
-            
-            // Return success to popup - credits will be updated after URL redirect
-            return { 
-              success: true, 
-              message: 'Vehicle posted successfully, waiting for redirect to complete recording'
-            };
+            // Record the posting in backend and deduct credits
+            try {
+              console.log('🚀 CREDIT DEDUCTION ATTEMPT STARTING');
+              console.log('🚀 Vehicle ID for recording:', vehicleData.id);
+              this.log('📝 Recording vehicle posting in backend...');
+              this.log('🔍 Current URL before recording:', window.location.href);
+              
+              const recordResult = await this.recordVehiclePosting(vehicleData.id);
+              
+              console.log('🚀 CREDIT DEDUCTION RESULT:', recordResult);
+              console.log('🚀 Credits after posting:', recordResult.credits);
+              this.log('✅ Vehicle posting recorded in backend', recordResult);
+              this.log('💰 Credits after posting:', recordResult.credits);
+              
+              // Send credit update to popup immediately
+              console.log('🚀 SENDING CREDITS UPDATE TO POPUP:', recordResult.credits);
+              chrome.runtime.sendMessage({
+                action: 'creditsUpdated',
+                credits: recordResult.credits
+              });
+              
+              // Clear posting state first
+              this.isPosting = false;
+              this.currentVehicleData = null;
+              this.uploadedImages = [];
+              this.log('🔄 Reset posting flags and uploaded images');
+              
+              // Wait a moment for any page processing
+              await this.delay(2000);
+              
+              // Set flag that we're waiting for the next vehicle posting
+              console.log('🚀 SETTING WAITING FOR NEXT VEHICLE FLAG');
+              this.isWaitingForNextVehicle = true;
+              
+              // Navigate to create page immediately for next vehicle (same as error path)
+              this.log('🔄 Posting complete, navigating to create page...');
+              this.log('📍 Current URL before navigation:', window.location.href);
+              
+              const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
+              this.log('🎯 Navigation to:', createVehicleUrl);
+              window.location.href = createVehicleUrl;
+              
+              console.log('🚀 POSTING FLOW COMPLETE - NAVIGATED TO CREATE PAGE');
+              console.log('🚀 Current URL after posting:', window.location.href);
+              
+              // Return success with credits info to popup for processing next vehicle
+              return { 
+                success: true, 
+                credits: recordResult.credits,
+                message: recordResult.message 
+              };
+              
+            } catch (backendError) {
+              this.log('⚠️ CRITICAL: Vehicle posted but failed to record in backend:', backendError);
+              this.log('⚠️ Backend error details:', backendError.message);
+              this.log('⚠️ Backend error stack:', backendError.stack);
+              console.error('Backend recording error:', backendError);
+              console.error('Full backend error object:', backendError);
+              
+              // IMPORTANT: Send error notification to popup
+              chrome.runtime.sendMessage({
+                action: 'recordingError',
+                vehicleId: vehicleData.id,
+                error: backendError.message,
+                fullError: backendError.toString()
+              });
+              
+              // Clear posting state even if recording failed
+              this.isPosting = false;
+              this.currentVehicleData = null;
+              this.uploadedImages = [];
+              this.log('🔄 Reset posting flags despite backend error');
+              
+              // Wait a moment
+              await this.delay(1000);
+              
+              // Still navigate back for next vehicle even if recording failed
+              this.log('🔄 Attempting navigation despite recording error...');
+              this.log('📍 Current URL before fallback navigation:', window.location.href);
+              
+              const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
+              this.log('🎯 Fallback navigation to:', createVehicleUrl);
+              window.location.href = createVehicleUrl;
+              
+              return { 
+                success: true, 
+                warning: 'Posted but failed to record: ' + backendError.message,
+                databaseError: true
+              };
+            }
           }
           
         } catch (error) {
@@ -2067,126 +2124,201 @@ class SalesonatorAutomator {
     }
   }
 
-  // Select Fuel Type dropdown using the same proven pattern as Make dropdown
+  // Select Fuel Type dropdown with enhanced detection (similar to vehicle condition)
   async selectFuelType(fuelType) {
     try {
       this.log(`⛽ Selecting fuel type: ${fuelType}`);
       console.log(`[FUEL DEBUG] Starting fuel type selection for: ${fuelType}`);
       
-      // Clean fuel type string
-      const cleanFuelType = this.mapFuelType(fuelType) || (fuelType || '').toString().trim();
-      console.log(`[FUEL DEBUG] Normalized fuel type: ${cleanFuelType}`);
+      const normalized = this.mapFuelType(fuelType) || fuelType;
+      console.log(`[FUEL DEBUG] Normalized fuel type: ${normalized}`);
       
-      // Use the same proven selectors as Make dropdown
-      const fuelDropdownSelectors = [
-        'text:Fuel type', // Visible label
+      await this.closeAnyOpenDropdown();
+      await this.delay(500);
+      
+      // Use the same proven approach as vehicle condition - find label first, then dropdown relative to it
+      const labelSelectors = [
+        'text:Fuel type',
         '[aria-label*="Fuel type"]',
-        'div[role="button"]', // Generic fallback after previous fields
-        'select'
+        'span:has-text("Fuel type")',
+        'label:has-text("Fuel type")',
+        '*:contains("Fuel type")'
       ];
       
-      console.log(`[FUEL DEBUG] Searching for fuel type dropdown with selectors:`, fuelDropdownSelectors);
+      console.log(`[FUEL DEBUG] Looking for fuel type label with selectors:`, labelSelectors);
       
-      const fuelDropdown = await this.waitForElement(fuelDropdownSelectors, 8000);
-      if (!fuelDropdown) {
+      // Find the label first
+      let dropdown = null;
+      for (const selector of labelSelectors) {
+        try {
+          const label = await this.waitForElement([selector], 2000);
+          if (label) {
+            console.log(`[FUEL DEBUG] Found label:`, label.textContent);
+            // Find the dropdown relative to this label (same pattern as working dropdowns)
+            const possibleDropdowns = [
+              label.parentElement?.querySelector('div[role="button"]'),
+              label.parentElement?.querySelector('select'),
+              label.nextElementSibling,
+              label.parentElement?.nextElementSibling?.querySelector('div[role="button"]'),
+              label.closest('div')?.querySelector('div[role="button"]')
+            ].filter(Boolean);
+            
+            for (const possibleDropdown of possibleDropdowns) {
+              if (possibleDropdown) {
+                dropdown = possibleDropdown;
+                console.log(`[FUEL DEBUG] Found dropdown relative to label:`, dropdown);
+                break;
+              }
+            }
+            
+            if (dropdown) break;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+      
+      // Fallback: Look for dropdown with specific fuel-related context
+      if (!dropdown) {
+        console.log(`[FUEL DEBUG] Label approach failed, trying context-based approach`);
+        const allDropdowns = document.querySelectorAll('div[role="button"]');
+        for (const possibleDropdown of allDropdowns) {
+          const text = possibleDropdown.textContent?.toLowerCase() || '';
+          const context = possibleDropdown.closest('div')?.textContent?.toLowerCase() || '';
+          
+          // Look for fuel context or fuel-related terms
+          if (text.includes('fuel') || context.includes('fuel') ||
+              text.includes('gasoline') || text.includes('diesel') || 
+              text.includes('electric') || text.includes('hybrid')) {
+            dropdown = possibleDropdown;
+            console.log(`[FUEL DEBUG] Found dropdown by fuel context:`, dropdown);
+            break;
+          }
+        }
+      }
+      
+      if (!dropdown) {
         throw new Error('Fuel type dropdown not found');
       }
       
-      console.log(`[FUEL DEBUG] Found fuel type dropdown:`, fuelDropdown);
-      console.log(`[FUEL DEBUG] Dropdown tagName:`, fuelDropdown.tagName);
-      console.log(`[FUEL DEBUG] Dropdown textContent:`, fuelDropdown.textContent);
+      console.log(`[FUEL DEBUG] Found fuel type dropdown:`, dropdown);
+      console.log(`[FUEL DEBUG] Dropdown tagName:`, dropdown.tagName);
+      console.log(`[FUEL DEBUG] Dropdown innerHTML:`, dropdown.innerHTML);
       
-      await this.scrollIntoView(fuelDropdown);
-      await this.delay(this.randomDelay(500, 1000));
-      
+      await this.scrollIntoView(dropdown);
       this.log('⛽ Found fuel type dropdown, clicking to open...');
-      // Use the same reliable open sequence as Make dropdown
-      fuelDropdown.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-      fuelDropdown.click();
-      await this.delay(this.randomDelay(1200, 1800)); // Wait for dropdown to open
+      
+      console.log(`[FUEL DEBUG] Clicking fuel type dropdown...`);
+      dropdown.click();
+      await this.delay(2000);
       
       console.log(`[FUEL DEBUG] Checking if dropdown opened...`);
       const optionsAfterClick = document.querySelectorAll('[role="option"]');
       console.log(`[FUEL DEBUG] Found options after click:`, optionsAfterClick.length);
       
-      // Log first 20 options to debug
-      Array.from(optionsAfterClick).slice(0, 20).forEach((opt, idx) => {
-        console.log(`[FUEL DEBUG] Option ${idx + 1}:`, opt.textContent?.trim());
+      // Log available options for debugging
+      Array.from(optionsAfterClick).slice(0, 15).forEach((opt, idx) => {
+        console.log(`[FUEL DEBUG] Option ${idx}: ${opt.textContent?.trim()}`, opt);
       });
       
-      // Prefer searching within the options container only
-      let optionsContainer = null;
+      console.log(`[FUEL DEBUG] 🎯 Using enhanced option selection for: ${normalized}`);
+      
+      // Use multiple approaches to find the fuel type option
+      let fuelOption = null;
+      
+      // Method 1: Find by exact text match using waitForElement
       try {
-        optionsContainer = await this.waitForElement(['[role="listbox"]', '[role="menu"]'], 4000);
-      } catch {}
-      
-      const getExactOption = () => {
-        const scope = optionsContainer || document;
-        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
-        return opts.find(o => ((o.textContent || '').trim().toLowerCase() === cleanFuelType.toLowerCase()));
-      };
-      
-      const getFuzzyOption = () => {
-        const scope = optionsContainer || document;
-        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
-        return opts.find(o => (o.textContent || '').toLowerCase().includes(cleanFuelType.toLowerCase()));
-      };
-      
-      let fuelOption = getExactOption();
-      
-      // If not found, try typeahead (Facebook supports it)
-      if (!fuelOption && cleanFuelType) {
-        console.log(`[FUEL DEBUG] Exact match failed, trying typeahead...`);
-        for (const ch of cleanFuelType.toLowerCase()) {
-          fuelDropdown.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
-          await this.delay(this.randomDelay(40, 100));
+        const fuelSelectors = [
+          `text:${normalized}`,
+          `[role="option"]:has-text("${normalized}")`,
+          `div:has-text("${normalized}")`,
+          `span:has-text("${normalized}")`,
+          `li:has-text("${normalized}")`,
+          `[data-value="${normalized}"]`,
+          `[aria-label*="${normalized}"]`,
+          `*[title="${normalized}"]`
+        ];
+        
+        console.log(`[FUEL DEBUG] Searching for fuel option with selectors:`, fuelSelectors);
+        fuelOption = await this.waitForElement(fuelSelectors, 3000);
+        console.log(`[FUEL DEBUG] ✅ Found fuel option using waitForElement:`, fuelOption);
+        
+        if (fuelOption) {
+          console.log(`[FUEL DEBUG] Option text:`, fuelOption?.textContent || fuelOption?.innerHTML);
+          console.log(`[FUEL DEBUG] Option tagName:`, fuelOption?.tagName);
+          console.log(`[FUEL DEBUG] Option role:`, fuelOption?.getAttribute('role'));
         }
-        await this.delay(this.randomDelay(300, 600));
-        fuelOption = getExactOption();
+        
+      } catch (waitError) {
+        console.log(`[FUEL DEBUG] ⚠️ waitForElement failed, falling back to manual search:`, waitError.message);
+        
+        // Method 2: Manual search through options with exact match
+        fuelOption = Array.from(optionsAfterClick).find(opt => 
+          opt.textContent?.trim() === normalized
+        );
+        
+        // Method 3: Fuzzy match if exact fails
+        if (!fuelOption) {
+          fuelOption = Array.from(optionsAfterClick).find(opt => 
+            opt.textContent?.trim().toLowerCase().includes(normalized.toLowerCase())
+          );
+        }
+        
+        // Method 4: Try common variations
+        if (!fuelOption && normalized === 'Gasoline') {
+          fuelOption = Array.from(optionsAfterClick).find(opt => {
+            const text = opt.textContent?.trim().toLowerCase();
+            return text === 'gas' || text === 'petrol' || text === 'gasoline';
+          });
+        }
+        
+        if (!fuelOption && normalized === 'Hybrid') {
+          fuelOption = Array.from(optionsAfterClick).find(opt => {
+            const text = opt.textContent?.trim().toLowerCase();
+            return text.includes('hybrid') || text === 'plug-in hybrid';
+          });
+        }
+        
+        console.log(`[FUEL DEBUG] Manual search result:`, fuelOption);
       }
       
-      // Fallback to fuzzy match
       if (!fuelOption) {
-        console.log(`[FUEL DEBUG] Falling back to fuzzy match...`);
-        fuelOption = getFuzzyOption();
+        console.log(`[FUEL DEBUG] ❌ No fuel option found for: ${normalized}`);
+        console.log(`[FUEL DEBUG] Available options:`, Array.from(optionsAfterClick).map(opt => opt.textContent?.trim()));
+        throw new Error(`Fuel type option ${normalized} not found among ${optionsAfterClick.length} options`);
       }
       
-      // Ultimate fallback: any element with the text inside the container
-      if (!fuelOption) {
-        console.log(`[FUEL DEBUG] Trying ultimate fallback...`);
-        const elem = this.findElementByText(cleanFuelType, ['div','span','li'], optionsContainer || document);
-        if (elem) fuelOption = elem.closest('[role="option"]') || elem;
-      }
+      console.log(`[FUEL DEBUG] ⛽ Found fuel option, clicking: ${normalized}`);
+      await this.performFacebookDropdownClick(fuelOption);
+      await this.delay(2000);
       
-      if (!fuelOption) {
-        console.log(`[FUEL DEBUG] ❌ No fuel option found for "${cleanFuelType}"`);
-        throw new Error(`Fuel type option not found for "${cleanFuelType}"`);
-      }
-      
-      console.log(`[FUEL DEBUG] ⛽ Found fuel option, clicking: ${fuelOption.textContent?.trim()}`);
-      await this.scrollIntoView(fuelOption);
-      await this.delay(this.randomDelay(300, 600));
-      fuelOption.click();
-      await this.delay(this.randomDelay(1000, 1500)); // Wait for selection to register
-      
-      // Verify the dropdown now displays the selected fuel type
+      // Enhanced verification
       console.log(`[FUEL DEBUG] Verifying fuel type selection...`);
-      const selectedText = (fuelDropdown.textContent || '').toLowerCase();
-      const verified = selectedText.includes(cleanFuelType.toLowerCase());
-      console.log(`[FUEL DEBUG] Dropdown text after selection:`, fuelDropdown.textContent);
-      console.log(`[FUEL DEBUG] Verification successful:`, verified);
+      await this.delay(500);
+      console.log(`[FUEL DEBUG] Dropdown selected value:`, dropdown.textContent?.trim());
       
-      if (verified) {
-        this.log(`✅ Successfully selected fuel type: ${cleanFuelType}`);
+      // Check if fuel type appears in form
+      const dropdownText = dropdown.textContent?.trim();
+      const success = dropdownText?.includes(normalized) || 
+                     dropdownText?.includes(fuelType) ||
+                     document.body.textContent.includes(`Fuel type: ${normalized}`);
+      
+      console.log(`[FUEL DEBUG] Fuel type verification:`, {
+        dropdownContainsFuel: dropdownText?.includes(normalized),
+        success: success
+      });
+      
+      if (success) {
+        this.log(`✅ Successfully filled fuel type: ${normalized}`);
+        return true;
       } else {
-        this.log(`⚠️ Fuel type selection not verified. Dropdown shows: ${fuelDropdown.textContent}`);
+        this.log(`⚠️ Fuel type selection may have failed - dropdown text: ${dropdownText}`);
+        return false;
       }
-      
-      return verified;
       
     } catch (error) {
-      console.log(`[FUEL DEBUG] ❌ Fuel type selection failed:`, error);
       this.log(`⚠️ Could not select fuel type: ${fuelType}`, error);
+      console.log(`[FUEL DEBUG] ❌ Error selecting fuel type:`, error);
       return false;
     }
   }
@@ -3190,16 +3322,9 @@ class SalesonatorAutomator {
       if (this.consoleBuffer.length === 0) return;
       
       try {
-        // Get current authentication token with timeout
-        const token = await Promise.race([
-          this.getAuthToken(),
-          new Promise((resolve) => setTimeout(() => resolve(null), 2000))
-        ]);
-        
-        if (!token) {
-          console.debug('No auth token available for log transmission');
-          return;
-        }
+        // Get current authentication token
+        const token = await this.getAuthToken();
+        if (!token) return;
         
         const logsToSend = [...this.consoleBuffer];
         this.consoleBuffer = [];
@@ -3214,16 +3339,15 @@ class SalesonatorAutomator {
         });
         
         if (!response.ok) {
-          console.debug('Failed to send console logs:', response.status);
+          this.originalConsole.warn('Failed to send console logs:', response.status);
           // Put logs back in buffer if send failed
           this.consoleBuffer.unshift(...logsToSend);
         } else {
           const result = await response.json();
-          console.debug('Console logs sent successfully:', result.message);
+          this.originalConsole.debug('Console logs sent successfully:', result.message);
         }
       } catch (error) {
-        console.debug('Log transmission error (non-critical):', error.message);
-        // Don't log this error as it creates a recursive loop
+        this.originalConsole.error('Error sending console logs:', error);
       }
     };
     
@@ -3233,56 +3357,35 @@ class SalesonatorAutomator {
   }
   
   async getAuthToken() {
-    try {
-      // First try to get from chrome.storage directly (most reliable)
-      const result = await chrome.storage.sync.get(['userToken']);
-      if (result.userToken) {
-        return result.userToken;
-      }
-      
-      // If not found in storage, try background script as fallback
-      return new Promise((resolve) => {
+    return new Promise((resolve) => {
+      // First try background script
+      chrome.runtime.sendMessage({
+        action: 'GET_AUTH_TOKEN'
+      }, async (response) => {
+        if (response?.token) {
+          resolve(response.token);
+          return;
+        }
+        
+        // Fallback to storage if background script doesn't have token
         try {
-          chrome.runtime.sendMessage({ action: 'GET_AUTH_TOKEN' }, (response) => {
-            if (chrome.runtime.lastError) {
-              // Extension context invalidated - use localStorage fallback like old extension
-              console.debug('Extension context invalidated, checking localStorage fallback');
-              try {
-                const authKeys = Object.keys(localStorage).filter(key => 
-                  key.startsWith('sb-') && key.includes('auth-token')
-                );
-                
-                for (const authKey of authKeys) {
-                  const authData = localStorage.getItem(authKey);
-                  if (authData) {
-                    try {
-                      const parsed = JSON.parse(authData);
-                      if (parsed.access_token) {
-                        resolve(parsed.access_token);
-                        return;
-                      }
-                    } catch (e) {
-                      continue;
-                    }
-                  }
-                }
-                resolve(null);
-              } catch (e) {
-                resolve(null);
-              }
-            } else {
-              resolve(response?.token || null);
-            }
-          });
+          const result = await chrome.storage.sync.get(['userToken']);
+          if (result.userToken) {
+            // Store in background script for next time
+            chrome.runtime.sendMessage({
+              action: 'SET_AUTH_TOKEN',
+              token: result.userToken
+            });
+            resolve(result.userToken);
+          } else {
+            resolve(null);
+          }
         } catch (error) {
-          console.debug('Runtime error:', error.message);
+          console.error('Error getting auth token from storage:', error);
           resolve(null);
         }
       });
-    } catch (error) {
-      console.error('Error getting auth token:', error);
-      return null;
-    }
+    });
   }
 
   installNavigationGuards() {
@@ -3642,7 +3745,7 @@ class SalesonatorAutomator {
   }
 
   // Handle URL changes and redirects
-  async handleUrlChange() {
+  handleUrlChange() {
     const newUrl = window.location.href;
     const oldUrl = this.currentUrl;
     
@@ -3658,79 +3761,36 @@ class SalesonatorAutomator {
       
       this.currentUrl = newUrl;
       
-      // Check if we've been redirected to vehicles category or selling page after posting
-      if ((newUrl.includes('/marketplace/category/vehicles') || newUrl.includes('/marketplace/you/selling') || newUrl.includes('/marketplace/you')) && this.isWaitingForNextVehicle) {
+      // Check if we've been redirected to vehicles category after posting
+      if (newUrl.includes('/marketplace/category/vehicles') && this.isWaitingForNextVehicle) {
         console.log('🚀 DETECTED REDIRECT TO VEHICLES CATEGORY - POSTING COMPLETED');
-        console.log('🚀 Current vehicle data:', this.currentVehicleData);
-        console.log('🚀 Current vehicle (fallback):', this.currentVehicle);
         this.log('🎯 Detected redirect to vehicles category after posting - vehicle posted successfully');
         
-        // Use current vehicle data OR fallback to this.currentVehicle
-        const vehicleToRecord = this.currentVehicleData || this.currentVehicle;
-        if (vehicleToRecord && vehicleToRecord.id) {
+        // Send immediate success notification to popup
         try {
-          console.log('🚀 CREDIT DEDUCTION ATTEMPT STARTING (AFTER REDIRECT)');
-          console.log('🚀 Vehicle ID for recording:', vehicleToRecord.id);
-          console.log('🚀 Vehicle data available:', !!vehicleToRecord);
-          this.log('📝 Recording vehicle posting in backend...');
-          this.log('🔍 Current URL after redirect:', window.location.href);
+          chrome.runtime.sendMessage({
+            action: 'vehiclePosted',
+            oldUrl: oldUrl,
+            newUrl: newUrl,
+            status: 'posted_successfully'
+          });
           
-          const recordResult = await this.recordVehiclePosting(vehicleToRecord.id);
-            
-            console.log('🚀 CREDIT DEDUCTION RESULT:', recordResult);
-            console.log('🚀 Credits after posting:', recordResult.credits);
-            this.log('✅ Vehicle posting recorded in backend', recordResult);
-            this.log('💰 Credits after posting:', recordResult.credits);
-            
-            // Send credit update to popup immediately
-            console.log('🚀 SENDING CREDITS UPDATE TO POPUP:', recordResult.credits);
-            chrome.runtime.sendMessage({
-              action: 'creditsUpdated',
-              credits: recordResult.credits
-            });
-            
-            // Clear vehicle data now that recording is complete
-            this.currentVehicleData = null;
-            this.currentVehicle = null;
-            
-            // Send immediate success notification to popup
-            chrome.runtime.sendMessage({
-              action: 'vehiclePosted',
-              oldUrl: oldUrl,
-              newUrl: newUrl,
-              status: 'posted_successfully',
-              credits: recordResult.credits
-            });
-            
-          } catch (recordingError) {
-            console.error('🚀 CREDIT DEDUCTION FAILED:', recordingError);
-            this.log('❌ Failed to record vehicle posting:', recordingError.message);
-            
-            // Send error notification to popup but still continue
-            chrome.runtime.sendMessage({
-              action: 'vehiclePosted',
-              oldUrl: oldUrl,
-              newUrl: newUrl,
-              status: 'posted_successfully',
-              recordingFailed: true,
-              error: recordingError.message
-            });
-          }
+          // Also notify web app of successful posting (non-blocking)
+          this.notifyWebAppOfPosting();
+          
+          // Signal popup to continue with next vehicle immediately
+          chrome.runtime.sendMessage({
+            action: 'continueWithNextVehicle',
+            message: 'Vehicle posted successfully, ready for next vehicle'
+          });
+        } catch (error) {
+          console.log('Extension context invalidated, but posting was successful');
         }
         
-        // Also notify web app of successful posting (non-blocking)
-        await this.notifyWebAppOfPosting();
-        
-        // Signal popup to continue with next vehicle immediately
-        chrome.runtime.sendMessage({
-          action: 'continueWithNextVehicle',
-          message: 'Vehicle posted successfully, ready for next vehicle'
-        });
-        
         // Navigate to create page immediately for next vehicle
-        setTimeout(async () => {
+        setTimeout(() => {
           console.log('🚀 NAVIGATING TO CREATE PAGE FOR NEXT VEHICLE');
-          await this.navigateToCreateVehiclePage();
+          this.navigateToCreateVehiclePage();
         }, 1500);
       }
       
@@ -3771,8 +3831,8 @@ class SalesonatorAutomator {
             !newUrl.includes('/marketplace/category/vehicles')) {
           console.log('🚀 FORCING NAVIGATION TO CREATE FROM UNEXPECTED URL');
           this.log('🎯 Forcing navigation to create vehicle page from unexpected URL');
-          setTimeout(async () => {
-            await this.navigateToCreateVehiclePage();
+          setTimeout(() => {
+            this.navigateToCreateVehiclePage();
           }, 2000);
         }
       }
