@@ -2124,7 +2124,7 @@ class SalesonatorAutomator {
     }
   }
 
-  // Select Fuel Type dropdown with enhanced detection (similar to body style)
+  // Select Fuel Type dropdown with enhanced detection (similar to vehicle condition)
   async selectFuelType(fuelType) {
     try {
       this.log(`⛽ Selecting fuel type: ${fuelType}`);
@@ -2136,18 +2136,67 @@ class SalesonatorAutomator {
       await this.closeAnyOpenDropdown();
       await this.delay(500);
       
-      // Find fuel type dropdown with multiple strategies
-      const fuelDropdownSelectors = [
+      // Use the same proven approach as vehicle condition - find label first, then dropdown relative to it
+      const labelSelectors = [
         'text:Fuel type',
         '[aria-label*="Fuel type"]',
-        'div[role="button"]:has-text("Fuel type")',
         'span:has-text("Fuel type")',
-        '[data-testid*="fuel"]'
+        'label:has-text("Fuel type")',
+        '*:contains("Fuel type")'
       ];
       
-      console.log(`[FUEL DEBUG] Searching for fuel type dropdown with selectors:`, fuelDropdownSelectors);
+      console.log(`[FUEL DEBUG] Looking for fuel type label with selectors:`, labelSelectors);
       
-      const dropdown = await this.waitForElement(fuelDropdownSelectors, 8000);
+      // Find the label first
+      let dropdown = null;
+      for (const selector of labelSelectors) {
+        try {
+          const label = await this.waitForElement([selector], 2000);
+          if (label) {
+            console.log(`[FUEL DEBUG] Found label:`, label.textContent);
+            // Find the dropdown relative to this label (same pattern as working dropdowns)
+            const possibleDropdowns = [
+              label.parentElement?.querySelector('div[role="button"]'),
+              label.parentElement?.querySelector('select'),
+              label.nextElementSibling,
+              label.parentElement?.nextElementSibling?.querySelector('div[role="button"]'),
+              label.closest('div')?.querySelector('div[role="button"]')
+            ].filter(Boolean);
+            
+            for (const possibleDropdown of possibleDropdowns) {
+              if (possibleDropdown) {
+                dropdown = possibleDropdown;
+                console.log(`[FUEL DEBUG] Found dropdown relative to label:`, dropdown);
+                break;
+              }
+            }
+            
+            if (dropdown) break;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+      
+      // Fallback: Look for dropdown with specific fuel-related context
+      if (!dropdown) {
+        console.log(`[FUEL DEBUG] Label approach failed, trying context-based approach`);
+        const allDropdowns = document.querySelectorAll('div[role="button"]');
+        for (const possibleDropdown of allDropdowns) {
+          const text = possibleDropdown.textContent?.toLowerCase() || '';
+          const context = possibleDropdown.closest('div')?.textContent?.toLowerCase() || '';
+          
+          // Look for fuel context or fuel-related terms
+          if (text.includes('fuel') || context.includes('fuel') ||
+              text.includes('gasoline') || text.includes('diesel') || 
+              text.includes('electric') || text.includes('hybrid')) {
+            dropdown = possibleDropdown;
+            console.log(`[FUEL DEBUG] Found dropdown by fuel context:`, dropdown);
+            break;
+          }
+        }
+      }
+      
       if (!dropdown) {
         throw new Error('Fuel type dropdown not found');
       }
