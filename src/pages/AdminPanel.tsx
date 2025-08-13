@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useAuth } from "@/hooks/useAuth";
+import ConsoleLogsViewer from "@/components/ConsoleLogsViewer";
 
 export default function AdminPanel() {
   const { profile, loading: authLoading } = useAuth();
@@ -257,8 +258,28 @@ export default function AdminPanel() {
               disabled={settingsLoading}
             />
           </div>
+          
+          <Separator />
+          
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label htmlFor="console-logging-toggle">Console Logging</Label>
+              <p className="text-sm text-muted-foreground">
+                Enable collection of console logs from Chrome extension for debugging
+              </p>
+            </div>
+            <Switch
+              id="console-logging-toggle"
+              checked={getSetting('console_logging_enabled', { enabled: false })?.enabled}
+              onCheckedChange={(enabled) => updateSetting('console_logging_enabled', { enabled })}
+              disabled={settingsLoading}
+            />
+          </div>
         </CardContent>
       </Card>
+
+      {/* Console Logs Viewer */}
+      <ConsoleLogsViewer />
 
       {/* VIN Decoding Controls */}
       <div className="grid gap-6 md:grid-cols-3">

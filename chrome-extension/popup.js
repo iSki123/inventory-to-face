@@ -1,3 +1,23 @@
+// Store auth token when popup loads
+async function storeAuthToken() {
+  try {
+    // Try to get token from localStorage (set by web app)
+    const token = localStorage.getItem('sb-urdkaedsfnscgtyvcwlf-auth-token');
+    if (token) {
+      const authData = JSON.parse(token);
+      if (authData?.access_token) {
+        chrome.runtime.sendMessage({
+          action: 'SET_AUTH_TOKEN',
+          token: authData.access_token
+        });
+        console.log('Auth token sent to background script');
+      }
+    }
+  } catch (error) {
+    console.log('No auth token found or error:', error);
+  }
+}
+
 class SalesonatorExtension {
   constructor() {
     this.isPosting = false;
@@ -10,6 +30,9 @@ class SalesonatorExtension {
 
   async init() {
     console.log('Initializing Salesonator Extension...');
+    
+    // Store auth token when popup opens
+    await storeAuthToken();
     
     try {
       // Load saved settings

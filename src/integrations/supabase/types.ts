@@ -176,6 +176,48 @@ export type Database = {
         }
         Relationships: []
       }
+      console_logs: {
+        Row: {
+          created_at: string
+          data: Json | null
+          id: string
+          log_level: string
+          message: string
+          session_id: string
+          source: string
+          timestamp: string
+          url: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data?: Json | null
+          id?: string
+          log_level: string
+          message: string
+          session_id: string
+          source: string
+          timestamp?: string
+          url?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json | null
+          id?: string
+          log_level?: string
+          message?: string
+          session_id?: string
+          source?: string
+          timestamp?: string
+          url?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       facebook_posting_jobs: {
         Row: {
           completed_at: string | null

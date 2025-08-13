@@ -9,6 +9,10 @@ class SalesonatorAutomator {
     this.uploadedImages = []; // Track uploaded images to prevent duplicates
     this.currentUrl = window.location.href;
     this.isWaitingForNextVehicle = false;
+    
+    // Initialize console logging
+    this.initializeConsoleLogging();
+    
     this.setupMessageListener();
     this.installNavigationGuards();
     this.setupUrlChangeDetection();
@@ -3198,6 +3202,121 @@ class SalesonatorAutomator {
   }
 
   // Navigation guards to prevent accidental redirects during posting
+  initializeConsoleLogging() {
+    this.consoleBuffer = [];
+    this.sessionId = this.generateSessionId();
+    this.maxBufferSize = 100;
+    this.logBatchInterval = 30000; // 30 seconds
+    
+    // Override console methods to capture logs
+    this.originalConsole = {
+      log: console.log,
+      info: console.info,
+      warn: console.warn,
+      error: console.error,
+      debug: console.debug
+    };
+    
+    ['log', 'info', 'warn', 'error', 'debug'].forEach(level => {
+      console[level] = (...args) => {
+        // Call original console method
+        this.originalConsole[level](...args);
+        
+        // Capture the log
+        this.captureLog(level, args);
+      };
+    });
+    
+    // Start periodic log transmission
+    this.startLogTransmission();
+    
+    console.log('📊 Console logging initialized', { sessionId: this.sessionId });
+  }
+  
+  generateSessionId() {
+    return 'ext_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  }
+  
+  captureLog(level, args) {
+    try {
+      const message = args.map(arg => {
+        if (typeof arg === 'object') {
+          return JSON.stringify(arg, null, 2);
+        }
+        return String(arg);
+      }).join(' ');
+      
+      const logEntry = {
+        session_id: this.sessionId,
+        timestamp: new Date().toISOString(),
+        level: level,
+        message: message,
+        data: args.length > 1 ? args.slice(1) : null,
+        url: window.location.href,
+        source: 'content_script',
+        user_agent: navigator.userAgent
+      };
+      
+      this.consoleBuffer.push(logEntry);
+      
+      // Trim buffer if it gets too large
+      if (this.consoleBuffer.length > this.maxBufferSize) {
+        this.consoleBuffer = this.consoleBuffer.slice(-this.maxBufferSize);
+      }
+    } catch (error) {
+      this.originalConsole.error('Failed to capture log:', error);
+    }
+  }
+  
+  async startLogTransmission() {
+    const transmitLogs = async () => {
+      if (this.consoleBuffer.length === 0) return;
+      
+      try {
+        // Get current authentication token
+        const token = await this.getAuthToken();
+        if (!token) return;
+        
+        const logsToSend = [...this.consoleBuffer];
+        this.consoleBuffer = [];
+        
+        const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/console-logger', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ logs: logsToSend })
+        });
+        
+        if (!response.ok) {
+          this.originalConsole.warn('Failed to send console logs:', response.status);
+          // Put logs back in buffer if send failed
+          this.consoleBuffer.unshift(...logsToSend);
+        } else {
+          const result = await response.json();
+          this.originalConsole.debug('Console logs sent successfully:', result.message);
+        }
+      } catch (error) {
+        this.originalConsole.error('Error sending console logs:', error);
+      }
+    };
+    
+    // Send logs immediately, then on interval
+    transmitLogs();
+    setInterval(transmitLogs, this.logBatchInterval);
+  }
+  
+  async getAuthToken() {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({
+        action: 'GET_AUTH_TOKEN'
+      }, (response) => {
+        resolve(response?.token || null);
+      });
+    });
+  }
+
   installNavigationGuards() {
     if (this._navGuardsInstalled) return;
     this._navGuardsInstalled = true;

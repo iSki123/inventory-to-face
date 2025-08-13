@@ -1,5 +1,8 @@
 // Background script for Salesonator Chrome Extension
 
+// Store authentication token
+let authToken = null;
+
 class SalesonatorBackground {
   constructor() {
     this.init();
@@ -36,6 +39,18 @@ class SalesonatorBackground {
 
   onMessage(request, sender, sendResponse) {
     try {
+      if (request.action === 'SET_AUTH_TOKEN') {
+        authToken = request.token;
+        console.log('Auth token stored in background script');
+        sendResponse({ success: true });
+        return true;
+      }
+      
+      if (request.action === 'GET_AUTH_TOKEN') {
+        sendResponse({ token: authToken });
+        return true;
+      }
+      
       if (request.action === 'authenticateUser') {
         // Handle user authentication with Salesonator
         this.authenticateUser(request.credentials)
