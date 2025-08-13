@@ -523,14 +523,17 @@ class SalesonatorExtension {
         
         console.log(`📊 Found ${allVehicles.length} vehicles from database, ${this.vehicles.length} after filtering posted ones`);
         
-        countEl.textContent = this.vehicles.length === 0 
-          ? 'No vehicles ready to post' 
-          : `${this.vehicles.length} vehicles ready to post`;
-        countEl.style.display = 'block';
+        // Hide the separate vehicle count element
+        countEl.style.display = 'none';
         
         startBtn.disabled = this.vehicles.length === 0;
         statusEl.className = 'status connected';
-        statusEl.textContent = '✅ Connected to Salesonator';
+        
+        if (this.vehicles.length === 0) {
+          statusEl.textContent = '✅ Connected to Salesonator - No vehicles ready to post';
+        } else {
+          statusEl.textContent = `✅ Connected to Salesonator - ${this.vehicles.length} vehicles ready to post`;
+        }
         
         console.log('🔧 Images will be downloaded per-vehicle before posting');
         
@@ -544,8 +547,7 @@ class SalesonatorExtension {
       console.error('Error fetching vehicles:', error);
       statusEl.className = 'status disconnected';
       statusEl.textContent = `Error: ${error.message}`;
-      countEl.textContent = 'Failed to load vehicles';
-      countEl.style.display = 'block';
+      countEl.style.display = 'none';
       startBtn.disabled = true;
       
       // If authentication failed, show login
