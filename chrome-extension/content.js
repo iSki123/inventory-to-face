@@ -2062,201 +2062,126 @@ class SalesonatorAutomator {
     }
   }
 
-  // Select Fuel Type dropdown with enhanced detection (similar to vehicle condition)
+  // Select Fuel Type dropdown using the same proven pattern as Make dropdown
   async selectFuelType(fuelType) {
     try {
       this.log(`⛽ Selecting fuel type: ${fuelType}`);
       console.log(`[FUEL DEBUG] Starting fuel type selection for: ${fuelType}`);
       
-      const normalized = this.mapFuelType(fuelType) || fuelType;
-      console.log(`[FUEL DEBUG] Normalized fuel type: ${normalized}`);
+      // Clean fuel type string
+      const cleanFuelType = this.mapFuelType(fuelType) || (fuelType || '').toString().trim();
+      console.log(`[FUEL DEBUG] Normalized fuel type: ${cleanFuelType}`);
       
-      await this.closeAnyOpenDropdown();
-      await this.delay(500);
-      
-      // Use the same proven approach as vehicle condition - find label first, then dropdown relative to it
-      const labelSelectors = [
-        'text:Fuel type',
+      // Use the same proven selectors as Make dropdown
+      const fuelDropdownSelectors = [
+        'text:Fuel type', // Visible label
         '[aria-label*="Fuel type"]',
-        'span:has-text("Fuel type")',
-        'label:has-text("Fuel type")',
-        '*:contains("Fuel type")'
+        'div[role="button"]', // Generic fallback after previous fields
+        'select'
       ];
       
-      console.log(`[FUEL DEBUG] Looking for fuel type label with selectors:`, labelSelectors);
+      console.log(`[FUEL DEBUG] Searching for fuel type dropdown with selectors:`, fuelDropdownSelectors);
       
-      // Find the label first
-      let dropdown = null;
-      for (const selector of labelSelectors) {
-        try {
-          const label = await this.waitForElement([selector], 2000);
-          if (label) {
-            console.log(`[FUEL DEBUG] Found label:`, label.textContent);
-            // Find the dropdown relative to this label (same pattern as working dropdowns)
-            const possibleDropdowns = [
-              label.parentElement?.querySelector('div[role="button"]'),
-              label.parentElement?.querySelector('select'),
-              label.nextElementSibling,
-              label.parentElement?.nextElementSibling?.querySelector('div[role="button"]'),
-              label.closest('div')?.querySelector('div[role="button"]')
-            ].filter(Boolean);
-            
-            for (const possibleDropdown of possibleDropdowns) {
-              if (possibleDropdown) {
-                dropdown = possibleDropdown;
-                console.log(`[FUEL DEBUG] Found dropdown relative to label:`, dropdown);
-                break;
-              }
-            }
-            
-            if (dropdown) break;
-          }
-        } catch (e) {
-          continue;
-        }
-      }
-      
-      // Fallback: Look for dropdown with specific fuel-related context
-      if (!dropdown) {
-        console.log(`[FUEL DEBUG] Label approach failed, trying context-based approach`);
-        const allDropdowns = document.querySelectorAll('div[role="button"]');
-        for (const possibleDropdown of allDropdowns) {
-          const text = possibleDropdown.textContent?.toLowerCase() || '';
-          const context = possibleDropdown.closest('div')?.textContent?.toLowerCase() || '';
-          
-          // Look for fuel context or fuel-related terms
-          if (text.includes('fuel') || context.includes('fuel') ||
-              text.includes('gasoline') || text.includes('diesel') || 
-              text.includes('electric') || text.includes('hybrid')) {
-            dropdown = possibleDropdown;
-            console.log(`[FUEL DEBUG] Found dropdown by fuel context:`, dropdown);
-            break;
-          }
-        }
-      }
-      
-      if (!dropdown) {
+      const fuelDropdown = await this.waitForElement(fuelDropdownSelectors, 8000);
+      if (!fuelDropdown) {
         throw new Error('Fuel type dropdown not found');
       }
       
-      console.log(`[FUEL DEBUG] Found fuel type dropdown:`, dropdown);
-      console.log(`[FUEL DEBUG] Dropdown tagName:`, dropdown.tagName);
-      console.log(`[FUEL DEBUG] Dropdown innerHTML:`, dropdown.innerHTML);
+      console.log(`[FUEL DEBUG] Found fuel type dropdown:`, fuelDropdown);
+      console.log(`[FUEL DEBUG] Dropdown tagName:`, fuelDropdown.tagName);
+      console.log(`[FUEL DEBUG] Dropdown textContent:`, fuelDropdown.textContent);
       
-      await this.scrollIntoView(dropdown);
+      await this.scrollIntoView(fuelDropdown);
+      await this.delay(this.randomDelay(500, 1000));
+      
       this.log('⛽ Found fuel type dropdown, clicking to open...');
-      
-      console.log(`[FUEL DEBUG] Clicking fuel type dropdown...`);
-      dropdown.click();
-      await this.delay(2000);
+      // Use the same reliable open sequence as Make dropdown
+      fuelDropdown.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      fuelDropdown.click();
+      await this.delay(this.randomDelay(1200, 1800)); // Wait for dropdown to open
       
       console.log(`[FUEL DEBUG] Checking if dropdown opened...`);
       const optionsAfterClick = document.querySelectorAll('[role="option"]');
       console.log(`[FUEL DEBUG] Found options after click:`, optionsAfterClick.length);
       
-      // Log available options for debugging
-      Array.from(optionsAfterClick).slice(0, 15).forEach((opt, idx) => {
-        console.log(`[FUEL DEBUG] Option ${idx}: ${opt.textContent?.trim()}`, opt);
+      // Log first 20 options to debug
+      Array.from(optionsAfterClick).slice(0, 20).forEach((opt, idx) => {
+        console.log(`[FUEL DEBUG] Option ${idx + 1}:`, opt.textContent?.trim());
       });
       
-      console.log(`[FUEL DEBUG] 🎯 Using enhanced option selection for: ${normalized}`);
-      
-      // Use multiple approaches to find the fuel type option
-      let fuelOption = null;
-      
-      // Method 1: Find by exact text match using waitForElement
+      // Prefer searching within the options container only
+      let optionsContainer = null;
       try {
-        const fuelSelectors = [
-          `text:${normalized}`,
-          `[role="option"]:has-text("${normalized}")`,
-          `div:has-text("${normalized}")`,
-          `span:has-text("${normalized}")`,
-          `li:has-text("${normalized}")`,
-          `[data-value="${normalized}"]`,
-          `[aria-label*="${normalized}"]`,
-          `*[title="${normalized}"]`
-        ];
-        
-        console.log(`[FUEL DEBUG] Searching for fuel option with selectors:`, fuelSelectors);
-        fuelOption = await this.waitForElement(fuelSelectors, 3000);
-        console.log(`[FUEL DEBUG] ✅ Found fuel option using waitForElement:`, fuelOption);
-        
-        if (fuelOption) {
-          console.log(`[FUEL DEBUG] Option text:`, fuelOption?.textContent || fuelOption?.innerHTML);
-          console.log(`[FUEL DEBUG] Option tagName:`, fuelOption?.tagName);
-          console.log(`[FUEL DEBUG] Option role:`, fuelOption?.getAttribute('role'));
+        optionsContainer = await this.waitForElement(['[role="listbox"]', '[role="menu"]'], 4000);
+      } catch {}
+      
+      const getExactOption = () => {
+        const scope = optionsContainer || document;
+        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
+        return opts.find(o => ((o.textContent || '').trim().toLowerCase() === cleanFuelType.toLowerCase()));
+      };
+      
+      const getFuzzyOption = () => {
+        const scope = optionsContainer || document;
+        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
+        return opts.find(o => (o.textContent || '').toLowerCase().includes(cleanFuelType.toLowerCase()));
+      };
+      
+      let fuelOption = getExactOption();
+      
+      // If not found, try typeahead (Facebook supports it)
+      if (!fuelOption && cleanFuelType) {
+        console.log(`[FUEL DEBUG] Exact match failed, trying typeahead...`);
+        for (const ch of cleanFuelType.toLowerCase()) {
+          fuelDropdown.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
+          await this.delay(this.randomDelay(40, 100));
         }
-        
-      } catch (waitError) {
-        console.log(`[FUEL DEBUG] ⚠️ waitForElement failed, falling back to manual search:`, waitError.message);
-        
-        // Method 2: Manual search through options with exact match
-        fuelOption = Array.from(optionsAfterClick).find(opt => 
-          opt.textContent?.trim() === normalized
-        );
-        
-        // Method 3: Fuzzy match if exact fails
-        if (!fuelOption) {
-          fuelOption = Array.from(optionsAfterClick).find(opt => 
-            opt.textContent?.trim().toLowerCase().includes(normalized.toLowerCase())
-          );
-        }
-        
-        // Method 4: Try common variations
-        if (!fuelOption && normalized === 'Gasoline') {
-          fuelOption = Array.from(optionsAfterClick).find(opt => {
-            const text = opt.textContent?.trim().toLowerCase();
-            return text === 'gas' || text === 'petrol' || text === 'gasoline';
-          });
-        }
-        
-        if (!fuelOption && normalized === 'Hybrid') {
-          fuelOption = Array.from(optionsAfterClick).find(opt => {
-            const text = opt.textContent?.trim().toLowerCase();
-            return text.includes('hybrid') || text === 'plug-in hybrid';
-          });
-        }
-        
-        console.log(`[FUEL DEBUG] Manual search result:`, fuelOption);
+        await this.delay(this.randomDelay(300, 600));
+        fuelOption = getExactOption();
+      }
+      
+      // Fallback to fuzzy match
+      if (!fuelOption) {
+        console.log(`[FUEL DEBUG] Falling back to fuzzy match...`);
+        fuelOption = getFuzzyOption();
+      }
+      
+      // Ultimate fallback: any element with the text inside the container
+      if (!fuelOption) {
+        console.log(`[FUEL DEBUG] Trying ultimate fallback...`);
+        const elem = this.findElementByText(cleanFuelType, ['div','span','li'], optionsContainer || document);
+        if (elem) fuelOption = elem.closest('[role="option"]') || elem;
       }
       
       if (!fuelOption) {
-        console.log(`[FUEL DEBUG] ❌ No fuel option found for: ${normalized}`);
-        console.log(`[FUEL DEBUG] Available options:`, Array.from(optionsAfterClick).map(opt => opt.textContent?.trim()));
-        throw new Error(`Fuel type option ${normalized} not found among ${optionsAfterClick.length} options`);
+        console.log(`[FUEL DEBUG] ❌ No fuel option found for "${cleanFuelType}"`);
+        throw new Error(`Fuel type option not found for "${cleanFuelType}"`);
       }
       
-      console.log(`[FUEL DEBUG] ⛽ Found fuel option, clicking: ${normalized}`);
-      await this.performFacebookDropdownClick(fuelOption);
-      await this.delay(2000);
+      console.log(`[FUEL DEBUG] ⛽ Found fuel option, clicking: ${fuelOption.textContent?.trim()}`);
+      await this.scrollIntoView(fuelOption);
+      await this.delay(this.randomDelay(300, 600));
+      fuelOption.click();
+      await this.delay(this.randomDelay(1000, 1500)); // Wait for selection to register
       
-      // Enhanced verification
+      // Verify the dropdown now displays the selected fuel type
       console.log(`[FUEL DEBUG] Verifying fuel type selection...`);
-      await this.delay(500);
-      console.log(`[FUEL DEBUG] Dropdown selected value:`, dropdown.textContent?.trim());
+      const selectedText = (fuelDropdown.textContent || '').toLowerCase();
+      const verified = selectedText.includes(cleanFuelType.toLowerCase());
+      console.log(`[FUEL DEBUG] Dropdown text after selection:`, fuelDropdown.textContent);
+      console.log(`[FUEL DEBUG] Verification successful:`, verified);
       
-      // Check if fuel type appears in form
-      const dropdownText = dropdown.textContent?.trim();
-      const success = dropdownText?.includes(normalized) || 
-                     dropdownText?.includes(fuelType) ||
-                     document.body.textContent.includes(`Fuel type: ${normalized}`);
-      
-      console.log(`[FUEL DEBUG] Fuel type verification:`, {
-        dropdownContainsFuel: dropdownText?.includes(normalized),
-        success: success
-      });
-      
-      if (success) {
-        this.log(`✅ Successfully filled fuel type: ${normalized}`);
-        return true;
+      if (verified) {
+        this.log(`✅ Successfully selected fuel type: ${cleanFuelType}`);
       } else {
-        this.log(`⚠️ Fuel type selection may have failed - dropdown text: ${dropdownText}`);
-        return false;
+        this.log(`⚠️ Fuel type selection not verified. Dropdown shows: ${fuelDropdown.textContent}`);
       }
+      
+      return verified;
       
     } catch (error) {
+      console.log(`[FUEL DEBUG] ❌ Fuel type selection failed:`, error);
       this.log(`⚠️ Could not select fuel type: ${fuelType}`, error);
-      console.log(`[FUEL DEBUG] ❌ Error selecting fuel type:`, error);
       return false;
     }
   }
