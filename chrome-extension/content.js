@@ -3234,33 +3234,64 @@ class SalesonatorAutomator {
   
   async getAuthToken() {
     return new Promise((resolve) => {
-      // First try background script
-      chrome.runtime.sendMessage({
-        action: 'GET_AUTH_TOKEN'
-      }, async (response) => {
-        if (response?.token) {
-          resolve(response.token);
-          return;
-        }
-        
-        // Fallback to storage if background script doesn't have token
-        try {
-          const result = await chrome.storage.sync.get(['userToken']);
-          if (result.userToken) {
-            // Store in background script for next time
-            chrome.runtime.sendMessage({
-              action: 'SET_AUTH_TOKEN',
-              token: result.userToken
-            });
-            resolve(result.userToken);
-          } else {
+      try {
+        // First try background script
+        chrome.runtime.sendMessage({
+          action: 'GET_AUTH_TOKEN'
+        }, async (response) => {
+          // Check for extension context invalidation
+          if (chrome.runtime.lastError) {
+            console.debug('Extension context error, falling back to storage:', chrome.runtime.lastError.message);
+            try {
+              const result = await chrome.storage.sync.get(['userToken']);
+              resolve(result.userToken || null);
+            } catch (storageError) {
+              console.debug('Storage access failed:', storageError.message);
+              resolve(null);
+            }
+            return;
+          }
+          
+          if (response?.token) {
+            resolve(response.token);
+            return;
+          }
+          
+          // Fallback to storage if background script doesn't have token
+          try {
+            const result = await chrome.storage.sync.get(['userToken']);
+            if (result.userToken) {
+              // Try to store in background script for next time (ignore errors)
+              try {
+                chrome.runtime.sendMessage({
+                  action: 'SET_AUTH_TOKEN',
+                  token: result.userToken
+                });
+              } catch (e) {
+                // Ignore background script communication errors
+              }
+              resolve(result.userToken);
+            } else {
+              resolve(null);
+            }
+          } catch (error) {
+            console.debug('Error getting auth token from storage:', error.message);
             resolve(null);
           }
-        } catch (error) {
-          console.error('Error getting auth token from storage:', error);
+        });
+      } catch (error) {
+        // If chrome.runtime.sendMessage itself fails, fallback to storage
+        console.debug('Runtime message failed, using storage fallback:', error.message);
+        try {
+          chrome.storage.sync.get(['userToken']).then(result => {
+            resolve(result.userToken || null);
+          }).catch(() => {
+            resolve(null);
+          });
+        } catch (e) {
           resolve(null);
         }
-      });
+      }
     });
   }
 
