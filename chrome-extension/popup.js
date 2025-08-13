@@ -78,11 +78,14 @@ class SalesonatorExtension {
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('mainSection').style.display = 'block';
         
-        // Automatically fetch vehicles when authenticated
-        await this.fetchVehicles();
-        
         // Check for existing posting state after authentication
         await this.checkPostingState();
+        
+        // Automatically fetch vehicles when authenticated
+        setTimeout(async () => {
+          await this.fetchVehicles();
+        }, 100);
+        
         return; // Exit early, don't run checkAuthentication
       } else {
         console.log('❌ No web app authentication found');
@@ -291,7 +294,9 @@ class SalesonatorExtension {
           loginSection.style.display = 'none';
           mainSection.style.display = 'block';
           // Automatically fetch vehicles when authenticated
-          await this.fetchVehicles();
+          setTimeout(async () => {
+            await this.fetchVehicles();
+          }, 100);
         } else {
           // Token is invalid, show login
           await chrome.storage.sync.remove(['userToken']);
@@ -366,7 +371,9 @@ class SalesonatorExtension {
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('mainSection').style.display = 'block';
         // Automatically fetch vehicles when authenticated
-        await this.fetchVehicles();
+        setTimeout(async () => {
+          await this.fetchVehicles();
+        }, 100);
       }
     }, 2000);
     
@@ -423,7 +430,9 @@ class SalesonatorExtension {
         statusEl.textContent = 'Authentication successful!';
         await this.checkAuthentication(); // Refresh the UI
         // Automatically fetch vehicles after manual authentication
-        await this.fetchVehicles();
+        setTimeout(async () => {
+          await this.fetchVehicles();
+        }, 100);
       } else {
         throw new Error(data.error_description || 'Authentication failed');
       }
@@ -482,15 +491,11 @@ class SalesonatorExtension {
         throw new Error('User not authenticated. Please log in to Salesonator first.');
       }
 
-      const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster', {
-        method: 'POST',
+      const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/get-pending-vehicles', {
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${userToken}`
-        },
-        body: JSON.stringify({
-          action: 'get_pending_vehicles'
-        })
+        }
       });
 
       if (!response.ok) {
