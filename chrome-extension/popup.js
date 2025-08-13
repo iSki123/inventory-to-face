@@ -478,6 +478,7 @@ class SalesonatorExtension {
 
   async fetchVehicles() {
     const statusEl = document.getElementById('status');
+    const countEl = document.getElementById('vehicleCount');
     const startBtn = document.getElementById('startPosting');
 
     try {
@@ -522,14 +523,14 @@ class SalesonatorExtension {
         
         console.log(`📊 Found ${allVehicles.length} vehicles from database, ${this.vehicles.length} after filtering posted ones`);
         
+        countEl.textContent = this.vehicles.length === 0 
+          ? 'No vehicles ready to post' 
+          : `${this.vehicles.length} vehicles ready to post`;
+        countEl.style.display = 'block';
+        
         startBtn.disabled = this.vehicles.length === 0;
         statusEl.className = 'status connected';
-        
-        if (this.vehicles.length !== allVehicles.length) {
-          statusEl.textContent = `✅ ${this.vehicles.length} new vehicles loaded (${allVehicles.length - this.vehicles.length} already posted)`;
-        } else {
-          statusEl.textContent = `✅ ${this.vehicles.length} vehicles loaded! Ready to start posting.`;
-        }
+        statusEl.textContent = '✅ Connected to Salesonator';
         
         console.log('🔧 Images will be downloaded per-vehicle before posting');
         
@@ -543,6 +544,8 @@ class SalesonatorExtension {
       console.error('Error fetching vehicles:', error);
       statusEl.className = 'status disconnected';
       statusEl.textContent = `Error: ${error.message}`;
+      countEl.textContent = 'Failed to load vehicles';
+      countEl.style.display = 'block';
       startBtn.disabled = true;
       
       // If authentication failed, show login
