@@ -78,6 +78,9 @@ class SalesonatorExtension {
         this.showWebAppAuthSuccess();
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('mainSection').style.display = 'block';
+        
+        // Check for existing posting state after authentication
+        await this.checkPostingState();
         return; // Exit early, don't run checkAuthentication
       } else {
         console.log('❌ No web app authentication found');
@@ -603,7 +606,8 @@ class SalesonatorExtension {
       currentVehicleIndex: 0,
       postingStartTime: Date.now(),
       totalVehiclesInSession: vehiclesToPost.length,
-      rateLimitingEnabled: true
+      rateLimitingEnabled: true,
+      lastPostingActivity: Date.now()
     });
 
     this.isPosting = true;
@@ -623,7 +627,7 @@ class SalesonatorExtension {
     this.isPosting = false;
     
     // Clear posting state from storage
-    await chrome.storage.local.remove(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postingStartTime']);
+    await chrome.storage.local.remove(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postingStartTime', 'lastPostingActivity']);
     
     document.getElementById('startPosting').style.display = 'inline-block';
     document.getElementById('stopPosting').style.display = 'none';
@@ -633,6 +637,9 @@ class SalesonatorExtension {
   async postNextVehicle() {
     // Get current state from storage (in case of reload/redirect)
     const state = await chrome.storage.local.get(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postedVehicles']);
+    
+    // Update last activity timestamp to prevent stale state detection
+    await chrome.storage.local.set({ lastPostingActivity: Date.now() });
     
     if (!state.isPosting || !state.postingQueue || state.currentVehicleIndex >= state.postingQueue.length) {
       await this.stopPosting();
@@ -849,7 +856,11 @@ class SalesonatorExtension {
     const state = await chrome.storage.local.get(['currentVehicleIndex', 'postingQueue']);
     const newIndex = (state.currentVehicleIndex || 0) + 1;
     
-    await chrome.storage.local.set({ currentVehicleIndex: newIndex });
+    // Update storage with persistence timestamp
+    await chrome.storage.local.set({ 
+      currentVehicleIndex: newIndex,
+      lastPostingActivity: Date.now()
+    });
     this.currentVehicleIndex = newIndex;
     
     // Check if we have reached the end of the queue
@@ -1226,23 +1237,87 @@ class SalesonatorExtension {
     }
   }
 
-  // Check for existing posting state on initialization
   async checkPostingState() {
-    const state = await chrome.storage.local.get(['isPosting', 'postingQueue', 'currentVehicleIndex']);
+    try {
+      const state = await chrome.storage.local.get(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postingStartTime', 'lastPostingActivity']);
+      
+      if (state.isPosting && state.postingQueue && state.postingQueue.length > 0) {
+        console.log('Found existing posting state:', state);
+        
+        // Check if the last activity was recent (within 10 minutes) to avoid stale states
+        const lastActivity = state.lastPostingActivity || 0;
+        const timeDifference = Date.now() - lastActivity;
+        const maxIdleTime = 10 * 60 * 1000; // 10 minutes
+        
+        if (timeDifference > maxIdleTime) {
+          console.log('Posting state is stale, clearing it');
+          await this.clearPostingState();
+          return;
+        }
+        
+        // Restore the posting state
+        this.isPosting = true;
+        this.vehicles = state.postingQueue;
+        this.currentVehicleIndex = state.currentVehicleIndex || 0;
+        
+        // Update UI to reflect posting state
+        document.getElementById('startPosting').style.display = 'none';
+        document.getElementById('stopPosting').style.display = 'inline-block';
+        
+        console.log('Resuming posting from vehicle index:', this.currentVehicleIndex);
+        
+        // Resume posting (but only if we're on Facebook and there are more vehicles)
+        if (this.currentVehicleIndex < this.vehicles.length) {
+          document.getElementById('status').textContent = `Resuming posting from vehicle ${this.currentVehicleIndex + 1} of ${this.vehicles.length}`;
+          setTimeout(() => {
+            this.checkConnectionAndResume();
+          }, 2000);
+        } else {
+          // All vehicles have been processed, clear the state
+          console.log('All vehicles processed, clearing posting state');
+          await this.clearPostingState();
+        }
+      }
+    } catch (error) {
+      console.error('Error checking posting state:', error);
+    }
+  }
+
+  async clearPostingState() {
+    await chrome.storage.local.remove(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postingStartTime', 'lastPostingActivity']);
+    this.isPosting = false;
+    this.vehicles = [];
+    this.currentVehicleIndex = 0;
     
-    if (state.isPosting && state.postingQueue) {
-      console.log('🔄 Resuming posting from storage state...');
-      this.isPosting = true;
-      this.vehicles = state.postingQueue;
-      this.currentVehicleIndex = state.currentVehicleIndex || 0;
+    // Reset UI
+    document.getElementById('startPosting').style.display = 'inline-block';
+    document.getElementById('stopPosting').style.display = 'none';
+    document.getElementById('status').textContent = 'Ready to start posting';
+  }
+
+  async checkConnectionAndResume() {
+    try {
+      // Check if we're on Facebook
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const isFacebook = tab.url && tab.url.includes('facebook.com');
       
-      // Update UI
-      document.getElementById('startPosting').style.display = 'none';
-      document.getElementById('stopPosting').style.display = 'inline-block';
-      document.getElementById('vehicleCount').textContent = `${this.vehicles.length} vehicles ready to post`;
-      
+      if (!isFacebook) {
+        document.getElementById('status').textContent = 'Please navigate to Facebook Marketplace to resume posting';
+        
+        // Keep checking every 5 seconds until user navigates to Facebook
+        setTimeout(() => {
+          if (this.isPosting && this.currentVehicleIndex < this.vehicles.length) {
+            this.checkConnectionAndResume();
+          }
+        }, 5000);
+        return;
+      }
+
       // Resume posting
-      await this.postNextVehicle();
+      console.log('Resuming posting...');
+      this.postNextVehicle();
+    } catch (error) {
+      console.error('Error checking connection for resume:', error);
     }
   }
 }
