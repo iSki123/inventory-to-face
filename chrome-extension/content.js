@@ -3284,17 +3284,6 @@ class SalesonatorAutomator {
       return null;
     }
   }
-          chrome.storage.sync.get(['userToken']).then(result => {
-            resolve(result.userToken || null);
-          }).catch(() => {
-            resolve(null);
-          });
-        } catch (e) {
-          resolve(null);
-        }
-      }
-    });
-  }
 
   installNavigationGuards() {
     if (this._navGuardsInstalled) return;
