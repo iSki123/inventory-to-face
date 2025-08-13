@@ -565,11 +565,15 @@ class SalesonatorAutomator {
               console.log('🚀 SETTING WAITING FOR NEXT VEHICLE FLAG');
               this.isWaitingForNextVehicle = true;
               
-              // Let URL change detection handle navigation after Facebook redirects
-              this.log('🔄 Posting complete, waiting for Facebook redirects...');
-              this.log('📡 URL change detection will handle navigation to create page automatically');
+              // Navigate to create page immediately for next vehicle (same as error path)
+              this.log('🔄 Posting complete, navigating to create page...');
+              this.log('📍 Current URL before navigation:', window.location.href);
               
-              console.log('🚀 POSTING FLOW COMPLETE - WAITING FOR REDIRECTS');
+              const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
+              this.log('🎯 Navigation to:', createVehicleUrl);
+              window.location.href = createVehicleUrl;
+              
+              console.log('🚀 POSTING FLOW COMPLETE - NAVIGATED TO CREATE PAGE');
               console.log('🚀 Current URL after posting:', window.location.href);
               
               // Return success with credits info to popup for processing next vehicle
