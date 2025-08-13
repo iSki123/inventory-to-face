@@ -3755,7 +3755,7 @@ class SalesonatorAutomator {
         }
         
         // Also notify web app of successful posting (non-blocking)
-        this.notifyWebAppOfPosting();
+        await this.notifyWebAppOfPosting();
         
         // Signal popup to continue with next vehicle immediately
         chrome.runtime.sendMessage({
@@ -3764,9 +3764,9 @@ class SalesonatorAutomator {
         });
         
         // Navigate to create page immediately for next vehicle
-        setTimeout(() => {
+        setTimeout(async () => {
           console.log('🚀 NAVIGATING TO CREATE PAGE FOR NEXT VEHICLE');
-          this.navigateToCreateVehiclePage();
+          await this.navigateToCreateVehiclePage();
         }, 1500);
       }
       
@@ -3807,8 +3807,8 @@ class SalesonatorAutomator {
             !newUrl.includes('/marketplace/category/vehicles')) {
           console.log('🚀 FORCING NAVIGATION TO CREATE FROM UNEXPECTED URL');
           this.log('🎯 Forcing navigation to create vehicle page from unexpected URL');
-          setTimeout(() => {
-            this.navigateToCreateVehiclePage();
+          setTimeout(async () => {
+            await this.navigateToCreateVehiclePage();
           }, 2000);
         }
       }
