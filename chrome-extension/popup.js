@@ -46,7 +46,6 @@ class SalesonatorExtension {
       }
 
       // Set up event listeners
-      document.getElementById('fetchVehicles').addEventListener('click', () => this.fetchVehicles());
       document.getElementById('startPosting').addEventListener('click', () => this.startPosting());
       document.getElementById('stopPosting').addEventListener('click', () => this.stopPosting());
       document.getElementById('delay').addEventListener('change', () => this.saveSettings());
@@ -78,6 +77,9 @@ class SalesonatorExtension {
         this.showWebAppAuthSuccess();
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('mainSection').style.display = 'block';
+        
+        // Automatically fetch vehicles when authenticated
+        await this.fetchVehicles();
         
         // Check for existing posting state after authentication
         await this.checkPostingState();
@@ -288,6 +290,8 @@ class SalesonatorExtension {
         if (response.ok) {
           loginSection.style.display = 'none';
           mainSection.style.display = 'block';
+          // Automatically fetch vehicles when authenticated
+          await this.fetchVehicles();
         } else {
           // Token is invalid, show login
           await chrome.storage.sync.remove(['userToken']);
@@ -361,6 +365,8 @@ class SalesonatorExtension {
         this.showWebAppAuthSuccess();
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('mainSection').style.display = 'block';
+        // Automatically fetch vehicles when authenticated
+        await this.fetchVehicles();
       }
     }, 2000);
     
@@ -416,6 +422,8 @@ class SalesonatorExtension {
         
         statusEl.textContent = 'Authentication successful!';
         await this.checkAuthentication(); // Refresh the UI
+        // Automatically fetch vehicles after manual authentication
+        await this.fetchVehicles();
       } else {
         throw new Error(data.error_description || 'Authentication failed');
       }
