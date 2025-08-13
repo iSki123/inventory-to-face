@@ -84,6 +84,9 @@ class SalesonatorExtension {
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('mainSection').style.display = 'block';
         
+        // Auto-fetch vehicles after successful authentication
+        await this.fetchVehicles();
+        
         // Check for existing posting state after authentication
         await this.checkPostingState();
         return; // Exit early, don't run checkAuthentication
@@ -249,7 +252,7 @@ class SalesonatorExtension {
       }
       
       console.log('No web app authentication found');
-      if (statusEl) statusEl.textContent = 'No authentication found in web app';
+      if (statusEl) statusEl.textContent = 'Ready to connect - click "Fetch Pending Vehicles"';
       return null;
     } catch (error) {
       console.warn('Error checking web app authentication:', error);
@@ -393,6 +396,9 @@ class SalesonatorExtension {
         this.showWebAppAuthSuccess();
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('mainSection').style.display = 'block';
+        
+        // Auto-fetch vehicles after successful authentication
+        await this.fetchVehicles();
       }
     }, 2000);
     
