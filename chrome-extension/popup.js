@@ -922,6 +922,24 @@ class SalesonatorExtension {
     // Start countdown timer
     this.startCountdownTimer(rateLimitDelay);
     
+    // Navigate to Facebook Marketplace at 15 seconds left to allow page loading time
+    const redirectTime = Math.max(rateLimitDelay - 15, 5); // Redirect 15 seconds early, but at least after 5 seconds
+    
+    setTimeout(async () => {
+      console.log('🔄 Redirecting to Facebook Marketplace early for page loading...');
+      try {
+        // Navigate to Facebook Marketplace create vehicle page
+        const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tabs[0]) {
+          await chrome.tabs.update(tabs[0].id, { url: createVehicleUrl });
+          console.log('✅ Successfully navigated to Facebook Marketplace');
+        }
+      } catch (error) {
+        console.error('⚠️ Error during early navigation:', error);
+      }
+    }, redirectTime * 1000);
+    
     setTimeout(() => {
       this.postNextVehicle();
     }, rateLimitDelay * 1000);
