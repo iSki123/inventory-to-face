@@ -772,12 +772,15 @@ class SalesonatorExtension {
     `;
     
     // Add click handler for buy credits button
-    document.getElementById('buyCreditsBtn').addEventListener('click', () => {
-      // Open Salesonator billing page in new tab
-      chrome.tabs.create({ 
-        url: 'https://7163d240-f16f-476c-b2aa-a96bf0373743.lovableproject.com/billing' 
+    const buyCreditsBtn = document.getElementById('buyCreditsBtn');
+    if (buyCreditsBtn) {
+      buyCreditsBtn.addEventListener('click', () => {
+        // Open Salesonator billing page in new tab
+        chrome.tabs.create({ 
+          url: 'https://7163d240-f16f-476c-b2aa-a96bf0373743.lovableproject.com/billing' 
+        });
       });
-    });
+    }
   }
 
   // Download images for a specific vehicle before posting
