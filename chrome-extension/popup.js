@@ -262,7 +262,7 @@ class SalesonatorExtension {
   showWebAppAuthSuccess() {
     const statusEl = document.getElementById('status');
     statusEl.className = 'status connected';
-    statusEl.textContent = '✅ Auto-authenticated via Salesonator web app!';
+    statusEl.innerHTML = 'Auto-authenticated via Salesonator web app!';
     document.getElementById('creditBalance').style.display = 'block';
   }
 
