@@ -3683,7 +3683,7 @@ class SalesonatorAutomator {
   }
 
   // Handle URL changes and redirects
-  handleUrlChange() {
+  async handleUrlChange() {
     const newUrl = window.location.href;
     const oldUrl = this.currentUrl;
     
