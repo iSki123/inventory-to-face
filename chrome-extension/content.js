@@ -3283,11 +3283,7 @@ class SalesonatorAutomator {
       console.error('Error getting auth token:', error);
       return null;
     }
-        });
-      } catch (error) {
-        // If chrome.runtime.sendMessage itself fails, fallback to storage
-        console.debug('Runtime message failed, using storage fallback:', error.message);
-        try {
+  }
           chrome.storage.sync.get(['userToken']).then(result => {
             resolve(result.userToken || null);
           }).catch(() => {

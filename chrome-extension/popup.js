@@ -159,16 +159,16 @@ class SalesonatorExtension {
                   const profile = profileData[0];
                   console.log('Extracted profile:', profile);
                   
-                  if (profile && profile.is_active && profile.credits > 0) {
+                  if (profile && profile.is_active) {
                     console.log('✅ User is eligible with credits:', profile.credits);
                     console.log('Setting up auto-authentication...');
-                    this.credits = profile.credits;
+                    this.credits = profile.credits || 0;
                     this.updateCreditDisplay();
                     this.showWebAppAuthSuccess();
-                    return { token: authData.token, user: authData.user, credits: profile.credits };
+                    return { token: authData.token, user: authData.user, credits: profile.credits || 0 };
                   } else {
                     console.log('❌ User is not eligible - Active:', profile?.is_active, 'Credits:', profile?.credits);
-                    this.showError('Active account with credits required for extension');
+                    this.showError('Active account required for extension');
                     return null;
                   }
                 } else {
