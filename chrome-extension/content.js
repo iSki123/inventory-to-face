@@ -556,53 +556,13 @@ class SalesonatorAutomator {
             this.log('⏳ Waiting for Facebook redirect to complete posting...');
             
             console.log('🚀 POSTING SUBMITTED - WAITING FOR FACEBOOK REDIRECT');
-              console.log('🚀 Current URL after posting:', window.location.href);
-              
-              // Return success with credits info to popup for processing next vehicle
-              return { 
-                success: true, 
-                credits: recordResult.credits,
-                message: recordResult.message 
-              };
-              
-            } catch (backendError) {
-              this.log('⚠️ CRITICAL: Vehicle posted but failed to record in backend:', backendError);
-              this.log('⚠️ Backend error details:', backendError.message);
-              this.log('⚠️ Backend error stack:', backendError.stack);
-              console.error('Backend recording error:', backendError);
-              console.error('Full backend error object:', backendError);
-              
-              // IMPORTANT: Send error notification to popup
-              chrome.runtime.sendMessage({
-                action: 'recordingError',
-                vehicleId: vehicleData.id,
-                error: backendError.message,
-                fullError: backendError.toString()
-              });
-              
-              // Clear posting state even if recording failed
-              this.isPosting = false;
-              this.currentVehicleData = null;
-              this.uploadedImages = [];
-              this.log('🔄 Reset posting flags despite backend error');
-              
-              // Wait a moment
-              await this.delay(1000);
-              
-              // Still navigate back for next vehicle even if recording failed
-              this.log('🔄 Attempting navigation despite recording error...');
-              this.log('📍 Current URL before fallback navigation:', window.location.href);
-              
-              const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
-              this.log('🎯 Fallback navigation to:', createVehicleUrl);
-              window.location.href = createVehicleUrl;
-              
-              return { 
-                success: true, 
-                warning: 'Posted but failed to record: ' + backendError.message,
-                databaseError: true
-              };
-            }
+            console.log('🚀 Current URL after posting:', window.location.href);
+            
+            // Return success to popup - credits will be updated after URL redirect
+            return { 
+              success: true, 
+              message: 'Vehicle posted successfully, waiting for redirect to complete recording'
+            };
           }
           
         } catch (error) {
