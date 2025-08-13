@@ -478,7 +478,6 @@ class SalesonatorExtension {
 
   async fetchVehicles() {
     const statusEl = document.getElementById('status');
-    const countEl = document.getElementById('vehicleCount');
     const startBtn = document.getElementById('startPosting');
 
     try {
@@ -523,9 +522,6 @@ class SalesonatorExtension {
         
         console.log(`📊 Found ${allVehicles.length} vehicles from database, ${this.vehicles.length} after filtering posted ones`);
         
-        // Hide the separate vehicle count element
-        countEl.style.display = 'none';
-        
         startBtn.disabled = this.vehicles.length === 0;
         statusEl.className = 'status connected';
         
@@ -547,7 +543,6 @@ class SalesonatorExtension {
       console.error('Error fetching vehicles:', error);
       statusEl.className = 'status disconnected';
       statusEl.textContent = `Error: ${error.message}`;
-      countEl.style.display = 'none';
       startBtn.disabled = true;
       
       // If authentication failed, show login
