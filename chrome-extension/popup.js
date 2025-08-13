@@ -457,6 +457,13 @@ class SalesonatorExtension {
     const statusEl = document.getElementById('status');
     
     try {
+      // First check if we're currently posting - if so, don't override status
+      const state = await chrome.storage.local.get(['isPosting', 'postingQueue', 'currentVehicleIndex']);
+      if (state.isPosting && state.postingQueue && state.postingQueue.length > 0) {
+        console.log('🚀 Currently posting, not checking connection');
+        return; // Don't override posting status
+      }
+      
       // Check if we're on Facebook
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       console.log('🔍 Checking connection, current URL:', tab.url);
@@ -479,7 +486,8 @@ class SalesonatorExtension {
       chrome.tabs.sendMessage(tab.id, { action: 'checkLogin' }, (response) => {
         if (chrome.runtime.lastError) {
           console.log('⚠️ Content script communication error:', chrome.runtime.lastError.message);
-          statusEl.className = 'status connected'; // Assume connected if we're on Facebook
+          // If we can't reach content script but we're on Facebook, assume connected
+          statusEl.className = 'status connected';
           statusEl.textContent = 'Connected to Facebook';
         } else if (response && response.loggedIn) {
           console.log('✅ Facebook login confirmed');
@@ -1025,7 +1033,7 @@ class SalesonatorExtension {
                 
                 // Don't wait for response - the content script will notify us via message when done
                 console.log('✅ Vehicle posting command sent, waiting for notification...');
-                document.getElementById('status').textContent = 'Posting vehicle...';
+                this.updatePostingStatus('Posting vehicle...', 'info');
                 resolve({ success: true, message: 'Posting initiated' });
               });
             }
@@ -1227,7 +1235,7 @@ class SalesonatorExtension {
 
   setupMessageListener() {
     // Listen for messages from the background script and content script
-      chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+    chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       console.log('📨 Popup received message:', message);
       
       if (message.action === 'extensionReloaded') {
@@ -1245,8 +1253,7 @@ class SalesonatorExtension {
         // Check if database recording failed
         if (message.recordingFailed || message.databaseError) {
           console.error('⚠️ Database recording failed for vehicle:', message.vehicleId);
-          document.getElementById('status').textContent = `Vehicle posted but DB update failed: ${message.error}`;
-          this.updateStatusMessage(`Posted but database error: ${message.error}`, 'error');
+          this.updatePostingStatus(`Vehicle posted but DB update failed: ${message.error}`, 'error');
           
           // Still mark locally to prevent immediate reposting, but show warning
           const state = await chrome.storage.local.get(['postingQueue', 'currentVehicleIndex']);
@@ -1256,7 +1263,7 @@ class SalesonatorExtension {
             console.log('⚠️ Marked vehicle as posted locally despite database error');
           }
         } else {
-          document.getElementById('status').textContent = 'Vehicle posted! Moving to next...';
+          this.updatePostingStatus('Vehicle posted! Moving to next...', 'success');
           
           // Mark vehicle as posted before moving to next
           const state = await chrome.storage.local.get(['postingQueue', 'currentVehicleIndex']);
@@ -1269,20 +1276,67 @@ class SalesonatorExtension {
         // Don't call moveToNextVehicle here - wait for continueWithNextVehicle message
       } else if (message.action === 'recordingError') {
         console.error('💥 Recording error received:', message.error);
-        document.getElementById('status').textContent = `Database error: ${message.error}`;
-        this.updateStatusMessage(`Critical: Database recording failed - ${message.error}`, 'error');
+        this.updatePostingStatus(`Database error: ${message.error}`, 'error');
       } else if (message.action === 'continueWithNextVehicle') {
         console.log('🚀 Content script signaling to continue with next vehicle immediately');
-        document.getElementById('status').textContent = 'Preparing next vehicle...';
-        // Move to next vehicle and continue posting - moveToNextVehicle already calls postNextVehicle
+        this.updatePostingStatus('Preparing next vehicle...', 'info');
         this.moveToNextVehicle();
       } else if (message.action === 'readyForNextVehicle') {
         console.log('🚀 Content script ready for next vehicle');
-        document.getElementById('status').textContent = 'Ready for next vehicle...';
-        // Longer delay to ensure page is fully loaded before posting next vehicle
+        this.updatePostingStatus('Ready for next vehicle...', 'info');
         setTimeout(() => {
           this.postNextVehicle();
         }, 4000);
+      } else if (message.action === 'postingProgress') {
+        // Handle detailed posting progress from content script
+        console.log('📊 Posting progress:', message.progress);
+        this.updatePostingStatus(message.progress, 'info');
+      } else if (message.action === 'formFilling') {
+        // Handle form filling progress
+        console.log('📝 Form filling progress:', message.step);
+        this.updatePostingStatus(`Filling form: ${message.step}`, 'info');
+      } else if (message.action === 'pageNavigation') {
+        // Handle page navigation updates
+        console.log('🧭 Navigation:', message.step);
+        this.updatePostingStatus(`Navigation: ${message.step}`, 'info');
+      }
+    });
+  }
+
+  // Helper method to update posting status with progress info
+  updatePostingStatus(message, type = 'info') {
+    const statusEl = document.getElementById('status');
+    const state = chrome.storage.local.get(['postingQueue', 'currentVehicleIndex']);
+    
+    state.then(async (data) => {
+      let progressInfo = '';
+      if (data.postingQueue && data.currentVehicleIndex !== undefined) {
+        const current = data.currentVehicleIndex + 1;
+        const total = data.postingQueue.length;
+        progressInfo = ` (${current}/${total})`;
+        
+        // Also show current vehicle info if available
+        const currentVehicle = data.postingQueue[data.currentVehicleIndex];
+        if (currentVehicle) {
+          const vehicleInfo = `${currentVehicle.year} ${currentVehicle.make} ${currentVehicle.model}`;
+          progressInfo += ` - ${vehicleInfo}`;
+        }
+      }
+      
+      statusEl.textContent = message + progressInfo;
+      
+      // Set appropriate CSS class based on type
+      switch (type) {
+        case 'success':
+          statusEl.className = 'status connected';
+          break;
+        case 'error':
+          statusEl.className = 'status disconnected';
+          break;
+        case 'info':
+        default:
+          statusEl.className = 'status posting';
+          break;
       }
     });
   }
@@ -1334,7 +1388,9 @@ class SalesonatorExtension {
         
         // Show current state (but don't automatically resume posting)
         if (this.currentVehicleIndex < this.vehicles.length) {
-          document.getElementById('status').textContent = `Posting in progress: vehicle ${this.currentVehicleIndex + 1} of ${this.vehicles.length}`;
+          const currentVehicle = this.vehicles[this.currentVehicleIndex];
+          const vehicleInfo = currentVehicle ? `${currentVehicle.year} ${currentVehicle.make} ${currentVehicle.model}` : '';
+          this.updatePostingStatus(`Posting in progress - ${vehicleInfo}`, 'info');
           console.log('Extension showing current posting state - process is running in background');
         } else {
           // All vehicles have been processed, clear the state
