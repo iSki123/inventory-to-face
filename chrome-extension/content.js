@@ -3624,8 +3624,8 @@ class SalesonatorAutomator {
       
       this.currentUrl = newUrl;
       
-      // Check if we've been redirected to vehicles category after posting
-      if (newUrl.includes('/marketplace/category/vehicles') && this.isWaitingForNextVehicle) {
+      // Check if we've been redirected to vehicles category or selling page after posting
+      if ((newUrl.includes('/marketplace/category/vehicles') || newUrl.includes('/marketplace/you/selling') || newUrl.includes('/marketplace/you')) && this.isWaitingForNextVehicle) {
         console.log('🚀 DETECTED REDIRECT TO VEHICLES CATEGORY - POSTING COMPLETED');
         this.log('🎯 Detected redirect to vehicles category after posting - vehicle posted successfully');
         
