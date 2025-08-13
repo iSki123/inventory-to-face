@@ -24,6 +24,7 @@ class SalesonatorExtension {
     this.vehicles = [];
     this.currentVehicleIndex = 0;
     this.credits = 0;
+    this.countdownInterval = null; // For countdown timer
     this.init();
     this.setupMessageListener();
   }
@@ -300,6 +301,33 @@ class SalesonatorExtension {
         mainSection.style.display = 'none';
       }
     }
+  }
+
+  
+  startCountdownTimer(seconds) {
+    let remainingSeconds = seconds;
+    const statusEl = document.getElementById('status');
+    
+    // Clear any existing countdown interval
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+    }
+    
+    // Update immediately
+    statusEl.textContent = `Waiting ${remainingSeconds} seconds before next vehicle...`;
+    
+    // Start countdown
+    this.countdownInterval = setInterval(() => {
+      remainingSeconds--;
+      
+      if (remainingSeconds > 0) {
+        statusEl.textContent = `Waiting ${remainingSeconds} seconds before next vehicle...`;
+      } else {
+        statusEl.textContent = 'Preparing next vehicle...';
+        clearInterval(this.countdownInterval);
+        this.countdownInterval = null;
+      }
+    }, 1000);
   }
 
   async openDashboard() {
@@ -626,6 +654,12 @@ class SalesonatorExtension {
   async stopPosting() {
     this.isPosting = false;
     
+    // Clear countdown timer
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+      this.countdownInterval = null;
+    }
+    
     // Clear posting state from storage
     await chrome.storage.local.remove(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postingStartTime', 'lastPostingActivity']);
     
@@ -884,7 +918,9 @@ class SalesonatorExtension {
     const rateLimitDelay = Math.max(baseDelay, 30); // Minimum 30 seconds
     
     console.log(`⏱️ Waiting ${rateLimitDelay} seconds before next vehicle to avoid rate limiting...`);
-    document.getElementById('status').textContent = `Waiting ${rateLimitDelay} seconds before next vehicle...`;
+    
+    // Start countdown timer
+    this.startCountdownTimer(rateLimitDelay);
     
     setTimeout(() => {
       this.postNextVehicle();
@@ -1284,6 +1320,12 @@ class SalesonatorExtension {
   }
 
   async clearPostingState() {
+    // Clear countdown timer
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+      this.countdownInterval = null;
+    }
+    
     await chrome.storage.local.remove(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postingStartTime', 'lastPostingActivity']);
     this.isPosting = false;
     this.vehicles = [];
