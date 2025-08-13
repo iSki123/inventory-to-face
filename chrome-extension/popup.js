@@ -358,9 +358,12 @@ class SalesonatorExtension {
         throw new Error('No authentication token found');
       }
 
-      const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/vehicles?select=*&facebook_post_status=eq.pending', {
+      // Use edge function like old extension
+      const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/get-pending-vehicles', {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${userToken}`,
+          'Content-Type': 'application/json',
           'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
         }
       });
@@ -369,11 +372,14 @@ class SalesonatorExtension {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      this.vehicles = await response.json();
+      const data = await response.json();
+      this.vehicles = data.vehicles || [];
+      this.credits = data.credits || 0;
       this.currentVehicleIndex = 0;
       
       document.getElementById('vehicleCount').textContent = this.vehicles.length;
       document.getElementById('status').textContent = `Found ${this.vehicles.length} pending vehicles`;
+      this.updateCreditDisplay();
       
       // Pre-download images for better performance
       if (this.vehicles.length > 0) {
@@ -443,18 +449,17 @@ class SalesonatorExtension {
   async deductCreditForPosting(vehicle) {
     const { userToken } = await chrome.storage.sync.get(['userToken']);
     
-    const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/deduct-credit-and-update-vehicle', {
+    // Use edge function from old extension
+    const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${userToken}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
       },
       body: JSON.stringify({
         vehicle_id: vehicle.id,
-        facebook_post_id: null,
-        update_data: {
-          facebook_post_status: 'posting'
-        }
+        action: 'deduct_credit'
       })
     });
 
@@ -464,7 +469,7 @@ class SalesonatorExtension {
     }
 
     const result = await response.json();
-    this.credits = result.credits;
+    this.credits = result.credits || this.credits - 1;
     this.updateCreditDisplay();
   }
 
