@@ -1309,7 +1309,7 @@ class SalesonatorExtension {
           return;
         }
         
-        // Restore the posting state
+        // Restore the posting state (DISPLAY ONLY - no automatic resuming)
         this.isPosting = true;
         this.vehicles = state.postingQueue;
         this.currentVehicleIndex = state.currentVehicleIndex || 0;
@@ -1318,14 +1318,12 @@ class SalesonatorExtension {
         document.getElementById('startPosting').style.display = 'none';
         document.getElementById('stopPosting').style.display = 'inline-block';
         
-        console.log('Resuming posting from vehicle index:', this.currentVehicleIndex);
+        console.log('Displaying posting state from vehicle index:', this.currentVehicleIndex);
         
-        // Resume posting (but only if we're on Facebook and there are more vehicles)
+        // Show current state (but don't automatically resume posting)
         if (this.currentVehicleIndex < this.vehicles.length) {
-          document.getElementById('status').textContent = `Resuming posting from vehicle ${this.currentVehicleIndex + 1} of ${this.vehicles.length}`;
-          setTimeout(() => {
-            this.checkConnectionAndResume();
-          }, 2000);
+          document.getElementById('status').textContent = `Posting in progress: vehicle ${this.currentVehicleIndex + 1} of ${this.vehicles.length}`;
+          console.log('Extension showing current posting state - process is running in background');
         } else {
           // All vehicles have been processed, clear the state
           console.log('All vehicles processed, clearing posting state');
