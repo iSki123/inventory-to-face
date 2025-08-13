@@ -1271,9 +1271,14 @@ class SalesonatorExtension {
             const vehicle = state.postingQueue[state.currentVehicleIndex];
             await this.markVehicleAsPosted(vehicle);
           }
+          
+          // Automatically move to next vehicle after successful post
+          setTimeout(() => {
+            this.moveToNextVehicle();
+          }, 2000); // Small delay to ensure UI updates
         }
         
-        // Don't call moveToNextVehicle here - wait for continueWithNextVehicle message
+        // Don't call moveToNextVehicle here - it's now handled above
       } else if (message.action === 'recordingError') {
         console.error('💥 Recording error received:', message.error);
         this.updatePostingStatus(`Database error: ${message.error}`, 'error');
