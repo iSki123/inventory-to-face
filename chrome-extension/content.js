@@ -3592,7 +3592,7 @@ class SalesonatorAutomator {
       
       // Get user token from extension storage using direct access
       this.log('🔍 Getting user token from storage...');
-      const storageResult = await chrome.storage.local.get(['userToken']);
+      const storageResult = await chrome.storage.sync.get(['userToken']);
       const userToken = storageResult.userToken;
       
       if (!userToken) {
@@ -3965,7 +3965,7 @@ class SalesonatorAutomator {
     try {
       if (this.currentVehicle && this.currentVehicle.id) {
         // Get stored authentication
-        const result = await chrome.storage.local.get(['userToken']);
+        const result = await chrome.storage.sync.get(['userToken']);
         if (!result.userToken) {
           console.log('No auth token available for web app notification');
           return;

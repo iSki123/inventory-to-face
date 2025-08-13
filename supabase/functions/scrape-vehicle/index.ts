@@ -56,8 +56,10 @@ serve(async (req) => {
           contact_phone: v.contact_phone || null,
           contact_email: v.contact_email || null,
           user_id: userId,
-          status: 'available',
-          facebook_post_status: 'draft',
+          status: v.status || 'available',
+          facebook_post_status: v.facebook_post_status || 'draft',
+          facebook_post_id: v.facebook_post_id || null,
+          last_posted_at: v.last_posted_at || null,
           updated_at: new Date().toISOString(),
         };
 
