@@ -528,7 +528,7 @@ class SalesonatorExtension {
         if (this.vehicles.length === 0) {
           statusEl.innerHTML = 'Connected to Salesonator<br>No vehicles ready to post';
         } else {
-          statusEl.innerHTML = `Connected to Salesonator<br>${this.vehicles.length} vehicles ready to post`;
+          statusEl.innerHTML = 'Connected to Salesonator<br>' + this.vehicles.length + ' vehicles ready to post';
         }
         
         console.log('🔧 Images will be downloaded per-vehicle before posting');
