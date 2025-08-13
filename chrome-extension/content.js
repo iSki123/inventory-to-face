@@ -483,6 +483,11 @@ class SalesonatorAutomator {
     try {
       this.log('🚗 Starting enhanced vehicle posting process...', vehicleData);
       
+      // Store current vehicle data for later reference
+      this.currentVehicleData = vehicleData;
+      this.currentVehicle = vehicleData;
+      this.isWaitingForNextVehicle = true;
+      
       // Check if we're on the correct page first
       if (!window.location.href.includes('/marketplace/create/vehicle')) {
         this.log('⚠️ Not on create vehicle page, current URL:', window.location.href);
@@ -3627,17 +3632,21 @@ class SalesonatorAutomator {
       // Check if we've been redirected to vehicles category or selling page after posting
       if ((newUrl.includes('/marketplace/category/vehicles') || newUrl.includes('/marketplace/you/selling') || newUrl.includes('/marketplace/you')) && this.isWaitingForNextVehicle) {
         console.log('🚀 DETECTED REDIRECT TO VEHICLES CATEGORY - POSTING COMPLETED');
+        console.log('🚀 Current vehicle data:', this.currentVehicleData);
+        console.log('🚀 Current vehicle (fallback):', this.currentVehicle);
         this.log('🎯 Detected redirect to vehicles category after posting - vehicle posted successfully');
         
-        // NOW record the posting in backend with the proper Facebook post ID
-        if (this.currentVehicleData && this.currentVehicleData.id) {
-          try {
-            console.log('🚀 CREDIT DEDUCTION ATTEMPT STARTING (AFTER REDIRECT)');
-            console.log('🚀 Vehicle ID for recording:', this.currentVehicleData.id);
-            this.log('📝 Recording vehicle posting in backend...');
-            this.log('🔍 Current URL after redirect:', window.location.href);
-            
-            const recordResult = await this.recordVehiclePosting(this.currentVehicleData.id);
+        // Use current vehicle data OR fallback to this.currentVehicle
+        const vehicleToRecord = this.currentVehicleData || this.currentVehicle;
+        if (vehicleToRecord && vehicleToRecord.id) {
+        try {
+          console.log('🚀 CREDIT DEDUCTION ATTEMPT STARTING (AFTER REDIRECT)');
+          console.log('🚀 Vehicle ID for recording:', vehicleToRecord.id);
+          console.log('🚀 Vehicle data available:', !!vehicleToRecord);
+          this.log('📝 Recording vehicle posting in backend...');
+          this.log('🔍 Current URL after redirect:', window.location.href);
+          
+          const recordResult = await this.recordVehiclePosting(vehicleToRecord.id);
             
             console.log('🚀 CREDIT DEDUCTION RESULT:', recordResult);
             console.log('🚀 Credits after posting:', recordResult.credits);
@@ -3653,6 +3662,7 @@ class SalesonatorAutomator {
             
             // Clear vehicle data now that recording is complete
             this.currentVehicleData = null;
+            this.currentVehicle = null;
             
             // Send immediate success notification to popup
             chrome.runtime.sendMessage({

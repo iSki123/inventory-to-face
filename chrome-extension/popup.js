@@ -1003,8 +1003,20 @@ class SalesonatorExtension {
 
   // New method to move to next vehicle and update storage
   async moveToNextVehicle() {
-    const state = await chrome.storage.local.get(['currentVehicleIndex', 'postingQueue']);
+    console.log('🔄 moveToNextVehicle called - checking state...');
+    console.log('🔄 Current isPosting:', this.isPosting);
+    console.log('🔄 Current isPaused:', this.isPaused);
+    
+    const state = await chrome.storage.local.get(['currentVehicleIndex', 'postingQueue', 'isPosting', 'isPaused']);
     const newIndex = (state.currentVehicleIndex || 0) + 1;
+    
+    console.log('🔄 Storage state:', {
+      currentIndex: state.currentVehicleIndex,
+      newIndex,
+      queueLength: state.postingQueue?.length,
+      isPosting: state.isPosting,
+      isPaused: state.isPaused
+    });
     
     // Update storage with persistence timestamp
     await chrome.storage.local.set({ 
@@ -1384,8 +1396,14 @@ class SalesonatorExtension {
         this.updatePostingStatus(`Database error: ${message.error}`, 'error');
       } else if (message.action === 'continueWithNextVehicle') {
         console.log('🚀 Content script signaling to continue with next vehicle immediately');
+        console.log('🚀 Current isPosting state:', this.isPosting);
+        console.log('🚀 Current isPaused state:', this.isPaused);
         this.updatePostingStatus('Preparing next vehicle...', 'info');
-        this.moveToNextVehicle();
+        
+        // Small delay to ensure UI state is properly updated
+        setTimeout(() => {
+          this.moveToNextVehicle();
+        }, 1000);
       } else if (message.action === 'readyForNextVehicle') {
         console.log('🚀 Content script ready for next vehicle');
         this.updatePostingStatus('Ready for next vehicle...', 'info');
