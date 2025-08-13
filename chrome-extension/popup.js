@@ -21,10 +21,12 @@ async function storeAuthToken() {
 class SalesonatorExtension {
   constructor() {
     this.isPosting = false;
+    this.isPaused = false; // New: track paused state
     this.vehicles = [];
     this.currentVehicleIndex = 0;
     this.credits = 0;
     this.countdownInterval = null; // For countdown timer
+    this.pausedTimeout = null; // Track paused timeout
     this.init();
     this.setupMessageListener();
   }
@@ -50,6 +52,8 @@ class SalesonatorExtension {
       document.getElementById('fetchVehicles').addEventListener('click', () => this.fetchVehicles());
       document.getElementById('startPosting').addEventListener('click', () => this.startPosting());
       document.getElementById('stopPosting').addEventListener('click', () => this.stopPosting());
+      document.getElementById('pausePosting').addEventListener('click', () => this.pausePosting());
+      document.getElementById('resumePosting').addEventListener('click', () => this.resumePosting());
       document.getElementById('delay').addEventListener('change', () => this.saveSettings());
       document.getElementById('login').addEventListener('click', () => this.showLoginForm());
       document.getElementById('openDashboard').addEventListener('click', () => this.openDashboard());
@@ -659,10 +663,16 @@ class SalesonatorExtension {
     });
 
     this.isPosting = true;
+    this.isPaused = false;
     this.currentVehicleIndex = 0;
     
+    // Hide elements during posting and show pause button
     document.getElementById('startPosting').style.display = 'none';
     document.getElementById('stopPosting').style.display = 'inline-block';
+    document.getElementById('pausePosting').style.display = 'inline-block';
+    document.getElementById('resumePosting').style.display = 'none';
+    document.getElementById('fetchVehicles').style.display = 'none'; // Hide fetch button
+    document.getElementById('vehicleCount').style.display = 'none'; // Hide "No vehicles ready to post"
     document.getElementById('status').textContent = `Starting posting process for ${vehiclesToPost.length} vehicles with rate limiting...`;
     
     // Start with a longer initial delay to ensure clean start
@@ -673,12 +683,85 @@ class SalesonatorExtension {
 
   async stopPosting() {
     this.isPosting = false;
+    this.isPaused = false;
     
     // Clear countdown timer
     if (this.countdownInterval) {
       clearInterval(this.countdownInterval);
       this.countdownInterval = null;
     }
+    
+    // Clear any pending timeouts
+    if (this.pausedTimeout) {
+      clearTimeout(this.pausedTimeout);
+      this.pausedTimeout = null;
+    }
+    
+    // Clear posting state from storage
+    await chrome.storage.local.remove(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postingStartTime', 'lastPostingActivity', 'isPaused']);
+    
+    // Restore UI elements
+    document.getElementById('startPosting').style.display = 'inline-block';
+    document.getElementById('stopPosting').style.display = 'none';
+    document.getElementById('pausePosting').style.display = 'none';
+    document.getElementById('resumePosting').style.display = 'none';
+    document.getElementById('fetchVehicles').style.display = 'inline-block'; // Show fetch button
+    document.getElementById('vehicleCount').style.display = 'block'; // Show vehicle count
+    document.getElementById('status').textContent = 'Posting stopped';
+  }
+
+  async pausePosting() {
+    console.log('⏸️ Pausing posting process...');
+    this.isPaused = true;
+    
+    // Clear countdown timer if running
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+      this.countdownInterval = null;
+    }
+    
+    // Clear any pending timeouts
+    if (this.pausedTimeout) {
+      clearTimeout(this.pausedTimeout);
+      this.pausedTimeout = null;
+    }
+    
+    // Update storage with paused state
+    await chrome.storage.local.set({ 
+      isPaused: true,
+      lastPostingActivity: Date.now()
+    });
+    
+    // Update UI
+    document.getElementById('pausePosting').style.display = 'none';
+    document.getElementById('resumePosting').style.display = 'inline-block';
+    this.updatePostingStatus('Posting paused - click Resume to continue', 'info');
+    
+    console.log('✅ Posting paused successfully');
+  }
+
+  async resumePosting() {
+    console.log('▶️ Resuming posting process...');
+    this.isPaused = false;
+    
+    // Update storage to remove paused state
+    await chrome.storage.local.set({ 
+      isPaused: false,
+      lastPostingActivity: Date.now()
+    });
+    
+    // Update UI
+    document.getElementById('pausePosting').style.display = 'inline-block';
+    document.getElementById('resumePosting').style.display = 'none';
+    this.updatePostingStatus('Resuming posting process...', 'info');
+    
+    // Continue with next vehicle after a short delay
+    setTimeout(() => {
+      this.postNextVehicle();
+    }, 1000);
+    
+    console.log('✅ Posting resumed successfully');
+  }
     
     // Clear posting state from storage
     await chrome.storage.local.remove(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postingStartTime', 'lastPostingActivity']);
@@ -689,8 +772,21 @@ class SalesonatorExtension {
   }
 
   async postNextVehicle() {
+    // Check if posting is paused
+    if (this.isPaused) {
+      console.log('⏸️ Posting is paused, skipping postNextVehicle');
+      return;
+    }
+    
     // Get current state from storage (in case of reload/redirect)
-    const state = await chrome.storage.local.get(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postedVehicles']);
+    const state = await chrome.storage.local.get(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postedVehicles', 'isPaused']);
+    
+    // Check if paused state was stored
+    if (state.isPaused) {
+      console.log('⏸️ Posting is paused (from storage), skipping postNextVehicle');
+      this.isPaused = true;
+      return;
+    }
     
     // Update last activity timestamp to prevent stale state detection
     await chrome.storage.local.set({ lastPostingActivity: Date.now() });
@@ -960,8 +1056,12 @@ class SalesonatorExtension {
       }
     }, redirectTime * 1000);
     
-    setTimeout(() => {
-      this.postNextVehicle();
+    this.pausedTimeout = setTimeout(() => {
+      if (!this.isPaused) {
+        this.postNextVehicle();
+      } else {
+        console.log('⏸️ Skipping postNextVehicle due to paused state');
+      }
     }, rateLimitDelay * 1000);
   }
 
@@ -1364,7 +1464,7 @@ class SalesonatorExtension {
 
   async checkPostingState() {
     try {
-      const state = await chrome.storage.local.get(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postingStartTime', 'lastPostingActivity']);
+      const state = await chrome.storage.local.get(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postingStartTime', 'lastPostingActivity', 'isPaused']);
       
       if (state.isPosting && state.postingQueue && state.postingQueue.length > 0) {
         console.log('Found existing posting state:', state);
@@ -1382,12 +1482,26 @@ class SalesonatorExtension {
         
         // Restore the posting state (DISPLAY ONLY - no automatic resuming)
         this.isPosting = true;
+        this.isPaused = state.isPaused || false;
         this.vehicles = state.postingQueue;
         this.currentVehicleIndex = state.currentVehicleIndex || 0;
         
         // Update UI to reflect posting state
         document.getElementById('startPosting').style.display = 'none';
-        document.getElementById('stopPosting').style.display = 'inline-block';
+        document.getElementById('fetchVehicles').style.display = 'none'; // Hide during posting
+        document.getElementById('vehicleCount').style.display = 'none'; // Hide during posting
+        
+        if (this.isPaused) {
+          // Show paused state
+          document.getElementById('stopPosting').style.display = 'inline-block';
+          document.getElementById('pausePosting').style.display = 'none';
+          document.getElementById('resumePosting').style.display = 'inline-block';
+        } else {
+          // Show active posting state
+          document.getElementById('stopPosting').style.display = 'inline-block';
+          document.getElementById('pausePosting').style.display = 'inline-block';
+          document.getElementById('resumePosting').style.display = 'none';
+        }
         
         console.log('Displaying posting state from vehicle index:', this.currentVehicleIndex);
         
@@ -1395,7 +1509,8 @@ class SalesonatorExtension {
         if (this.currentVehicleIndex < this.vehicles.length) {
           const currentVehicle = this.vehicles[this.currentVehicleIndex];
           const vehicleInfo = currentVehicle ? `${currentVehicle.year} ${currentVehicle.make} ${currentVehicle.model}` : '';
-          this.updatePostingStatus(`Posting in progress - ${vehicleInfo}`, 'info');
+          const statusText = this.isPaused ? `Posting paused - ${vehicleInfo}` : `Posting in progress - ${vehicleInfo}`;
+          this.updatePostingStatus(statusText, 'info');
           console.log('Extension showing current posting state - process is running in background');
         } else {
           // All vehicles have been processed, clear the state
@@ -1415,14 +1530,25 @@ class SalesonatorExtension {
       this.countdownInterval = null;
     }
     
-    await chrome.storage.local.remove(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postingStartTime', 'lastPostingActivity']);
+    // Clear any pending timeouts
+    if (this.pausedTimeout) {
+      clearTimeout(this.pausedTimeout);
+      this.pausedTimeout = null;
+    }
+    
+    await chrome.storage.local.remove(['isPosting', 'postingQueue', 'currentVehicleIndex', 'postingStartTime', 'lastPostingActivity', 'isPaused']);
     this.isPosting = false;
+    this.isPaused = false;
     this.vehicles = [];
     this.currentVehicleIndex = 0;
     
-    // Reset UI
+    // Reset UI - restore all elements
     document.getElementById('startPosting').style.display = 'inline-block';
     document.getElementById('stopPosting').style.display = 'none';
+    document.getElementById('pausePosting').style.display = 'none';
+    document.getElementById('resumePosting').style.display = 'none';
+    document.getElementById('fetchVehicles').style.display = 'inline-block';
+    document.getElementById('vehicleCount').style.display = 'block';
     document.getElementById('status').textContent = 'Ready to start posting';
   }
 
