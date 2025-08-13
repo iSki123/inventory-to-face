@@ -3190,9 +3190,16 @@ class SalesonatorAutomator {
       if (this.consoleBuffer.length === 0) return;
       
       try {
-        // Get current authentication token
-        const token = await this.getAuthToken();
-        if (!token) return;
+        // Get current authentication token with timeout
+        const token = await Promise.race([
+          this.getAuthToken(),
+          new Promise((resolve) => setTimeout(() => resolve(null), 2000))
+        ]);
+        
+        if (!token) {
+          console.debug('No auth token available for log transmission');
+          return;
+        }
         
         const logsToSend = [...this.consoleBuffer];
         this.consoleBuffer = [];
@@ -3207,15 +3214,16 @@ class SalesonatorAutomator {
         });
         
         if (!response.ok) {
-          this.originalConsole.warn('Failed to send console logs:', response.status);
+          console.debug('Failed to send console logs:', response.status);
           // Put logs back in buffer if send failed
           this.consoleBuffer.unshift(...logsToSend);
         } else {
           const result = await response.json();
-          this.originalConsole.debug('Console logs sent successfully:', result.message);
+          console.debug('Console logs sent successfully:', result.message);
         }
       } catch (error) {
-        this.originalConsole.error('Error sending console logs:', error);
+        console.debug('Log transmission error (non-critical):', error.message);
+        // Don't log this error as it creates a recursive loop
       }
     };
     

@@ -114,7 +114,7 @@ class SalesonatorExtension {
 
   async checkWebAppAuthentication() {
     try {
-      console.log('Checking for web app authentication...');
+      console.log('🔍 Checking for web app authentication...');
       
       // Show connecting status - but only if element exists
       const statusEl = document.getElementById('status');
@@ -122,9 +122,29 @@ class SalesonatorExtension {
         statusEl.textContent = 'Connecting to Salesonator...';
       }
       
+      // Clear any existing auth check interval
+      if (this.authCheckInterval) {
+        clearInterval(this.authCheckInterval);
+        this.authCheckInterval = null;
+      }
+      
       // Check all open tabs for Salesonator (much broader search)
       const allTabs = await chrome.tabs.query({});
-      console.log('Found tabs:', allTabs.length);
+      console.log('🔍 Found tabs:', allTabs.length);
+      
+      // Set a timeout for the entire authentication check
+      const authCheckPromise = this.performAuthCheck(allTabs, statusEl);
+      const timeoutPromise = new Promise((resolve) => {
+        setTimeout(() => {
+          console.log('⏰ Authentication check timed out after 10 seconds');
+          resolve(null);
+        }, 10000);
+      });
+      
+      const result = await Promise.race([authCheckPromise, timeoutPromise]);
+      if (result) {
+        return result;
+      }
       
       for (const tab of allTabs) {
         if (tab.url && 
@@ -236,7 +256,134 @@ class SalesonatorExtension {
                   console.log('❌ Error response:', errorText);
                   if (statusEl) statusEl.textContent = 'Failed to verify user eligibility';
                   return null;
+  }
+
+  async performAuthCheck(allTabs, statusEl) {
+    for (const tab of allTabs) {
+      if (tab.url && 
+          (tab.url.includes('lovableproject.com') || 
+           tab.url.includes('localhost') ||
+           tab.url.includes('salesonator') ||
+           tab.url.includes('inventory-to-face') ||
+           tab.url.includes('7163d240-f16f-476c-b2aa-a96bf0373743'))) {
+        
+        console.log('🔍 Checking Salesonator tab:', tab.url);
+        
+        try {
+          // Inject and execute a script to check for authentication
+          const results = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => {
+              console.log('🔍 Checking localStorage for auth data...');
+              
+              // Log all localStorage keys for debugging
+              const allKeys = Object.keys(localStorage);
+              console.log('All localStorage keys:', allKeys);
+              
+              // Check for multiple possible auth key patterns (broader search)
+              const authKeys = allKeys.filter(key => 
+                key.startsWith('sb-') ||
+                key.includes('supabase') ||
+                key.includes('auth') ||
+                key.includes('token') ||
+                key.includes('session')
+              );
+              
+              console.log('Found potential auth keys:', authKeys);
+              
+              for (const authKey of authKeys) {
+                const authData = localStorage.getItem(authKey);
+                console.log('Checking key:', authKey, 'Data length:', authData?.length);
+                
+                if (authData) {
+                  try {
+                    const parsed = JSON.parse(authData);
+                    console.log('Parsed auth data keys:', Object.keys(parsed));
+                    
+                    if (parsed.access_token && parsed.user) {
+                      console.log('✅ Found valid auth data with access_token');
+                      return {
+                        token: parsed.access_token,
+                        user: parsed.user,
+                        expires_at: parsed.expires_at
+                      };
+                    }
+                  } catch (e) {
+                    console.log('Failed to parse auth data for key:', authKey, e);
+                  }
                 }
+              }
+              
+              console.log('❌ No valid auth data found');
+              return null;
+            }
+          });
+          
+          const authData = results[0]?.result;
+          console.log('🔧 Script execution result:', authData);
+          
+          if (authData && authData.token) {
+            console.log('✅ Found authentication data in tab:', tab.url);
+            console.log('User ID:', authData.user.id);
+            
+            // Check if token is still valid and user has credits
+            console.log('🔧 Starting eligibility verification for user:', authData.user.id);
+            
+            try {
+              const profileUrl = `https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/profiles?select=credits,is_active,role&user_id=eq.${authData.user.id}`;
+              console.log('🔧 Checking profile at:', profileUrl);
+              console.log('Using token:', authData.token.substring(0, 20) + '...');
+              
+              console.log('🔧 Making fetch request...');
+              const response = await fetch(profileUrl, {
+                headers: {
+                  'Authorization': `Bearer ${authData.token}`,
+                  'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+                }
+              });
+              
+              console.log('✅ Fetch completed, response status:', response.status);
+              console.log('Response ok:', response.ok);
+              
+              if (response.ok) {
+                const profileData = await response.json();
+                console.log('✅ Profile data received:', profileData);
+                console.log('Profile data length:', profileData.length);
+                const profile = profileData[0];
+                console.log('Extracted profile:', profile);
+                
+                if (profile && profile.is_active) {
+                  console.log('✅ User is eligible with credits:', profile.credits);
+                  console.log('Setting up auto-authentication...');
+                  this.credits = profile.credits;
+                  this.updateCreditDisplay();
+                  return { token: authData.token, user: authData.user, credits: profile.credits };
+                } else {
+                  console.log('❌ User is not eligible - Active:', profile?.is_active, 'Credits:', profile?.credits);
+                  if (statusEl) statusEl.textContent = 'Account not active - please contact support';
+                  return null;
+                }
+              } else {
+                const errorText = await response.text();
+                console.log('❌ Failed to verify user eligibility, status:', response.status);
+                console.log('❌ Error response:', errorText);
+                if (statusEl) statusEl.textContent = 'Failed to verify user eligibility';
+                return null;
+              }
+            } catch (error) {
+              console.error('❌ Error verifying user eligibility:', error);
+              console.error('❌ Error details:', error.message, error.stack);
+              if (statusEl) statusEl.textContent = 'Error checking user eligibility: ' + error.message;
+              return null;
+            }
+          }
+        } catch (error) {
+          console.log('Script injection failed for tab:', tab.url, error);
+          continue;
+        }
+      }
+    }
+    return null;
               } catch (error) {
                 console.error('❌ Error verifying user eligibility:', error);
                 console.error('❌ Error details:', error.message, error.stack);
@@ -251,13 +398,19 @@ class SalesonatorExtension {
         }
       }
       
-      console.log('No web app authentication found');
-      if (statusEl) statusEl.textContent = 'Ready to connect - click "Fetch Pending Vehicles"';
+      console.log('❌ No web app authentication found in any tabs');
+      if (statusEl) {
+        statusEl.textContent = 'Ready to connect - click "Fetch Pending Vehicles"';
+        statusEl.className = 'status disconnected';
+      }
       return null;
     } catch (error) {
-      console.warn('Error checking web app authentication:', error);
+      console.warn('❌ Error checking web app authentication:', error);
       const statusEl = document.getElementById('status');
-      if (statusEl) statusEl.textContent = 'Error checking web app authentication';
+      if (statusEl) {
+        statusEl.textContent = 'Authentication check failed - click "Fetch Pending Vehicles"';
+        statusEl.className = 'status disconnected';
+      }
       return null;
     }
   }
