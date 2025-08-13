@@ -709,6 +709,14 @@ class SalesonatorExtension {
       throw new Error('User not authenticated');
     }
 
+    // Check current credits before attempting deduction
+    if (this.credits <= 0) {
+      // Stop posting and redirect to buy credits
+      this.stopPosting();
+      this.showBuyCreditsMessage();
+      throw new Error('Insufficient credits. Please purchase more credits to continue posting.');
+    }
+
     const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster', {
       method: 'POST',
       headers: {
@@ -728,6 +736,11 @@ class SalesonatorExtension {
 
     const data = await response.json();
     if (!data.success) {
+      // Check if error is about insufficient credits
+      if (data.error && data.error.includes('Insufficient credits')) {
+        this.stopPosting();
+        this.showBuyCreditsMessage();
+      }
       throw new Error(data.error || 'Credit deduction failed');
     }
 
@@ -736,6 +749,35 @@ class SalesonatorExtension {
     this.updateCreditDisplay();
     
     return data;
+  }
+
+  // New method to show buy credits message and redirect
+  showBuyCreditsMessage() {
+    const statusEl = document.getElementById('status');
+    statusEl.className = 'status disconnected';
+    statusEl.innerHTML = `
+      <div style="text-align: center; padding: 10px;">
+        <div style="margin-bottom: 10px;">❌ No credits remaining!</div>
+        <div style="margin-bottom: 15px; font-size: 14px;">You need credits to post vehicles to Facebook Marketplace.</div>
+        <button id="buyCreditsBtn" style="
+          background: #10b981;
+          color: white;
+          border: none;
+          padding: 10px 20px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: bold;
+        ">Buy Credits</button>
+      </div>
+    `;
+    
+    // Add click handler for buy credits button
+    document.getElementById('buyCreditsBtn').addEventListener('click', () => {
+      // Open Salesonator billing page in new tab
+      chrome.tabs.create({ 
+        url: 'https://7163d240-f16f-476c-b2aa-a96bf0373743.lovableproject.com/billing' 
+      });
+    });
   }
 
   // Download images for a specific vehicle before posting
@@ -806,6 +848,22 @@ class SalesonatorExtension {
     
     await chrome.storage.local.set({ currentVehicleIndex: newIndex });
     this.currentVehicleIndex = newIndex;
+    
+    // Check if we have reached the end of the queue
+    if (newIndex >= state.postingQueue.length) {
+      console.log('✅ All vehicles have been processed');
+      document.getElementById('status').textContent = '✅ All vehicles posted successfully!';
+      this.stopPosting();
+      return;
+    }
+    
+    // Check credits before proceeding to next vehicle
+    if (this.credits <= 0) {
+      console.log('❌ No credits remaining, stopping posting process');
+      this.stopPosting();
+      this.showBuyCreditsMessage();
+      return;
+    }
     
     // Enhanced delay with rate limiting - minimum 30 seconds between posts
     const baseDelay = parseInt(document.getElementById('delay').value) || 5;
