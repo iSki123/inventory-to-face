@@ -3645,31 +3645,27 @@ class SalesonatorAutomator {
       const facebookPostId = this.extractFacebookPostId();
       this.log('🆔 Facebook post ID:', facebookPostId);
       
-      // Prepare update data
-      const updateData = {
-        facebook_post_status: 'posted',
-        facebook_post_id: facebookPostId,
-        last_posted_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      // Use edge function instead of direct database call
+      this.log('📦 Calling edge function to update vehicle status');
       
-      this.log('📦 Update data prepared:', updateData);
-      
-      const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/vehicles';
+      const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster';
       this.log('🌐 API URL:', apiUrl);
       
-      console.log('🚀 Making API call to update vehicle status...');
-      this.consoleLog('INFO', 'Making API call to update vehicle status');
+      console.log('🚀 Making API call to edge function...');
+      this.consoleLog('INFO', 'Making API call to facebook-poster edge function');
       
-      const response = await fetch(`${apiUrl}?id=eq.${vehicleId}`, {
-        method: 'PATCH',
+      const response = await fetch(apiUrl, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userToken}`,
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ',
-          'Prefer': 'return=representation'
+          'Authorization': `Bearer ${userToken}`
         },
-        body: JSON.stringify(updateData)
+        body: JSON.stringify({
+          action: 'update_vehicle_status',
+          vehicleId: vehicleId,
+          status: 'posted',
+          facebookPostId: facebookPostId
+        })
       });
       
       console.log('🚀 API Response received:', response.status, response.statusText);
@@ -3737,31 +3733,30 @@ class SalesonatorAutomator {
         updated_at: new Date().toISOString()
       };
       
-      this.log('📤 Calling database function with data:', JSON.stringify({
-        p_vehicle_id: vehicleId,
-        p_user_id: 'from_auth',
-        p_facebook_post_id: facebookPostId,
-        p_update_data: updateData
+      this.log('📤 Calling edge function with data:', JSON.stringify({
+        action: 'update_vehicle_status',
+        vehicleId: vehicleId,
+        status: 'posted',
+        facebookPostId: facebookPostId
       }, null, 2));
       
-      const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/rpc/deduct_credit_and_update_vehicle';
+      const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster';
       this.log('🌐 API URL:', apiUrl);
       
-      console.log('🚀 Making API call to deduct credits...');
-      this.consoleLog('INFO', 'Making API call to deduct_credit_and_update_vehicle');
+      console.log('🚀 Making API call to edge function...');
+      this.consoleLog('INFO', 'Making API call to facebook-poster edge function');
       
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userToken}`,
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
+          'Authorization': `Bearer ${userToken}`
         },
         body: JSON.stringify({
-          p_vehicle_id: vehicleId,
-          p_user_id: null, // Let function use auth.uid()
-          p_facebook_post_id: facebookPostId,
-          p_update_data: updateData
+          action: 'update_vehicle_status',
+          vehicleId: vehicleId,
+          status: 'posted',
+          facebookPostId: facebookPostId
         })
       });
       
