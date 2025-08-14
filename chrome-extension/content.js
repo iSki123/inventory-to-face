@@ -3303,10 +3303,19 @@ class SalesonatorAutomator {
     const transmitLogs = async () => {
       if (this.consoleBuffer.length === 0) return;
       
+      // Check if extension context is still valid before attempting transmission
+      if (!chrome?.runtime?.id) {
+        this.originalConsole.warn('Extension context invalidated, skipping log transmission');
+        return;
+      }
+      
       try {
         // Get current authentication token
         const token = await this.getAuthToken();
-        if (!token) return;
+        if (!token) {
+          this.originalConsole.debug('No auth token available, skipping log transmission');
+          return;
+        }
         
         const logsToSend = [...this.consoleBuffer];
         this.consoleBuffer = [];
@@ -3322,14 +3331,17 @@ class SalesonatorAutomator {
         
         if (!response.ok) {
           this.originalConsole.warn('Failed to send console logs:', response.status);
-          // Put logs back in buffer if send failed
-          this.consoleBuffer.unshift(...logsToSend);
+          // Put logs back in buffer if send failed (only if buffer isn't too large)
+          if (this.consoleBuffer.length < 1000) {
+            this.consoleBuffer.unshift(...logsToSend);
+          }
         } else {
           const result = await response.json();
           this.originalConsole.debug('Console logs sent successfully:', result.message);
         }
       } catch (error) {
         this.originalConsole.error('Error sending console logs:', error);
+        // Don't re-throw the error to prevent disrupting the main flow
       }
     };
     
@@ -3340,33 +3352,61 @@ class SalesonatorAutomator {
   
   async getAuthToken() {
     return new Promise((resolve) => {
-      // First try background script
-      chrome.runtime.sendMessage({
-        action: 'GET_AUTH_TOKEN'
-      }, async (response) => {
-        if (response?.token) {
-          resolve(response.token);
-          return;
-        }
-        
-        // Fallback to storage if background script doesn't have token
-        try {
-          const result = await chrome.storage.sync.get(['userToken']);
-          if (result.userToken) {
-            // Store in background script for next time
-            chrome.runtime.sendMessage({
-              action: 'SET_AUTH_TOKEN',
-              token: result.userToken
-            });
-            resolve(result.userToken);
-          } else {
+      // Check if extension context is still valid
+      if (!chrome?.runtime?.id) {
+        this.originalConsole.warn('Extension context invalidated, cannot get auth token');
+        resolve(null);
+        return;
+      }
+      
+      try {
+        // First try background script
+        chrome.runtime.sendMessage({
+          action: 'GET_AUTH_TOKEN'
+        }, async (response) => {
+          // Check for chrome.runtime.lastError to handle context invalidation
+          if (chrome.runtime.lastError) {
+            this.originalConsole.warn('Extension context error:', chrome.runtime.lastError.message);
+            // Fallback to storage directly
+            try {
+              const result = await chrome.storage.sync.get(['userToken']);
+              resolve(result.userToken || null);
+            } catch (storageError) {
+              this.originalConsole.error('Error getting auth token from storage:', storageError);
+              resolve(null);
+            }
+            return;
+          }
+          
+          if (response?.token) {
+            resolve(response.token);
+            return;
+          }
+          
+          // Fallback to storage if background script doesn't have token
+          try {
+            const result = await chrome.storage.sync.get(['userToken']);
+            if (result.userToken) {
+              // Try to store in background script for next time (if context is valid)
+              if (chrome?.runtime?.id) {
+                chrome.runtime.sendMessage({
+                  action: 'SET_AUTH_TOKEN',
+                  token: result.userToken
+                });
+              }
+              resolve(result.userToken);
+            } else {
+              resolve(null);
+            }
+          } catch (error) {
+            this.originalConsole.error('Error getting auth token from storage:', error);
             resolve(null);
           }
-        } catch (error) {
-          console.error('Error getting auth token from storage:', error);
-          resolve(null);
-        }
-      });
+        });
+      } catch (error) {
+        this.originalConsole.error('Error in getAuthToken:', error);
+        resolve(null);
+      }
     });
   }
 
