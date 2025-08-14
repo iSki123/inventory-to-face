@@ -52,6 +52,7 @@ class SalesonatorExtension {
       document.getElementById('delay').addEventListener('change', () => this.saveSettings());
       document.getElementById('login').addEventListener('click', () => this.showLoginForm());
       document.getElementById('openDashboard').addEventListener('click', () => this.openDashboard());
+      document.getElementById('debugCreditDeduction').addEventListener('click', () => this.debugCreditDeduction());
 
       // Show initial status - but only if element exists
       const statusEl = document.getElementById('status');
@@ -1338,6 +1339,73 @@ class SalesonatorExtension {
     document.getElementById('startPosting').style.display = 'inline-block';
     document.getElementById('stopPosting').style.display = 'none';
     document.getElementById('status').textContent = 'Ready to start posting';
+  }
+
+  async debugCreditDeduction() {
+    console.log('🐛 DEBUG: Testing credit deduction...');
+    
+    try {
+      // Get user token
+      const settings = await chrome.storage.sync.get(['userToken']);
+      if (!settings.userToken) {
+        alert('❌ No user token found. Please login first.');
+        return;
+      }
+
+      // Get first draft vehicle for testing
+      await this.fetchVehicles();
+      const draftVehicle = this.vehicles.find(v => v.facebook_post_status === 'draft');
+      
+      if (!draftVehicle) {
+        alert('❌ No draft vehicles found to test with.');
+        return;
+      }
+
+      console.log('🐛 Found vehicle for testing:', draftVehicle.id, draftVehicle.year, draftVehicle.make, draftVehicle.model);
+      
+      // Call the edge function to deduct credit and update status
+      const apiUrl = document.getElementById('apiUrl').value;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${settings.userToken}`
+        },
+        body: JSON.stringify({
+          action: 'updateVehicleStatus',
+          vehicleId: draftVehicle.id,
+          status: 'posted',
+          facebookPostId: 'debug_test_' + Date.now(),
+          updateData: {
+            facebook_post_status: 'posted',
+            last_posted_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('🐛 DEBUG SUCCESS:', result);
+        alert(`✅ DEBUG SUCCESS!\n\nVehicle: ${draftVehicle.year} ${draftVehicle.make} ${draftVehicle.model}\nCredits Remaining: ${result.credits}\nStatus: ${result.status || 'posted'}`);
+        
+        // Update credit display
+        this.updateCreditDisplay(result.credits);
+        
+        // Refresh vehicles to see updated status
+        setTimeout(() => {
+          this.fetchVehicles();
+        }, 1000);
+      } else {
+        console.error('🐛 DEBUG ERROR:', result);
+        alert(`❌ DEBUG FAILED!\n\nError: ${result.error || 'Unknown error'}`);
+      }
+      
+    } catch (error) {
+      console.error('🐛 DEBUG EXCEPTION:', error);
+      alert(`❌ DEBUG EXCEPTION!\n\nError: ${error.message}`);
+    }
   }
 
   async checkConnectionAndResume() {
