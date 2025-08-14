@@ -4148,3 +4148,4 @@ if (!window.salesonatorAutomator) {
   console.log('✅ Salesonator Enhanced Automator loaded successfully');
   console.log('📞 Content script ready to receive messages from popup');
 }
+}
