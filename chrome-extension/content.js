@@ -556,12 +556,14 @@ class SalesonatorAutomator {
               
               // No need to update credits since they were already deducted
               
-              // Send credit update to popup immediately
-              console.log('🚀 SENDING CREDITS UPDATE TO POPUP:', recordResult.credits);
-              chrome.runtime.sendMessage({
-                action: 'creditsUpdated',
-                credits: recordResult.credits
-              });
+              // Send credit update to popup if available (from pre-publish step)
+              if (typeof this.remainingCredits === 'number') {
+                console.log('🚀 SENDING CREDITS UPDATE TO POPUP:', this.remainingCredits);
+                chrome.runtime.sendMessage({
+                  action: 'creditsUpdated',
+                  credits: this.remainingCredits
+                });
+              }
               
               // Clear posting state first
               this.isPosting = false;
@@ -590,8 +592,8 @@ class SalesonatorAutomator {
               // Return success with credits info to popup for processing next vehicle
               return { 
                 success: true, 
-                credits: recordResult.credits,
-                message: recordResult.message 
+                credits: this.remainingCredits,
+                message: 'Published and deducted 1 credit'
               };
               
             } catch (backendError) {
@@ -3250,7 +3252,7 @@ class SalesonatorAutomator {
         updated_at: new Date().toISOString()
       };
 
-      const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/rpc/deduct_credit_and_update_vehicle';
+      const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster';
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -3259,10 +3261,10 @@ class SalesonatorAutomator {
           'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
         },
         body: JSON.stringify({
-          p_vehicle_id: vehicleId,
-          p_user_id: null,
-          p_facebook_post_id: placeholderPostId,
-          p_update_data: updateData
+          vehicle_id: vehicleId,
+          facebook_post_id: placeholderPostId,
+          facebook_post_status: updateData.facebook_post_status,
+          last_posted_at: updateData.last_posted_at
         })
       });
 
