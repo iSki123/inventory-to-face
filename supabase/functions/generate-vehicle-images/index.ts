@@ -103,7 +103,7 @@ serve(async (req) => {
       vehicleData.features && vehicleData.features.length > 0 ? `with features: ${vehicleData.features.slice(0, 5).join(', ')}` : null
     ].filter(Boolean).join(', ');
 
-    const basePromptSuffix = `Professional automotive dealership photography with MANDATORY 80-pixel minimum bleed/margin between the vehicle edges and all image borders. The vehicle must be completely centered in the frame with substantial buffer space on all sides - NO PART of the vehicle should touch or approach the image edges. Maintain at least 80px clear space around the entire vehicle perimeter. Clean, bright dealership lot background with professional lighting. The vehicle has a visible license plate reading "${dealershipName}". Ultra high resolution, realistic automotive photography style with professional framing standards. The vehicle should appear pristine and ready for sale with complete visibility and generous border spacing.`;
+    const basePromptSuffix = `Professional automotive dealership photography with the ENTIRE vehicle well-centered in the frame with generous white space around all edges. The vehicle should occupy approximately 60-70% of the image frame, leaving substantial empty space on all sides - top, bottom, left, and right. Think of it like a product photo where the subject is prominently displayed but never touches the edges. Clean, bright modern dealership showroom floor or outdoor lot with professional lighting. The vehicle has a visible license plate reading "${dealershipName}". Ultra high resolution, realistic automotive photography style with professional product photography composition. The vehicle should appear pristine and ready for sale with complete vehicle visibility and ample breathing room around the entire perimeter.`;
 
     // Define 2 key image prompts (reduced from 4 to prevent timeouts)
     const imagePrompts = [
@@ -141,7 +141,8 @@ serve(async (req) => {
               n: 1,
               size: '1024x1024',
               quality: 'high',
-              output_format: 'png'
+              output_format: 'png',
+              background: 'auto'
             }),
           });
 
@@ -269,9 +270,10 @@ serve(async (req) => {
         );
       }
 
-      // Combine existing images with newly generated ones
-      const existingImages = currentVehicle?.images || [];
-      const allImages = [...existingImages, ...generatedImages];
+      // Combine existing images with newly generated ones (filter out any nulls/undefined)
+      const existingImages = (currentVehicle?.images || []).filter(img => img && img.trim() !== '');
+      const filteredGeneratedImages = generatedImages.filter(img => img && img.trim() !== '');
+      const allImages = [...existingImages, ...filteredGeneratedImages];
       
       console.log(`Combining ${existingImages.length} existing images with ${generatedImages.length} AI-generated images`);
 
