@@ -1367,20 +1367,31 @@ class SalesonatorExtension {
 
       console.log('🐛 DEBUG: User token found, length:', settings.userToken.length);
 
-      // Get the same vehicle that would be posted next (first available draft)
-      await this.fetchVehicles();
-      const availableVehicles = this.vehicles.filter(v => 
-        v.facebook_post_status === 'draft' && 
-        v.status === 'available'
-      );
+      // Get the current posting state to test with the SAME vehicle being processed
+      const state = await chrome.storage.local.get(['isPosting', 'postingQueue', 'currentVehicleIndex']);
       
-      if (availableVehicles.length === 0) {
-        alert('❌ No available draft vehicles found to test with.');
-        return;
+      let draftVehicle;
+      
+      if (state.isPosting && state.postingQueue && state.currentVehicleIndex < state.postingQueue.length) {
+        // Use the currently active vehicle from the posting queue
+        draftVehicle = state.postingQueue[state.currentVehicleIndex];
+        console.log('🐛 DEBUG: Using ACTIVE posting vehicle from queue');
+      } else {
+        // Fallback: get available vehicles and use first one
+        await this.fetchVehicles();
+        const availableVehicles = this.vehicles.filter(v => 
+          v.facebook_post_status === 'draft' && 
+          v.status === 'available'
+        );
+        
+        if (availableVehicles.length === 0) {
+          alert('❌ No available draft vehicles found to test with.');
+          return;
+        }
+        
+        draftVehicle = availableVehicles[0];
+        console.log('🐛 DEBUG: Using first available vehicle (no active posting)');
       }
-      
-      // Use the first vehicle that would be posted (same logic as posting queue)
-      const draftVehicle = availableVehicles[0];
 
       console.log('🐛 Found vehicle for testing:', draftVehicle.id, draftVehicle.year, draftVehicle.make, draftVehicle.model);
       
