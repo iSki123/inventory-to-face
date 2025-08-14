@@ -3703,7 +3703,12 @@ class SalesonatorAutomator {
           action: 'update_vehicle_status',
           vehicleId: vehicleId,
           status: 'posted',
-          facebookPostId: facebookPostId
+          facebookPostId: facebookPostId,
+          updateData: {
+            facebook_post_status: 'posted',
+            last_posted_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
         })
       });
       
