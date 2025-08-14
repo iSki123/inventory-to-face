@@ -3747,8 +3747,10 @@ class SalesonatorAutomator {
         try {
           chrome.runtime.sendMessage({
             action: 'vehiclePosted',
+            vehicleId: this.currentVehicle?.id,
             oldUrl: oldUrl,
             newUrl: newUrl,
+            facebookPostId: newUrl,
             status: 'posted_successfully'
           });
           

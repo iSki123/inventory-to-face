@@ -709,30 +709,7 @@ class SalesonatorExtension {
         throw new Error('Insufficient credits to post vehicle');
       }
       
-      // Step 3: Deduct credits before posting attempt
-      await this.sendLogToContent('💰 Deducting credit before posting...', { vehicle: vehicleLabel });
-      console.log('💰🚨🚨 DEDUCTING CREDIT BEFORE POSTING - THIS SHOULD SHOW IN LOGS 🚨🚨💰');
-      console.log('💰 Vehicle ID for deduction:', vehicle.id);
-      console.log('💰 Current credits before deduction:', this.credits);
-      
-      try {
-        const deductionResult = await this.deductCreditForPosting(vehicle.id);
-        console.log('✅ Credit deducted successfully:', deductionResult);
-        this.credits = deductionResult.credits; // Update local credit count
-        this.updateCreditDisplay();
-        
-        await this.sendLogToContent('✅ Credit deducted, proceeding with posting', { 
-          vehicle: vehicleLabel, 
-          remainingCredits: deductionResult.credits 
-        });
-        
-      } catch (creditError) {
-        console.error('❌ Failed to deduct credit:', creditError);
-        await this.sendErrorToContent('❌ Failed to deduct credit', { error: creditError.message, vehicle });
-        throw new Error(`Failed to deduct credit: ${creditError.message}`);
-      }
-      
-      // Step 4: Send vehicle to content script for posting (credit already deducted)
+      // Step 3: Send vehicle to content script for posting
       await this.sendVehicleToContentScript(vehicle);
     } catch (error) {
       console.error('Error posting vehicle:', error);
@@ -758,25 +735,16 @@ class SalesonatorExtension {
     return true;
   }
 
-  // New method to deduct credit before posting
-  async deductCreditForPosting(vehicleId) {
+  // Method to mark vehicle as posted and deduct credit
+  async markVehiclePosted(vehicleId, facebookPostId) {
     try {
-      console.log('💰 Starting credit deduction for vehicle:', vehicleId);
+      console.log('💰 Marking vehicle as posted and deducting credit:', vehicleId);
       
       // Get user token from storage
       const { userToken } = await chrome.storage.sync.get(['userToken']);
       if (!userToken) {
         throw new Error('User not authenticated - no token found');
       }
-      
-      // Generate Facebook post ID (placeholder since posting hasn't happened yet)
-      const facebookPostId = `fb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      // Prepare update data
-      const updateData = {
-        facebook_post_status: 'processing',
-        last_posted_at: new Date().toISOString()
-      };
       
       const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster';
       
@@ -789,7 +757,7 @@ class SalesonatorExtension {
         body: JSON.stringify({
           action: 'update_vehicle_status',
           vehicleId: vehicleId,
-          status: 'processing',
+          status: 'posted',
           facebookPostId: facebookPostId
         })
       });
@@ -800,16 +768,22 @@ class SalesonatorExtension {
       }
       
       const result = await response.json();
-      console.log('✅ Credit deduction successful:', result);
+      console.log('✅ Vehicle marked as posted and credit deducted:', result);
+      
+      // Update local credit count
+      if (result.credits !== undefined) {
+        this.credits = result.credits;
+        this.updateCreditDisplay();
+      }
       
       return {
         success: true,
         credits: result.credits,
-        message: 'Credit deducted successfully'
+        message: 'Vehicle posted and credit deducted successfully'
       };
       
     } catch (error) {
-      console.error('❌ Error deducting credit:', error);
+      console.error('❌ Error marking vehicle posted:', error);
       throw error;
     }
   }
@@ -1231,6 +1205,21 @@ class SalesonatorExtension {
         this.updateStatusMessage(`Pre-downloading images: ${data.stored}/${data.total} (${percentage}%) - Chunk ${data.chunk}/${data.totalChunks}`, 'info');
       } else if (message.action === 'vehiclePosted') {
         console.log('🎉 Vehicle posted successfully, continuing with next...');
+        
+        // Deduct credit and mark as posted
+        try {
+          const vehicleId = message.vehicleId || message.vehicle?.id;
+          const facebookPostId = message.facebookPostId || `fb_${Date.now()}`;
+          
+          if (vehicleId) {
+            await this.markVehiclePosted(vehicleId, facebookPostId);
+            console.log('✅ Credit deducted successfully after posting');
+          }
+          
+        } catch (error) {
+          console.error('❌ Error deducting credit after posting:', error);
+          this.updateStatusMessage(`Posted but credit error: ${error.message}`, 'error');
+        }
         
         // Check if database recording failed
         if (message.recordingFailed || message.databaseError) {
