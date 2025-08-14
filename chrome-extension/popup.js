@@ -1352,6 +1352,8 @@ class SalesonatorExtension {
         return;
       }
 
+      console.log('🐛 DEBUG: User token found:', settings.userToken.substring(0, 20) + '...');
+
       // Get first draft vehicle for testing
       await this.fetchVehicles();
       const draftVehicle = this.vehicles.find(v => v.facebook_post_status === 'draft');
@@ -1363,28 +1365,51 @@ class SalesonatorExtension {
 
       console.log('🐛 Found vehicle for testing:', draftVehicle.id, draftVehicle.year, draftVehicle.make, draftVehicle.model);
       
-      // Call the edge function to deduct credit and update status
+      // Get API URL
       const apiUrl = document.getElementById('apiUrl').value;
+      console.log('🐛 DEBUG: API URL:', apiUrl);
+      
+      // Prepare request payload
+      const requestPayload = {
+        action: 'update_vehicle_status',
+        vehicleId: draftVehicle.id,
+        status: 'posted',
+        facebookPostId: 'debug_test_' + Date.now(),
+        updateData: {
+          facebook_post_status: 'posted',
+          last_posted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      };
+      
+      console.log('🐛 DEBUG: Request payload:', JSON.stringify(requestPayload, null, 2));
+      
+      // Call the edge function to deduct credit and update status
+      console.log('🐛 DEBUG: Making fetch request...');
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${settings.userToken}`
         },
-        body: JSON.stringify({
-          action: 'update_vehicle_status',
-          vehicleId: draftVehicle.id,
-          status: 'posted',
-          facebookPostId: 'debug_test_' + Date.now(),
-          updateData: {
-            facebook_post_status: 'posted',
-            last_posted_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }
-        })
+        body: JSON.stringify(requestPayload)
       });
 
-      const result = await response.json();
+      console.log('🐛 DEBUG: Response status:', response.status);
+      console.log('🐛 DEBUG: Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      const responseText = await response.text();
+      console.log('🐛 DEBUG: Raw response text:', responseText);
+      
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('🐛 DEBUG: Failed to parse response as JSON:', parseError);
+        throw new Error(`Invalid JSON response: ${responseText}`);
+      }
+      
+      console.log('🐛 DEBUG: Parsed result:', result);
       
       if (result.success) {
         console.log('🐛 DEBUG SUCCESS:', result);
