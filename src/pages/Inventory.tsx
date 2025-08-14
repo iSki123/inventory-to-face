@@ -18,12 +18,14 @@ import { VehicleForm } from "@/components/VehicleForm";
 import { VehicleSourceForm } from "@/components/VehicleSourceForm";
 import { VehicleImageWithBlur } from "@/components/VehicleImageWithBlur";
 import { useToast } from "@/hooks/use-toast";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 
 export default function Inventory() {
   const { vehicles, loading, addVehicle, updateVehicle, deleteVehicle, bulkDeleteVehicles, postToFacebook, generateAIDescriptions, generateAIImages, refetch } = useVehicles();
   const { sources, loading: sourcesLoading, addSource, startScraping, importSpecificTask, listAvailableTasks } = useVehicleSources(refetch);
   const { profile, updateProfile } = useAuth();
   const { toast } = useToast();
+  const { getSetting } = useSiteSettings();
   
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -236,6 +238,16 @@ export default function Inventory() {
             <Settings className="mr-2 h-4 w-4" />
             Data Sources
           </Button>
+          {getSetting('ai_image_generation_enabled', { enabled: true })?.enabled && (
+            <Button 
+              variant="outline" 
+              onClick={() => generateAIImages(vehicles.map(v => v.id))}
+              disabled={loading || vehicles.length === 0}
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              Generate AI Images
+            </Button>
+          )}
           <Button onClick={() => setShowForm(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Vehicle
