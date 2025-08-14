@@ -18,14 +18,22 @@ serve(async (req) => {
     
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAIApiKey) {
-      throw new Error('OpenAI API key not configured');
+      console.error('OpenAI API key not configured');
+      return new Response(
+        JSON.stringify({ success: false, error: 'OpenAI API key not configured' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
     }
 
     const { vehicleId, vehicleData, dealershipName } = await req.json();
     console.log('Request data:', { vehicleId, vehicleData: !!vehicleData, dealershipName });
 
     if (!vehicleId || !vehicleData) {
-      throw new Error('Vehicle ID and data are required');
+      console.error('Vehicle ID and data are required');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Vehicle ID and data are required' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
     }
 
     // Initialize Supabase client with service role for database updates
@@ -263,7 +271,10 @@ serve(async (req) => {
 
       if (fetchError) {
         console.error('Error fetching current vehicle images:', fetchError);
-        throw new Error(`Failed to fetch vehicle: ${fetchError.message}`);
+        return new Response(
+          JSON.stringify({ success: false, error: `Failed to fetch vehicle: ${fetchError.message}` }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
       }
 
       // Combine existing images with newly generated ones
@@ -284,7 +295,10 @@ serve(async (req) => {
 
       if (updateError) {
         console.error('Error updating vehicle with generated images:', updateError);
-        throw new Error(`Failed to update vehicle: ${updateError.message}`);
+        return new Response(
+          JSON.stringify({ success: false, error: `Failed to update vehicle: ${updateError.message}` }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
       }
 
       console.log('Successfully updated vehicle with AI-generated images');
