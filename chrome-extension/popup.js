@@ -1372,7 +1372,7 @@ class SalesonatorExtension {
           'Authorization': `Bearer ${settings.userToken}`
         },
         body: JSON.stringify({
-          action: 'updateVehicleStatus',
+          action: 'update_vehicle_status',
           vehicleId: draftVehicle.id,
           status: 'posted',
           facebookPostId: 'debug_test_' + Date.now(),
