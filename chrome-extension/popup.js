@@ -53,6 +53,7 @@ class SalesonatorExtension {
       document.getElementById('login').addEventListener('click', () => this.showLoginForm());
       document.getElementById('openDashboard').addEventListener('click', () => this.openDashboard());
       document.getElementById('debugCreditDeduction').addEventListener('click', () => this.debugCreditDeduction());
+      document.getElementById('debugTestComm').addEventListener('click', () => this.testContentScriptCommunication());
 
       // Show initial status - but only if element exists
       const statusEl = document.getElementById('status');
@@ -1461,12 +1462,56 @@ class SalesonatorExtension {
         }, 5000);
         return;
       }
-
-      // Resume posting
-      console.log('Resuming posting...');
-      this.postNextVehicle();
     } catch (error) {
-      console.error('Error checking connection for resume:', error);
+      console.error('Error in resume check:', error);
+    }
+  }
+
+  // Debug method to test content script communication
+  async testContentScriptCommunication() {
+    try {
+      console.log('🐛 DEBUG: Testing content script communication...');
+      
+      const tabs = await new Promise((resolve) => {
+        chrome.tabs.query({ active: true, currentWindow: true }, resolve);
+      });
+      
+      if (!tabs || tabs.length === 0) {
+        console.log('🐛 DEBUG: No active tab found');
+        alert('No active tab found');
+        return;
+      }
+      
+      const currentTab = tabs[0];
+      console.log('🐛 DEBUG: Testing with tab:', currentTab.url, 'ID:', currentTab.id);
+      
+      // Test 1: Simple ping
+      chrome.tabs.sendMessage(currentTab.id, { action: 'ping' }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.log('🐛 DEBUG: Ping test FAILED:', chrome.runtime.lastError.message);
+          alert(`Ping test FAILED: ${chrome.runtime.lastError.message}`);
+        } else {
+          console.log('🐛 DEBUG: Ping test SUCCESS:', response);
+          
+          // Test 2: Send a test message to content script
+          chrome.tabs.sendMessage(currentTab.id, { 
+            action: 'debugTest',
+            timestamp: new Date().toISOString()
+          }, (response) => {
+            if (chrome.runtime.lastError) {
+              console.log('🐛 DEBUG: Debug test message FAILED:', chrome.runtime.lastError.message);
+              alert(`Debug test FAILED: ${chrome.runtime.lastError.message}`);
+            } else {
+              console.log('🐛 DEBUG: Debug test message SUCCESS:', response);
+              alert(`✅ Content script communication working!\nPing: ${JSON.stringify(response)}`);
+            }
+          });
+        }
+      });
+      
+    } catch (error) {
+      console.error('🐛 DEBUG: Error in test:', error);
+      alert(`Test error: ${error.message}`);
     }
   }
 }

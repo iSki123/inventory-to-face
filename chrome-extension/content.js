@@ -3503,6 +3503,18 @@ class SalesonatorAutomator {
         return true;
       }
       
+      if (request.action === 'debugTest') {
+        console.log('📨 DEBUG: Debug test message received:', request);
+        this.log('📨 DEBUG: Debug test message received in content script');
+        sendResponse({ 
+          status: 'debug_test_success', 
+          timestamp: new Date().toISOString(), 
+          url: window.location.href,
+          received: request 
+        });
+        return true;
+      }
+      
       if (request.action === 'postVehicle') {
         console.log('🚀 DEBUG: Processing postVehicle request...');
         console.log('🚀 DEBUG: Vehicle data received:', request.vehicle?.id, request.vehicle?.year, request.vehicle?.make, request.vehicle?.model);
