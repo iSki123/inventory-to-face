@@ -52,7 +52,7 @@ class Logger {
       const logsToSend = [...this.pendingLogs];
       this.pendingLogs = [];
 
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/console-logger`, {
+      const response = await fetch(`https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/console-logger`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

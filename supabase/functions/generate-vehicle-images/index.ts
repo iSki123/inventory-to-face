@@ -251,10 +251,10 @@ serve(async (req) => {
         generatedImages.push(imageUrl);
       }
       
-      // Add delay between requests to prevent rate limiting
+      // Add delay between requests to prevent rate limiting (reduced for timeout prevention)
       if (imageConfig !== imagePrompts[imagePrompts.length - 1]) {
-        console.log('Waiting 3 seconds before next image generation...');
-        await wait(3000);
+        console.log('Waiting 1 second before next image generation...');
+        await wait(1000); // Reduced from 3000ms to 1000ms
       }
     }
 
