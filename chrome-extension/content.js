@@ -2313,20 +2313,6 @@ class SalesonatorAutomator {
       return false;
     }
   }
-      
-      } else {
-        console.log(`[FUEL DEBUG] Fuel type selection may have failed - no evidence of selection found`);
-        this.log('⚠️ Fuel type selection verification failed for:', normalized);
-        return false;
-      }
-      
-    } catch (error) {
-      console.log(`[FUEL DEBUG] Error in selectFuelType:`, error);
-      this.log(`⚠️ Could not select fuel type: ${fuelType}`, error);
-      return false;
-    }
-  }
-
   // Transmission dropdown using successful field pattern
   async selectTransmission(transmission) {
     try {
