@@ -103,7 +103,7 @@ serve(async (req) => {
       vehicleData.features && vehicleData.features.length > 0 ? `with features: ${vehicleData.features.slice(0, 5).join(', ')}` : null
     ].filter(Boolean).join(', ');
 
-    const basePromptSuffix = `Professional automotive dealership photography with ample space around the vehicle. The vehicle should be centered in the frame with significant flood area/buffer space on all sides to ensure no parts are cut off. Clean, bright dealership lot background with professional lighting. The vehicle has a visible license plate reading "${dealershipName}". Ultra high resolution, realistic automotive photography style. The vehicle should appear pristine and ready for sale.`;
+    const basePromptSuffix = `Professional automotive dealership photography with MANDATORY 80-pixel minimum bleed/margin between the vehicle edges and all image borders. The vehicle must be completely centered in the frame with substantial buffer space on all sides - NO PART of the vehicle should touch or approach the image edges. Maintain at least 80px clear space around the entire vehicle perimeter. Clean, bright dealership lot background with professional lighting. The vehicle has a visible license plate reading "${dealershipName}". Ultra high resolution, realistic automotive photography style with professional framing standards. The vehicle should appear pristine and ready for sale with complete visibility and generous border spacing.`;
 
     // Define 2 key image prompts (reduced from 4 to prevent timeouts)
     const imagePrompts = [
