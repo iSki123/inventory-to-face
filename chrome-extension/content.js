@@ -536,7 +536,7 @@ class SalesonatorAutomator {
           if (success) {
             this.log('✅ Vehicle posted successfully');
             
-            // Update vehicle status to 'posted' (credits already deducted in popup)
+            // Update vehicle status to 'posted' and deduct credits
             try {
               console.log('🚀🚀🚀 UPDATING VEHICLE STATUS TO POSTED 🚀🚀🚀');
               console.log('🚀 Vehicle ID for status update:', vehicleData.id);
@@ -554,13 +554,11 @@ class SalesonatorAutomator {
               // Add console logging for successful update
               this.consoleLog('SUCCESS', 'Vehicle status updated to posted successfully');
               
-              // No need to update credits since they were already deducted
-              
               // Send credit update to popup immediately
-              console.log('🚀 SENDING CREDITS UPDATE TO POPUP:', recordResult.credits);
+              console.log('🚀 SENDING CREDITS UPDATE TO POPUP:', updateResult.credits);
               chrome.runtime.sendMessage({
                 action: 'creditsUpdated',
-                credits: recordResult.credits
+                credits: updateResult.credits
               });
               
               // Clear posting state first
@@ -590,8 +588,8 @@ class SalesonatorAutomator {
               // Return success with credits info to popup for processing next vehicle
               return { 
                 success: true, 
-                credits: recordResult.credits,
-                message: recordResult.message 
+                credits: updateResult.credits,
+                message: updateResult.message 
               };
               
             } catch (backendError) {
