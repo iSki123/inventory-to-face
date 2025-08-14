@@ -1,6 +1,7 @@
 // Enhanced Facebook Marketplace Automation
 // Implements React-native value setting, MutationObserver, keyboard simulation, and human-like behavior
 
+if (!window.SalesonatorAutomator) {
 class SalesonatorAutomator {
   constructor() {
     this.isPosting = false;
@@ -3645,8 +3646,8 @@ class SalesonatorAutomator {
       const facebookPostId = this.extractFacebookPostId();
       this.log('🆔 Facebook post ID:', facebookPostId);
       
-      // Use edge function instead of direct database call
-      this.log('📦 Calling edge function to update vehicle status');
+      // Use edge function to update status to 'posted' and deduct credits
+      this.log('📦 Calling edge function to update vehicle status and deduct credits');
       
       const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster';
       this.log('🌐 API URL:', apiUrl);
@@ -3685,113 +3686,14 @@ class SalesonatorAutomator {
       
       return {
         success: true,
-        message: 'Vehicle status updated to posted successfully'
+        message: 'Vehicle status updated to posted successfully',
+        credits: result.credits
       };
       
     } catch (error) {
       this.log('❌ Error in updateVehicleStatusToPosted:', error.message);
       console.error('Full status update error:', error);
       this.consoleLog('ERROR', 'updateVehicleStatusToPosted failed: ' + error.message);
-      throw error;
-    }
-  }
-
-  // Record vehicle posting in backend and deduct credits using proper endpoint
-  async recordVehiclePosting(vehicleId) {
-    try {
-      console.log('🔥🔥🔥 RECORD VEHICLE POSTING CALLED FOR:', vehicleId);
-      this.log('📝 Starting vehicle posting record process for ID:', vehicleId);
-      
-      // Log to console logs for tracking
-      this.consoleLog('INFO', 'recordVehiclePosting called for vehicle: ' + vehicleId);
-      
-      // Get user token from extension storage using direct access
-      this.log('🔍 Getting user token from storage...');
-      const storageResult = await chrome.storage.sync.get(['userToken']);
-      const userToken = storageResult.userToken;
-      
-      console.log('🔑 Storage result:', storageResult);
-      console.log('🔑 User token found:', !!userToken);
-      
-      if (!userToken) {
-        this.log('❌ No user token found in storage');
-        this.consoleLog('ERROR', 'No user token found in storage during credit deduction');
-        throw new Error('User not authenticated - no token found');
-      }
-      
-      this.log('🔑 Token found, proceeding with recording...');
-      this.consoleLog('INFO', 'User token found, proceeding with credit deduction');
-      
-      // Generate Facebook post ID
-      const facebookPostId = this.extractFacebookPostId();
-      this.log('🆔 Facebook post ID:', facebookPostId);
-      
-      // Call the database function directly via Supabase REST API
-      const updateData = {
-        facebook_post_status: 'posted',
-        last_posted_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      
-      this.log('📤 Calling edge function with data:', JSON.stringify({
-        action: 'update_vehicle_status',
-        vehicleId: vehicleId,
-        status: 'posted',
-        facebookPostId: facebookPostId
-      }, null, 2));
-      
-      const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster';
-      this.log('🌐 API URL:', apiUrl);
-      
-      console.log('🚀 Making API call to edge function...');
-      this.consoleLog('INFO', 'Making API call to facebook-poster edge function');
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userToken}`
-        },
-        body: JSON.stringify({
-          action: 'update_vehicle_status',
-          vehicleId: vehicleId,
-          status: 'posted',
-          facebookPostId: facebookPostId
-        })
-      });
-      
-      console.log('🚀 API Response received:', response.status, response.statusText);
-      
-      this.log('📨 Backend response status:', response.status);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        this.log('❌ Backend error response text:', errorText);
-        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
-      }
-      
-      const data = await response.json();
-      this.log('📋 Database function response:', JSON.stringify(data, null, 2));
-      
-      // The RPC response is the direct result of the function
-      if (!data || (data.error && !data.vehicle)) {
-        this.log('❌ Database function failed:', data?.error || 'No data returned');
-        throw new Error(data?.error || 'Failed to record posting');
-      }
-      
-      const credits = data.credits;
-      this.log('✅ Successfully recorded posting!');
-      this.log('💰 Credits remaining:', credits);
-      
-      return {
-        success: true,
-        credits: credits,
-        message: 'Vehicle posted and credits deducted successfully'
-      };
-      
-    } catch (error) {
-      this.log('❌ Error in recordVehiclePosting:', error.message);
-      console.error('Full recording error:', error);
       throw error;
     }
   }
@@ -4239,7 +4141,10 @@ class SalesonatorAutomator {
   }
 }
 
-// Initialize the enhanced automator
-const salesonatorAutomator = new SalesonatorAutomator();
-console.log('✅ Salesonator Enhanced Automator loaded successfully');
-console.log('📞 Content script ready to receive messages from popup');
+// Initialize the enhanced automator only if not already done
+if (!window.salesonatorAutomator) {
+  window.SalesonatorAutomator = SalesonatorAutomator;
+  window.salesonatorAutomator = new SalesonatorAutomator();
+  console.log('✅ Salesonator Enhanced Automator loaded successfully');
+  console.log('📞 Content script ready to receive messages from popup');
+}
