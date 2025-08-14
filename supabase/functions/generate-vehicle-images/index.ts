@@ -187,10 +187,34 @@ serve(async (req) => {
 
           const data = await response.json();
           if (data.data && data.data[0] && data.data[0].b64_json) {
-            // Convert base64 to data URL
-            const imageUrl = `data:image/png;base64,${data.data[0].b64_json}`;
-            console.log(`Successfully generated ${imageConfig.angle} image`);
-            return imageUrl;
+            // Convert base64 to binary data for storage upload
+            const base64Data = data.data[0].b64_json;
+            const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+            
+            // Generate unique filename
+            const filename = `${vehicleId}/${imageConfig.angle}_${Date.now()}.png`;
+            
+            // Upload to Supabase Storage
+            const { data: uploadData, error: uploadError } = await supabaseClient.storage
+              .from('ai-vehicle-images')
+              .upload(filename, binaryData, {
+                contentType: 'image/png',
+                upsert: false
+              });
+
+            if (uploadError) {
+              console.error(`Storage upload error for ${imageConfig.angle}:`, uploadError);
+              imageGenerationErrors.push(`${imageConfig.angle}: Upload failed - ${uploadError.message}`);
+              return null;
+            }
+
+            // Get public URL for the uploaded image
+            const { data: urlData } = supabaseClient.storage
+              .from('ai-vehicle-images')
+              .getPublicUrl(filename);
+
+            console.log(`Successfully generated and uploaded ${imageConfig.angle} image`);
+            return urlData.publicUrl;
           } else {
             console.error(`No image data returned for ${imageConfig.angle}`);
             imageGenerationErrors.push(`${imageConfig.angle}: No image data returned`);
