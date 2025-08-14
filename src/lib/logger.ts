@@ -12,6 +12,73 @@ interface LogEntry {
 class Logger {
   private logs: LogEntry[] = [];
   private maxLogs = 1000;
+  private pendingLogs: LogEntry[] = [];
+  private sendInterval: NodeJS.Timeout | null = null;
+  private sessionId: string;
+
+  constructor() {
+    this.sessionId = this.generateSessionId();
+    this.startPeriodicSend();
+  }
+
+  private generateSessionId(): string {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  private startPeriodicSend() {
+    if (typeof window === 'undefined') return;
+    
+    // Send logs every 30 seconds
+    this.sendInterval = setInterval(() => {
+      this.sendLogsToSupabase();
+    }, 30000);
+
+    // Send logs before page unload
+    window.addEventListener('beforeunload', () => {
+      this.sendLogsToSupabase();
+    });
+  }
+
+  private async sendLogsToSupabase() {
+    if (this.pendingLogs.length === 0) return;
+
+    try {
+      const supabaseModule = await import('../integrations/supabase/client');
+      const supabase = supabaseModule.supabase;
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      const logsToSend = [...this.pendingLogs];
+      this.pendingLogs = [];
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/console-logger`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          logs: logsToSend.map(log => ({
+            session_id: this.sessionId,
+            timestamp: log.timestamp,
+            level: log.level,
+            message: log.message,
+            data: log.data,
+            url: window.location.href,
+            source: log.source,
+            user_agent: navigator.userAgent
+          }))
+        })
+      });
+
+      if (!response.ok) {
+        console.error('Failed to send logs to Supabase:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error sending logs to Supabase:', error);
+    }
+  }
 
   private createLogEntry(level: LogLevel, message: string, data?: any): LogEntry {
     const entry: LogEntry = {
@@ -48,6 +115,8 @@ class Logger {
 
   private addLog(entry: LogEntry) {
     this.logs.unshift(entry);
+    this.pendingLogs.push(entry);
+    
     if (this.logs.length > this.maxLogs) {
       this.logs = this.logs.slice(0, this.maxLogs);
     }
@@ -104,11 +173,23 @@ class Logger {
   // Clear logs
   clear() {
     this.logs = [];
+    this.pendingLogs = [];
   }
 
   // Export logs for sharing
   exportLogs(): string {
     return JSON.stringify(this.logs, null, 2);
+  }
+
+  // Manual send logs
+  sendLogs() {
+    this.sendLogsToSupabase();
+  }
+
+  destroy() {
+    if (this.sendInterval) {
+      clearInterval(this.sendInterval);
+    }
   }
 }
 
