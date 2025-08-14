@@ -2129,7 +2129,7 @@ class SalesonatorAutomator {
       const normalized = this.mapFuelType(fuelType) || fuelType;
       console.log(`[FUEL DEBUG] Normalized fuel type: ${normalized}`);
       
-      // Use the same proven selectors as year/make/exterior color
+      // Find fuel dropdown more reliably (exact same pattern as year)
       const fuelDropdownSelectors = [
         'text:Fuel type',
         'text:Fuel',
@@ -2170,7 +2170,7 @@ class SalesonatorAutomator {
       
       console.log(`[FUEL DEBUG] 🎯 Using enhanced option selection...`);
       
-      // Use multiple approaches to find the fuel type option (same as year method)
+      // Use multiple approaches to find the fuel option (EXACT same as year method)
       let fuelOption = null;
       
       // Method 1: Find by exact text match using waitForElement
@@ -2211,99 +2211,69 @@ class SalesonatorAutomator {
       } catch (waitError) {
         console.log(`[FUEL DEBUG] ⚠️ waitForElement failed, falling back to manual search:`, waitError.message);
         
-        // Manual fallback search (same as year method)
+        // Method 2: Manual search through options (EXACT same as year method)
         fuelOption = Array.from(optionsAfterClick).find(opt => 
           opt.textContent?.trim().toLowerCase() === normalized.toLowerCase()
         );
-        console.log(`[FUEL DEBUG] Manual fallback result:`, fuelOption);
-      }
-      
-      // Method 2: Try exact match within all options
-      if (!fuelOption) {
-        console.log(`[FUEL DEBUG] Method 2: Trying exact match search...`);
-        fuelOption = Array.from(optionsAfterClick).find(opt => 
-          opt.textContent?.trim().toLowerCase() === normalized.toLowerCase()
-        );
-        if (fuelOption) console.log(`[FUEL DEBUG] Found via exact match:`, fuelOption);
-      }
-      
-      // Method 3: Try common fuel type variations
-      if (!fuelOption && normalized === 'Gasoline') {
-        console.log(`[FUEL DEBUG] Method 3: Trying gasoline variations...`);
-        fuelOption = Array.from(optionsAfterClick).find(opt => {
-          const text = (opt.textContent || '').trim().toLowerCase();
-          return text === 'gas' || text === 'petrol' || text === 'gasoline';
-        });
-        if (fuelOption) console.log(`[FUEL DEBUG] Found gasoline variant:`, fuelOption);
-      }
-      
-      if (!fuelOption && normalized === 'Hybrid') {
-        console.log(`[FUEL DEBUG] Method 3: Trying hybrid variations...`);
-        fuelOption = Array.from(optionsAfterClick).find(opt => {
-          const text = (opt.textContent || '').trim().toLowerCase();
-          return text === 'hybrid' || text.includes('hybrid');
-        });
-        if (fuelOption) console.log(`[FUEL DEBUG] Found hybrid variant:`, fuelOption);
-      }
-      
-      // Method 4: Fuzzy match as final fallback  
-      if (!fuelOption) {
-        console.log(`[FUEL DEBUG] Method 4: Trying fuzzy match...`);
-        fuelOption = Array.from(optionsAfterClick).find(opt => {
-          const text = (opt.textContent || '').toLowerCase();
-          return text.includes(normalized.toLowerCase()) && text.length <= normalized.length + 10;
-        });
-        if (fuelOption) console.log(`[FUEL DEBUG] Found via fuzzy match:`, fuelOption);
+        
+        // Try fuel type variations if exact match fails
+        if (!fuelOption && normalized === 'Gasoline') {
+          fuelOption = Array.from(optionsAfterClick).find(opt => {
+            const text = (opt.textContent || '').trim().toLowerCase();
+            return text === 'gas' || text === 'petrol' || text === 'gasoline';
+          });
+        }
+        
+        if (!fuelOption && normalized === 'Hybrid') {
+          fuelOption = Array.from(optionsAfterClick).find(opt => {
+            const text = (opt.textContent || '').trim().toLowerCase();
+            return text === 'hybrid' || text.includes('hybrid');
+          });
+        }
       }
       
       if (!fuelOption) {
-        console.log(`[FUEL DEBUG] ❌ No fuel option found for "${normalized}"`);
-        console.log(`[FUEL DEBUG] Available options:`, Array.from(optionsAfterClick).map(opt => opt.textContent?.trim()));
-        throw new Error(`Fuel type option not found for "${normalized}"`);
+        throw new Error(`Fuel type option ${normalized} not found among ${optionsAfterClick.length} options`);
       }
       
-      console.log(`[FUEL DEBUG] Final selected option:`, fuelOption);
-      console.log(`[FUEL DEBUG] Option text content:`, fuelOption.textContent?.trim());
+      console.log(`[FUEL DEBUG] ⛽ Found fuel option, clicking: ${normalized}`);
+      await this.performFacebookDropdownClick(fuelOption);
+      await this.delay(2000);
       
-      await this.scrollIntoView(fuelOption);
-      await this.delay(this.randomDelay(500, 1000));
+      // Enhanced verification (EXACT same as year method)
+      console.log(`[FUEL DEBUG] Verifying fuel type selection...`);
+      await this.delay(500);
+      console.log(`[FUEL DEBUG] Dropdown selected value:`, fuelDropdown.textContent?.trim());
       
-      this.log('⛽ Clicking fuel type option...');
-      fuelOption.click();
-      await this.delay(this.randomDelay(1000, 1500)); // Wait for selection to register
+      // Check if fuel type appears in any input fields
+      const allInputs = document.querySelectorAll('input');
+      console.log(`[FUEL DEBUG] Checking fuel inputs:`, allInputs.length);
+      allInputs.forEach((input, idx) => {
+        console.log(`[FUEL DEBUG] Input ${idx} value: ${input.value} name: ${input.name} aria-label: ${input.getAttribute('aria-label')}`);
+      });
       
-      // Enhanced verification with multiple checks (same as year method)
-      const verifications = {
-        dropdownText: false,
-        selectedValue: false,
-        ariaSelected: false
-      };
+      // Check dropdown text content
+      const dropdownText = fuelDropdown.textContent?.trim();
+      const dropdownDataValue = fuelDropdown.getAttribute('data-value');
+      console.log(`[FUEL DEBUG] Dropdown text after selection: "${dropdownText}"`);
+      console.log(`[FUEL DEBUG] Dropdown data-value: "${dropdownDataValue}"`);
       
-      // Check if dropdown text changed
-      const dropdownText = (fuelDropdown.textContent || '').toLowerCase();
-      verifications.dropdownText = dropdownText.includes(normalized.toLowerCase());
-      console.log(`[FUEL DEBUG] Dropdown text verification: ${verifications.dropdownText} (text: "${dropdownText}")`);
-      
-      // Check if there's a selected value attribute
-      if (fuelDropdown.value) {
-        verifications.selectedValue = fuelDropdown.value.toLowerCase().includes(normalized.toLowerCase());
-        console.log(`[FUEL DEBUG] Selected value verification: ${verifications.selectedValue} (value: "${fuelDropdown.value}")`);
+      // Verify selection worked
+      let selectionVerified = false;
+      if (dropdownText && dropdownText.toLowerCase().includes(normalized.toLowerCase())) {
+        selectionVerified = true;
+        console.log(`[FUEL DEBUG] ✅ Selection verified via dropdown text`);
+      }
+      if (dropdownDataValue && dropdownDataValue.toLowerCase().includes(normalized.toLowerCase())) {
+        selectionVerified = true;
+        console.log(`[FUEL DEBUG] ✅ Selection verified via data-value`);
       }
       
-      // Check if the option is marked as selected
-      if (fuelOption && fuelOption.getAttribute('aria-selected') === 'true') {
-        verifications.ariaSelected = true;
-        console.log(`[FUEL DEBUG] Aria-selected verification: ${verifications.ariaSelected}`);
-      }
-      
-      const success = Object.values(verifications).some(v => v);
-      
-      if (success) {
+      if (selectionVerified) {
         this.log('✅ Successfully selected fuel type:', normalized);
         return true;
       } else {
-        console.log(`[FUEL DEBUG] Fuel type selection may have failed - no evidence of selection found`);
-        this.log('⚠️ Fuel type selection verification failed for:', normalized);
+        this.log('⚠️ Fuel type selection may have failed - verification inconclusive');
         return false;
       }
       
