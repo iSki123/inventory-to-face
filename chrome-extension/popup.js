@@ -1366,14 +1366,20 @@ class SalesonatorExtension {
 
       console.log('🐛 DEBUG: User token found:', settings.userToken.substring(0, 20) + '...');
 
-      // Get first draft vehicle for testing
+      // Get the same vehicle that would be posted next (first available draft)
       await this.fetchVehicles();
-      const draftVehicle = this.vehicles.find(v => v.facebook_post_status === 'draft');
+      const availableVehicles = this.vehicles.filter(v => 
+        v.facebook_post_status === 'draft' && 
+        v.status === 'available'
+      );
       
-      if (!draftVehicle) {
-        alert('❌ No draft vehicles found to test with.');
+      if (availableVehicles.length === 0) {
+        alert('❌ No available draft vehicles found to test with.');
         return;
       }
+      
+      // Use the first vehicle that would be posted (same logic as posting queue)
+      const draftVehicle = availableVehicles[0];
 
       console.log('🐛 Found vehicle for testing:', draftVehicle.id, draftVehicle.year, draftVehicle.make, draftVehicle.model);
       
