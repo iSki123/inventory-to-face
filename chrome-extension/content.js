@@ -549,6 +549,14 @@ class SalesonatorAutomator {
               this.log('✅ Vehicle posting recorded in backend', recordResult);
               this.log('💰 Credits after posting:', recordResult.credits);
               
+              // Notify popup to update credit display
+              if (recordResult.credits !== undefined) {
+                chrome.runtime.sendMessage({
+                  action: 'updateCredits',
+                  credits: recordResult.credits
+                });
+              }
+              
               // Send credit update to popup immediately
               console.log('🚀 SENDING CREDITS UPDATE TO POPUP:', recordResult.credits);
               chrome.runtime.sendMessage({

@@ -117,6 +117,20 @@ class SalesonatorBackground {
           });
         return true; // async
       }
+      
+      if (request.action === 'updateCredits') {
+        // Handle credit updates from content script
+        chrome.storage.sync.set({ userCredits: request.credits })
+          .then(() => {
+            console.log('✅ Updated credits in storage:', request.credits);
+            sendResponse({ success: true });
+          })
+          .catch(error => {
+            console.error('❌ Error updating credits:', error);
+            sendResponse({ success: false, error: error.message });
+          });
+        return true; // async
+      }
 
       if (request.action === 'webAppAuthenticated') {
         // Handle automatic authentication from web app

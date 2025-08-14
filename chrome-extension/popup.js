@@ -26,6 +26,7 @@ class SalesonatorExtension {
     this.credits = 0;
     this.init();
     this.setupMessageListener();
+    this.setupCreditUpdateListener();
   }
 
   async init() {
@@ -697,14 +698,20 @@ class SalesonatorExtension {
         console.log(`📸 No images to download for ${vehicleLabel}`);
       }
       
-      // Step 2: Deduct credit BEFORE posting to ensure it completes before redirect
-      await this.sendLogToContent('💳 Deducting credit and initiating post...', { vehicle: vehicleLabel });
-      console.log('💳 Deducting credit before posting...');
-      await this.deductCreditForPosting(vehicle);
-      console.log('✅ Credit deducted successfully');
-      await this.sendLogToContent('✅ Credit deducted, sending vehicle to content script', { vehicle: vehicleLabel });
+      // Step 2: Check credits before posting but don't deduct yet
+      await this.sendLogToContent('🔍 Checking credits before posting...', { vehicle: vehicleLabel });
+      console.log('🔍 Checking credits before posting...');
       
-      // Step 3: Send vehicle to content script for posting
+      // Check current credits before attempting to post
+      if (this.credits <= 0) {
+        this.stopPosting();
+        this.showBuyCreditsMessage();
+        throw new Error('Insufficient credits to post vehicle');
+      }
+      
+      await this.sendLogToContent('✅ Credits available, sending vehicle to content script', { vehicle: vehicleLabel });
+      
+      // Step 3: Send vehicle to content script for posting (credit will be deducted after successful posting)
       await this.sendVehicleToContentScript(vehicle);
     } catch (error) {
       console.error('Error posting vehicle:', error);
@@ -718,54 +725,16 @@ class SalesonatorExtension {
     }
   }
 
-  // New method to handle credit deduction before posting
-  async deductCreditForPosting(vehicle) {
-    const { userToken } = await chrome.storage.sync.get(['userToken']);
-    
-    if (!userToken) {
-      throw new Error('User not authenticated');
-    }
-
-    // Check current credits before attempting deduction
+  // Method to check credits before posting (without deducting)
+  async checkCreditsBeforePosting() {
+    // Check current credits before attempting to post
     if (this.credits <= 0) {
-      // Stop posting and redirect to buy credits
       this.stopPosting();
       this.showBuyCreditsMessage();
-      throw new Error('Insufficient credits. Please purchase more credits to continue posting.');
+      throw new Error('Insufficient credits to post vehicle');
     }
-
-    const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${userToken}`
-      },
-      body: JSON.stringify({
-        action: 'deduct_credit',
-        vehicle_id: vehicle.id,
-        credit_amount: 1
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to deduct credit: ${response.status}`);
-    }
-
-    const data = await response.json();
-    if (!data.success) {
-      // Check if error is about insufficient credits
-      if (data.error && data.error.includes('Insufficient credits')) {
-        this.stopPosting();
-        this.showBuyCreditsMessage();
-      }
-      throw new Error(data.error || 'Credit deduction failed');
-    }
-
-    // Update local credit display
-    this.credits = data.remaining_credits || (this.credits - 1);
-    this.updateCreditDisplay();
     
-    return data;
+    return true;
   }
 
   // New method to show buy credits message and redirect
