@@ -536,30 +536,18 @@ class SalesonatorAutomator {
           if (success) {
             this.log('✅ Vehicle posted successfully');
             
-            // Update vehicle status to 'posted' and deduct credits
+            // Credits were already deducted when Next button was clicked
+            // Just send a confirmation message to popup
             try {
-              console.log('🚀🚀🚀 UPDATING VEHICLE STATUS TO POSTED 🚀🚀🚀');
-              console.log('🚀 Vehicle ID for status update:', vehicleData.id);
-              this.log('📝 Updating vehicle status in backend...');
-              this.log('🔍 Current URL before updating:', window.location.href);
-              
-              // Add console logging to track this call
-              this.consoleLog('CRITICAL', 'Updating vehicle status to posted for vehicle: ' + vehicleData.id);
-              
-              const updateResult = await this.updateVehicleStatusToPosted(vehicleData.id);
-              
-              console.log('🚀🚀🚀 VEHICLE STATUS UPDATE RESULT:', updateResult);
-              this.log('✅ Vehicle status updated in backend', updateResult);
-              
-              // Add console logging for successful update
-              this.consoleLog('SUCCESS', 'Vehicle status updated to posted successfully');
-              
-              // Send credit update to popup immediately
-              console.log('🚀 SENDING CREDITS UPDATE TO POPUP:', updateResult.credits);
+              // Send success confirmation to popup
               chrome.runtime.sendMessage({
-                action: 'creditsUpdated',
-                credits: updateResult.credits
+                action: 'vehiclePosted',
+                vehicleId: vehicleData.id,
+                success: true
               });
+              
+              this.log('✅ Vehicle posting confirmed');
+              
               
               // Clear posting state first
               this.isPosting = false;
@@ -585,49 +573,27 @@ class SalesonatorAutomator {
               console.log('🚀 POSTING FLOW COMPLETE - NAVIGATED TO CREATE PAGE');
               console.log('🚀 Current URL after posting:', window.location.href);
               
-              // Return success with credits info to popup for processing next vehicle
+              // Return success to popup for processing next vehicle
               return { 
-                success: true, 
-                credits: updateResult.credits,
-                message: updateResult.message 
+                success: true,
+                message: 'Vehicle posted successfully'
               };
               
-            } catch (backendError) {
-              this.log('⚠️ CRITICAL: Vehicle posted but failed to record in backend:', backendError);
-              this.log('⚠️ Backend error details:', backendError.message);
-              this.log('⚠️ Backend error stack:', backendError.stack);
-              console.error('Backend recording error:', backendError);
-              console.error('Full backend error object:', backendError);
+            } catch (generalError) {
+              this.log('⚠️ Error in success handling:', generalError);
               
-              // IMPORTANT: Send error notification to popup
-              chrome.runtime.sendMessage({
-                action: 'recordingError',
-                vehicleId: vehicleData.id,
-                error: backendError.message,
-                fullError: backendError.toString()
-              });
-              
-              // Clear posting state even if recording failed
+              // Clear posting state
               this.isPosting = false;
               this.currentVehicleData = null;
               this.uploadedImages = [];
-              this.log('🔄 Reset posting flags despite backend error');
               
-              // Wait a moment
-              await this.delay(1000);
-              
-              // Still navigate back for next vehicle even if recording failed
-              this.log('🔄 Attempting navigation despite recording error...');
-              this.log('📍 Current URL before fallback navigation:', window.location.href);
-              
+              // Still navigate for next vehicle
               const createVehicleUrl = 'https://www.facebook.com/marketplace/create/vehicle';
-              this.log('🎯 Fallback navigation to:', createVehicleUrl);
               window.location.href = createVehicleUrl;
               
               return { 
                 success: true, 
-                warning: 'Posted but failed to record: ' + backendError.message,
-                databaseError: true
+                warning: 'Posted but with some issues: ' + generalError.message
               };
             }
           }
@@ -3125,6 +3091,26 @@ class SalesonatorAutomator {
       
       this.log('📋 Clicking Next button...');
       nextButton.click();
+      
+      // DEDUCT CREDITS AND UPDATE STATUS IMMEDIATELY AFTER NEXT BUTTON
+      try {
+        this.log('💳 Deducting credits and updating vehicle status...');
+        console.log('🚀 DEDUCTING CREDITS AFTER NEXT BUTTON CLICK');
+        
+        const updateResult = await this.updateVehicleStatusToPosted(this.currentVehicleData.id);
+        console.log('🚀 CREDIT DEDUCTION RESULT:', updateResult);
+        
+        // Send credit update to popup immediately
+        chrome.runtime.sendMessage({
+          action: 'creditsUpdated',
+          credits: updateResult.credits
+        });
+        
+        this.log('✅ Credits deducted and status updated successfully');
+      } catch (creditError) {
+        this.log('❌ Error deducting credits:', creditError);
+        // Continue with posting even if credit deduction fails temporarily
+      }
       
       // Wait for preview page to load
       await this.delay(3000);
