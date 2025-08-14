@@ -3737,29 +3737,27 @@ class SalesonatorAutomator {
         updated_at: new Date().toISOString()
       };
       
-      this.log('📤 Using edge function for secure vehicle update with data:', JSON.stringify({
-        action: 'updateVehicleStatus',
-        vehicle_id: vehicleId,
-        status: 'posted',
-        facebook_post_id: facebookPostId,
-        update_data: updateData
+      this.log('📤 Calling database function with data:', JSON.stringify({
+        p_vehicle_id: vehicleId,
+        p_user_id: 'from_auth',
+        p_facebook_post_id: facebookPostId,
+        p_update_data: updateData
       }, null, 2));
       
-      console.log('🚀 Making API call to update vehicle status...');
-      this.consoleLog('INFO', 'Making API call to facebook-poster edge function');
+      const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/rpc/deduct_credit_and_update_vehicle';
+      this.log('🌐 API URL:', apiUrl);
       
-      const response = await fetch('https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster', {
+      console.log('🚀 Making API call to deduct credits...');
+      this.consoleLog('INFO', 'Making API call to deduct_credit_and_update_vehicle');
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userToken}`
+          'Authorization': `Bearer ${userToken}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
         },
         body: JSON.stringify({
-          action: 'updateVehicleStatus',
-          vehicle_id: vehicleId,
-          status: 'posted',
-          facebook_post_id: facebookPostId,
-          update_data: updateData
           p_vehicle_id: vehicleId,
           p_user_id: null, // Let function use auth.uid()
           p_facebook_post_id: facebookPostId,
