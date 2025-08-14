@@ -105,7 +105,7 @@ serve(async (req) => {
 
     const basePromptSuffix = `Professional automotive dealership photography with ample space around the vehicle. The vehicle should be centered in the frame with significant flood area/buffer space on all sides to ensure no parts are cut off. Clean, bright dealership lot background with professional lighting. The vehicle has a visible license plate reading "${dealershipName}". Ultra high resolution, realistic automotive photography style. The vehicle should appear pristine and ready for sale.`;
 
-    // Define the 4 image prompts with comprehensive vehicle information
+    // Define 2 key image prompts (reduced from 4 to prevent timeouts)
     const imagePrompts = [
       {
         angle: 'front_angled',
@@ -114,14 +114,6 @@ serve(async (req) => {
       {
         angle: 'side_profile',
         prompt: `${vehicleDetails}. Pure side profile view showing the complete side silhouette, wheels, and body lines of the vehicle. ${basePromptSuffix}`
-      },
-      {
-        angle: 'rear_view',
-        prompt: `${vehicleDetails}. Rear view showing the back of the vehicle, taillights, and rear bumper. ${basePromptSuffix}`
-      },
-      {
-        angle: 'interior_door_open',
-        prompt: `${vehicleDetails}. Interior view with driver's side door open, photographed from outside showing the cabin, seats, dashboard, steering wheel, and controls. Clean, well-lit interior with professional automotive photography lighting. Ample framing space around the vehicle opening. High resolution, realistic automotive photography style.`
       }
     ];
 
