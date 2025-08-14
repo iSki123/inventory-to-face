@@ -54,8 +54,7 @@ export const useLeads = () => {
         .from('leads')
         .select(`
           *,
-          vehicle:vehicles(year, make, model, price),
-          assigned_user:profiles!leads_assigned_to_fkey(first_name, last_name)
+          vehicle:vehicles(year, make, model, price)
         `)
         .order('created_at', { ascending: false });
 
@@ -94,8 +93,7 @@ export const useLeads = () => {
         }])
         .select(`
           *,
-          vehicle:vehicles(year, make, model, price),
-          assigned_user:profiles!leads_assigned_to_fkey(first_name, last_name)
+          vehicle:vehicles(year, make, model, price)
         `)
         .single();
 
@@ -135,8 +133,7 @@ export const useLeads = () => {
         .eq('id', id)
         .select(`
           *,
-          vehicle:vehicles(year, make, model, price),
-          assigned_user:profiles!leads_assigned_to_fkey(first_name, last_name)
+          vehicle:vehicles(year, make, model, price)
         `)
         .single();
 

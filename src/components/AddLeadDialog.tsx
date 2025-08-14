@@ -31,7 +31,7 @@ export function AddLeadDialog({ open, onOpenChange }: AddLeadDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [formData, setFormData] = useState<LeadFormData>({
-    vehicle_id: "",
+    vehicle_id: "none",
     customer_name: "",
     customer_email: "",
     customer_phone: "",
@@ -89,7 +89,7 @@ export function AddLeadDialog({ open, onOpenChange }: AddLeadDialogProps) {
     try {
       const leadData = {
         ...formData,
-        vehicle_id: formData.vehicle_id || undefined,
+        vehicle_id: formData.vehicle_id === "none" ? undefined : formData.vehicle_id || undefined,
         customer_email: formData.customer_email || undefined,
         customer_phone: formData.customer_phone || undefined,
         notes: formData.notes || undefined,
@@ -101,7 +101,7 @@ export function AddLeadDialog({ open, onOpenChange }: AddLeadDialogProps) {
       if (result) {
         // Reset form and close dialog
         setFormData({
-          vehicle_id: "",
+          vehicle_id: "none",
           customer_name: "",
           customer_email: "",
           customer_phone: "",
@@ -130,9 +130,12 @@ export function AddLeadDialog({ open, onOpenChange }: AddLeadDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby="add-lead-description">
         <DialogHeader>
           <DialogTitle>Add New Lead</DialogTitle>
+          <p id="add-lead-description" className="text-sm text-muted-foreground">
+            Create a new lead by entering customer information and details about their inquiry.
+          </p>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -144,7 +147,7 @@ export function AddLeadDialog({ open, onOpenChange }: AddLeadDialogProps) {
                 <SelectValue placeholder="Select a vehicle of interest" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No specific vehicle</SelectItem>
+                <SelectItem value="none">No specific vehicle</SelectItem>
                 {availableVehicles.map((vehicle) => (
                   <SelectItem key={vehicle.id} value={vehicle.id}>
                     {vehicle.year} {vehicle.make} {vehicle.model} - {formatPrice(vehicle.price)}
