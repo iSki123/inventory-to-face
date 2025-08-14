@@ -535,34 +535,25 @@ class SalesonatorAutomator {
           if (success) {
             this.log('✅ Vehicle posted successfully');
             
-            // Record the posting in backend and deduct credits - CRITICAL STEP
+            // Update vehicle status to 'posted' (credits already deducted in popup)
             try {
-              console.log('🚀🚀🚀 CREDIT DEDUCTION ATTEMPT STARTING 🚀🚀🚀');
-              console.log('🚀 Vehicle ID for recording:', vehicleData.id);
-              console.log('🚀 Vehicle data available:', !!vehicleData);
-              this.log('📝 Recording vehicle posting in backend...');
-              this.log('🔍 Current URL before recording:', window.location.href);
+              console.log('🚀🚀🚀 UPDATING VEHICLE STATUS TO POSTED 🚀🚀🚀');
+              console.log('🚀 Vehicle ID for status update:', vehicleData.id);
+              this.log('📝 Updating vehicle status in backend...');
+              this.log('🔍 Current URL before updating:', window.location.href);
               
               // Add console logging to track this call
-              this.consoleLog('CRITICAL', 'Starting credit deduction for vehicle: ' + vehicleData.id);
+              this.consoleLog('CRITICAL', 'Updating vehicle status to posted for vehicle: ' + vehicleData.id);
               
-              const recordResult = await this.recordVehiclePosting(vehicleData.id);
+              const updateResult = await this.updateVehicleStatusToPosted(vehicleData.id);
               
-              console.log('🚀🚀🚀 CREDIT DEDUCTION RESULT:', recordResult);
-              console.log('🚀 Credits after posting:', recordResult.credits);
-              this.log('✅ Vehicle posting recorded in backend', recordResult);
-              this.log('💰 Credits after posting:', recordResult.credits);
+              console.log('🚀🚀🚀 VEHICLE STATUS UPDATE RESULT:', updateResult);
+              this.log('✅ Vehicle status updated in backend', updateResult);
               
-              // Add console logging for successful deduction
-              this.consoleLog('SUCCESS', 'Credit deducted successfully, remaining credits: ' + recordResult.credits);
+              // Add console logging for successful update
+              this.consoleLog('SUCCESS', 'Vehicle status updated to posted successfully');
               
-              // Notify popup to update credit display
-              if (recordResult.credits !== undefined) {
-                chrome.runtime.sendMessage({
-                  action: 'updateCredits',
-                  credits: recordResult.credits
-                });
-              }
+              // No need to update credits since they were already deducted
               
               // Send credit update to popup immediately
               console.log('🚀 SENDING CREDITS UPDATE TO POPUP:', recordResult.credits);
@@ -3621,6 +3612,91 @@ class SalesonatorAutomator {
       } catch (fallbackError) {
         console.error(`[FACEBOOK CLICK] Even simple click failed:`, fallbackError);
       }
+    }
+  }
+
+  // Update vehicle status to 'posted' after successful posting (credits already deducted)
+  async updateVehicleStatusToPosted(vehicleId) {
+    try {
+      console.log('📝 Updating vehicle status to posted for:', vehicleId);
+      this.log('📝 Starting vehicle status update process for ID:', vehicleId);
+      
+      // Log to console logs for tracking
+      this.consoleLog('INFO', 'updateVehicleStatusToPosted called for vehicle: ' + vehicleId);
+      
+      // Get user token from extension storage
+      this.log('🔍 Getting user token from storage...');
+      const storageResult = await chrome.storage.sync.get(['userToken']);
+      const userToken = storageResult.userToken;
+      
+      console.log('🔑 Storage result:', storageResult);
+      console.log('🔑 User token found:', !!userToken);
+      
+      if (!userToken) {
+        this.log('❌ No user token found in storage');
+        this.consoleLog('ERROR', 'No user token found in storage during status update');
+        throw new Error('User not authenticated - no token found');
+      }
+      
+      this.log('🔑 Token found, proceeding with status update...');
+      this.consoleLog('INFO', 'User token found, proceeding with status update');
+      
+      // Generate Facebook post ID
+      const facebookPostId = this.extractFacebookPostId();
+      this.log('🆔 Facebook post ID:', facebookPostId);
+      
+      // Prepare update data
+      const updateData = {
+        facebook_post_status: 'posted',
+        facebook_post_id: facebookPostId,
+        last_posted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      this.log('📦 Update data prepared:', updateData);
+      
+      const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/vehicles';
+      this.log('🌐 API URL:', apiUrl);
+      
+      console.log('🚀 Making API call to update vehicle status...');
+      this.consoleLog('INFO', 'Making API call to update vehicle status');
+      
+      const response = await fetch(`${apiUrl}?id=eq.${vehicleId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userToken}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(updateData)
+      });
+      
+      console.log('🚀 API Response received:', response.status, response.statusText);
+      
+      this.log('📨 Backend response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.log('❌ Backend error response:', errorText);
+        this.consoleLog('ERROR', 'Failed to update vehicle status: ' + errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+      
+      const result = await response.json();
+      this.log('✅ Vehicle status update successful:', result);
+      this.consoleLog('SUCCESS', 'Vehicle status updated to posted successfully');
+      
+      return {
+        success: true,
+        message: 'Vehicle status updated to posted successfully'
+      };
+      
+    } catch (error) {
+      this.log('❌ Error in updateVehicleStatusToPosted:', error.message);
+      console.error('Full status update error:', error);
+      this.consoleLog('ERROR', 'updateVehicleStatusToPosted failed: ' + error.message);
+      throw error;
     }
   }
 
