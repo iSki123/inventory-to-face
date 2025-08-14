@@ -1622,103 +1622,128 @@ class SalesonatorAutomator {
       // Clean interior color string (remove extra spaces)
       const cleanInteriorColor = (interiorColor || '').toString().trim();
       
-      // Look for interior color dropdown more specifically using proven selectors
+      // Use the same proven selectors as year/make/exterior color
       const interiorColorDropdownSelectors = [
-        'text:Interior color', // Visible label
-        'text:Interior', // Shorter label 
-        '[aria-label*="Interior color"]',
+        'text:Interior color',
+        'text:Interior',
+        '[aria-label*="Interior color"]', 
         '[aria-label*="Interior"]',
-        'div[role="button"]', // Generic fallback
-        'select'
+        'div[role="button"]:has-text("Interior")',
+        'span:has-text("Interior")',
+        '[data-testid*="interior"]'
       ];
       
-      console.log(`[INTERIOR COLOR DEBUG] Looking for interior color dropdown with selectors:`, interiorColorDropdownSelectors);
+      console.log(`[INTERIOR COLOR DEBUG] Searching for interior color dropdown with selectors:`, interiorColorDropdownSelectors);
       
       const interiorColorDropdown = await this.waitForElement(interiorColorDropdownSelectors, 8000);
+      if (!interiorColorDropdown) {
+        throw new Error('Interior color dropdown not found');
+      }
+      
+      console.log(`[INTERIOR COLOR DEBUG] Found interior color dropdown:`, interiorColorDropdown);
+      console.log(`[INTERIOR COLOR DEBUG] Dropdown tagName:`, interiorColorDropdown.tagName);
+      console.log(`[INTERIOR COLOR DEBUG] Dropdown innerHTML:`, interiorColorDropdown.innerHTML);
+      console.log(`[INTERIOR COLOR DEBUG] Dropdown attributes:`, Array.from(interiorColorDropdown.attributes).map(a => `${a.name}="${a.value}"`));
+      
       await this.scrollIntoView(interiorColorDropdown);
-      await this.delay(this.randomDelay(500, 1000));
-      
       this.log('🪑 Found interior color dropdown, clicking to open...');
-      console.log(`[INTERIOR COLOR DEBUG] Found dropdown:`, interiorColorDropdown);
       
-      // Use a more reliable open sequence for React-controlled dropdowns
-      interiorColorDropdown.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      console.log(`[INTERIOR COLOR DEBUG] Clicking interior color dropdown...`);
       interiorColorDropdown.click();
-      await this.delay(this.randomDelay(1200, 1800)); // Wait for dropdown to open
+      await this.delay(2000);
       
-      // Prefer searching within the options container only
-      let optionsContainer = null;
+      console.log(`[INTERIOR COLOR DEBUG] Checking if dropdown opened...`);
+      const optionsAfterClick = document.querySelectorAll('[role="option"]');
+      console.log(`[INTERIOR COLOR DEBUG] Found options after click:`, optionsAfterClick.length);
+      
+      // Log first 20 options to debug
+      Array.from(optionsAfterClick).slice(0, 20).forEach((opt, idx) => {
+        console.log(`[INTERIOR COLOR DEBUG] Option ${idx}: ${opt.textContent?.trim()}`, opt);
+      });
+      
+      console.log(`[INTERIOR COLOR DEBUG] 🎯 Using enhanced option selection...`);
+      
+      // Use multiple approaches to find the interior color option (same as year method)
+      let interiorColorOption = null;
+      
+      // Method 1: Find by exact text match using waitForElement
       try {
-        optionsContainer = await this.waitForElement(['[role="listbox"]', '[role="menu"]'], 4000);
-        console.log(`[INTERIOR COLOR DEBUG] Found options container:`, optionsContainer);
-      } catch {
-        console.log(`[INTERIOR COLOR DEBUG] No options container found, using document scope`);
-      }
-      
-      const getExactOption = () => {
-        const scope = optionsContainer || document;
-        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
-        console.log(`[INTERIOR COLOR DEBUG] Found ${opts.length} options in scope`);
-        const found = opts.find(o => {
-          const text = (o.textContent || '').trim().toLowerCase();
-          console.log(`[INTERIOR COLOR DEBUG] Checking option: "${text}" against "${cleanInteriorColor.toLowerCase()}"`);
-          return text === cleanInteriorColor.toLowerCase();
-        });
-        if (found) console.log(`[INTERIOR COLOR DEBUG] Exact match found:`, found);
-        return found;
-      };
-      
-      const getFuzzyOption = () => {
-        const scope = optionsContainer || document;
-        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
-        const found = opts.find(o => {
-          const text = (o.textContent || '').toLowerCase();
-          return text.includes(cleanInteriorColor.toLowerCase());
-        });
-        if (found) console.log(`[INTERIOR COLOR DEBUG] Fuzzy match found:`, found);
-        return found;
-      };
-      
-      let interiorColorOption = getExactOption();
-      
-      // If not found, try typeahead (Facebook supports it)
-      if (!interiorColorOption && cleanInteriorColor) {
-        console.log(`[INTERIOR COLOR DEBUG] Trying typeahead for: ${cleanInteriorColor}`);
-        for (const ch of cleanInteriorColor.toLowerCase()) {
-          interiorColorDropdown.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
-          await this.delay(this.randomDelay(40, 100));
+        const interiorColorSelectors = [
+          `text:${cleanInteriorColor}`,
+          `[role="option"]:has-text("${cleanInteriorColor}")`,
+          `div:has-text("${cleanInteriorColor}")`,
+          `span:has-text("${cleanInteriorColor}")`,
+          `li:has-text("${cleanInteriorColor}")`,
+          `[data-value="${cleanInteriorColor}"]`,
+          `[aria-label*="${cleanInteriorColor}"]`,
+          `*[title="${cleanInteriorColor}"]`
+        ];
+        
+        console.log(`[INTERIOR COLOR DEBUG] Searching for interior color option with selectors:`, interiorColorSelectors);
+        interiorColorOption = await this.waitForElement(interiorColorSelectors, 3000);
+        console.log(`[INTERIOR COLOR DEBUG] ✅ Found interior color option using waitForElement:`, interiorColorOption);
+        console.log(`[INTERIOR COLOR DEBUG] Option text:`, interiorColorOption?.textContent || interiorColorOption?.innerHTML);
+        console.log(`[INTERIOR COLOR DEBUG] Option tagName:`, interiorColorOption?.tagName);
+        console.log(`[INTERIOR COLOR DEBUG] Option role:`, interiorColorOption?.getAttribute('role'));
+        console.log(`[INTERIOR COLOR DEBUG] Option ID:`, interiorColorOption?.id);
+        console.log(`[INTERIOR COLOR DEBUG] Option classes:`, interiorColorOption?.className);
+        
+        // Verify this is actually the interior color option we want
+        const optionText = interiorColorOption?.textContent?.trim();
+        const manualInteriorColorOption = Array.from(optionsAfterClick).find(opt => 
+          opt.textContent?.trim().toLowerCase() === cleanInteriorColor.toLowerCase()
+        );
+        console.log(`[INTERIOR COLOR DEBUG] 🔍 Manual search would find:`, manualInteriorColorOption);
+        console.log(`[INTERIOR COLOR DEBUG] 🔍 Are they the same element?`, interiorColorOption === manualInteriorColorOption);
+        
+        if (interiorColorOption !== manualInteriorColorOption) {
+          console.log(`[INTERIOR COLOR DEBUG] ⚠️ DIFFERENT ELEMENTS! Switching to manual match...`);
+          interiorColorOption = manualInteriorColorOption;
         }
-        await this.delay(this.randomDelay(300, 600));
-        interiorColorOption = getExactOption();
+        
+      } catch (waitError) {
+        console.log(`[INTERIOR COLOR DEBUG] ⚠️ waitForElement failed, falling back to manual search:`, waitError.message);
+        
+        // Manual fallback search (same as year method)
+        interiorColorOption = Array.from(optionsAfterClick).find(opt => 
+          opt.textContent?.trim().toLowerCase() === cleanInteriorColor.toLowerCase()
+        );
+        console.log(`[INTERIOR COLOR DEBUG] Manual fallback result:`, interiorColorOption);
       }
       
-      // Fallback to fuzzy match
+      // Method 2: Try exact match within all options
       if (!interiorColorOption) {
-        console.log(`[INTERIOR COLOR DEBUG] Trying fuzzy match`);
-        interiorColorOption = getFuzzyOption();
+        console.log(`[INTERIOR COLOR DEBUG] Method 2: Trying exact match search...`);
+        interiorColorOption = Array.from(optionsAfterClick).find(opt => 
+          opt.textContent?.trim().toLowerCase() === cleanInteriorColor.toLowerCase()
+        );
+        if (interiorColorOption) console.log(`[INTERIOR COLOR DEBUG] Found via exact match:`, interiorColorOption);
       }
       
-      // Ultimate fallback: any element with the text inside the container
+      // Method 3: Fuzzy match as final fallback  
       if (!interiorColorOption) {
-        console.log(`[INTERIOR COLOR DEBUG] Trying ultimate fallback search`);
-        const elem = this.findElementByText(cleanInteriorColor, ['div','span','li'], optionsContainer || document);
-        if (elem) interiorColorOption = elem.closest('[role="option"]') || elem;
-        if (interiorColorOption) console.log(`[INTERIOR COLOR DEBUG] Ultimate fallback found:`, interiorColorOption);
+        console.log(`[INTERIOR COLOR DEBUG] Method 3: Trying fuzzy match...`);
+        interiorColorOption = Array.from(optionsAfterClick).find(opt => {
+          const text = (opt.textContent || '').toLowerCase();
+          return text.includes(cleanInteriorColor.toLowerCase()) && text.length <= cleanInteriorColor.length + 10;
+        });
+        if (interiorColorOption) console.log(`[INTERIOR COLOR DEBUG] Found via fuzzy match:`, interiorColorOption);
       }
       
       if (!interiorColorOption) {
-        console.log(`[INTERIOR COLOR DEBUG] No interior color option found for "${cleanInteriorColor}"`);
-        // Show available options for debugging
-        const allOpts = Array.from((optionsContainer || document).querySelectorAll('[role="option"]'));
-        console.log(`[INTERIOR COLOR DEBUG] Available options:`, allOpts.map(opt => opt.textContent?.trim()));
+        console.log(`[INTERIOR COLOR DEBUG] ❌ No interior color option found for "${cleanInteriorColor}"`);
+        console.log(`[INTERIOR COLOR DEBUG] Available options:`, Array.from(optionsAfterClick).map(opt => opt.textContent?.trim()));
         throw new Error(`Interior color option not found for "${cleanInteriorColor}"`);
       }
       
-      console.log(`[INTERIOR COLOR DEBUG] Selected interior color option:`, interiorColorOption);
+      console.log(`[INTERIOR COLOR DEBUG] Final selected option:`, interiorColorOption);
+      console.log(`[INTERIOR COLOR DEBUG] Option text content:`, interiorColorOption.textContent?.trim());
+      
       await this.scrollIntoView(interiorColorOption);
-      await this.delay(this.randomDelay(300, 600));
+      await this.delay(this.randomDelay(500, 1000));
+      
+      this.log('🪑 Clicking interior color option...');
       interiorColorOption.click();
-      await this.delay(this.randomDelay(1000, 1500)); // Wait for selection to register
       
       // Enhanced verification with multiple checks (same as vehicle condition)
       const verifications = {
@@ -2104,130 +2129,150 @@ class SalesonatorAutomator {
       const normalized = this.mapFuelType(fuelType) || fuelType;
       console.log(`[FUEL DEBUG] Normalized fuel type: ${normalized}`);
       
-      await this.closeAnyOpenDropdown();
-      await this.delay(500);
-      
-      // Use same approach as working vehicle condition dropdown
+      // Use the same proven selectors as year/make/exterior color
       const fuelDropdownSelectors = [
-        'text:Fuel type', // Visible label approach
-        'text:Fuel', // Shorter label
+        'text:Fuel type',
+        'text:Fuel',
         '[aria-label*="Fuel type"]',
         '[aria-label*="Fuel"]',
-        'div[role="button"]', // Generic fallback
-        'select'
+        'div[role="button"]:has-text("Fuel")',
+        'span:has-text("Fuel")',
+        '[data-testid*="fuel"]'
       ];
       
-      console.log(`[FUEL DEBUG] Looking for fuel dropdown with selectors:`, fuelDropdownSelectors);
+      console.log(`[FUEL DEBUG] Searching for fuel dropdown with selectors:`, fuelDropdownSelectors);
       
       const fuelDropdown = await this.waitForElement(fuelDropdownSelectors, 8000);
+      if (!fuelDropdown) {
+        throw new Error('Fuel type dropdown not found');
+      }
+      
+      console.log(`[FUEL DEBUG] Found fuel type dropdown:`, fuelDropdown);
+      console.log(`[FUEL DEBUG] Dropdown tagName:`, fuelDropdown.tagName);
+      console.log(`[FUEL DEBUG] Dropdown innerHTML:`, fuelDropdown.innerHTML);
+      console.log(`[FUEL DEBUG] Dropdown attributes:`, Array.from(fuelDropdown.attributes).map(a => `${a.name}="${a.value}"`));
+      
       await this.scrollIntoView(fuelDropdown);
-      await this.delay(this.randomDelay(500, 1000));
-      
       this.log('⛽ Found fuel type dropdown, clicking to open...');
-      console.log(`[FUEL DEBUG] Found dropdown:`, fuelDropdown);
       
-      // Use the same reliable open sequence as vehicle condition
-      fuelDropdown.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      console.log(`[FUEL DEBUG] Clicking fuel dropdown...`);
       fuelDropdown.click();
-      await this.delay(this.randomDelay(1200, 1800)); // Wait for dropdown to open
+      await this.delay(2000);
       
-      // Search within the options container, same as vehicle condition
-      let optionsContainer = null;
+      console.log(`[FUEL DEBUG] Checking if dropdown opened...`);
+      const optionsAfterClick = document.querySelectorAll('[role="option"]');
+      console.log(`[FUEL DEBUG] Found options after click:`, optionsAfterClick.length);
+      
+      // Log first 20 options to debug
+      Array.from(optionsAfterClick).slice(0, 20).forEach((opt, idx) => {
+        console.log(`[FUEL DEBUG] Option ${idx}: ${opt.textContent?.trim()}`, opt);
+      });
+      
+      console.log(`[FUEL DEBUG] 🎯 Using enhanced option selection...`);
+      
+      // Use multiple approaches to find the fuel type option (same as year method)
+      let fuelOption = null;
+      
+      // Method 1: Find by exact text match using waitForElement
       try {
-        optionsContainer = await this.waitForElement(['[role="listbox"]', '[role="menu"]'], 4000);
-        console.log(`[FUEL DEBUG] Found options container:`, optionsContainer);
-      } catch {
-        console.log(`[FUEL DEBUG] No options container found, using document scope`);
-      }
-      
-      const getExactOption = () => {
-        const scope = optionsContainer || document;
-        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
-        console.log(`[FUEL DEBUG] Found ${opts.length} options in scope`);
-        const found = opts.find(o => {
-          const text = (o.textContent || '').trim().toLowerCase();
-          console.log(`[FUEL DEBUG] Checking option: "${text}" against "${normalized.toLowerCase()}"`);
-          return text === normalized.toLowerCase();
-        });
-        if (found) console.log(`[FUEL DEBUG] Exact match found:`, found);
-        return found;
-      };
-      
-      const getFuzzyOption = () => {
-        const scope = optionsContainer || document;
-        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
-        const found = opts.find(o => {
-          const text = (o.textContent || '').toLowerCase();
-          return text.includes(normalized.toLowerCase());
-        });
-        if (found) console.log(`[FUEL DEBUG] Fuzzy match found:`, found);
-        return found;
-      };
-      
-      let fuelOption = getExactOption();
-      
-      // If not found, try typeahead (Facebook supports it)
-      if (!fuelOption && normalized) {
-        console.log(`[FUEL DEBUG] Trying typeahead for: ${normalized}`);
-        for (const ch of normalized.toLowerCase()) {
-          fuelDropdown.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
-          await this.delay(this.randomDelay(40, 100));
+        const fuelSelectors = [
+          `text:${normalized}`,
+          `[role="option"]:has-text("${normalized}")`,
+          `div:has-text("${normalized}")`,
+          `span:has-text("${normalized}")`,
+          `li:has-text("${normalized}")`,
+          `[data-value="${normalized}"]`,
+          `[aria-label*="${normalized}"]`,
+          `*[title="${normalized}"]`
+        ];
+        
+        console.log(`[FUEL DEBUG] Searching for fuel option with selectors:`, fuelSelectors);
+        fuelOption = await this.waitForElement(fuelSelectors, 3000);
+        console.log(`[FUEL DEBUG] ✅ Found fuel option using waitForElement:`, fuelOption);
+        console.log(`[FUEL DEBUG] Option text:`, fuelOption?.textContent || fuelOption?.innerHTML);
+        console.log(`[FUEL DEBUG] Option tagName:`, fuelOption?.tagName);
+        console.log(`[FUEL DEBUG] Option role:`, fuelOption?.getAttribute('role'));
+        console.log(`[FUEL DEBUG] Option ID:`, fuelOption?.id);
+        console.log(`[FUEL DEBUG] Option classes:`, fuelOption?.className);
+        
+        // Verify this is actually the fuel option we want
+        const optionText = fuelOption?.textContent?.trim();
+        const manualFuelOption = Array.from(optionsAfterClick).find(opt => 
+          opt.textContent?.trim().toLowerCase() === normalized.toLowerCase()
+        );
+        console.log(`[FUEL DEBUG] 🔍 Manual search would find:`, manualFuelOption);
+        console.log(`[FUEL DEBUG] 🔍 Are they the same element?`, fuelOption === manualFuelOption);
+        
+        if (fuelOption !== manualFuelOption) {
+          console.log(`[FUEL DEBUG] ⚠️ DIFFERENT ELEMENTS! Switching to manual match...`);
+          fuelOption = manualFuelOption;
         }
-        await this.delay(this.randomDelay(300, 600));
-        fuelOption = getExactOption();
+        
+      } catch (waitError) {
+        console.log(`[FUEL DEBUG] ⚠️ waitForElement failed, falling back to manual search:`, waitError.message);
+        
+        // Manual fallback search (same as year method)
+        fuelOption = Array.from(optionsAfterClick).find(opt => 
+          opt.textContent?.trim().toLowerCase() === normalized.toLowerCase()
+        );
+        console.log(`[FUEL DEBUG] Manual fallback result:`, fuelOption);
       }
       
-      // Fallback to fuzzy match
+      // Method 2: Try exact match within all options
       if (!fuelOption) {
-        console.log(`[FUEL DEBUG] Trying fuzzy match`);
-        fuelOption = getFuzzyOption();
+        console.log(`[FUEL DEBUG] Method 2: Trying exact match search...`);
+        fuelOption = Array.from(optionsAfterClick).find(opt => 
+          opt.textContent?.trim().toLowerCase() === normalized.toLowerCase()
+        );
+        if (fuelOption) console.log(`[FUEL DEBUG] Found via exact match:`, fuelOption);
       }
       
-      // Try common fuel type variations
+      // Method 3: Try common fuel type variations
       if (!fuelOption && normalized === 'Gasoline') {
-        console.log(`[FUEL DEBUG] Trying gasoline variations`);
-        const scope = optionsContainer || document;
-        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
-        fuelOption = opts.find(o => {
-          const text = (o.textContent || '').trim().toLowerCase();
+        console.log(`[FUEL DEBUG] Method 3: Trying gasoline variations...`);
+        fuelOption = Array.from(optionsAfterClick).find(opt => {
+          const text = (opt.textContent || '').trim().toLowerCase();
           return text === 'gas' || text === 'petrol' || text === 'gasoline';
         });
+        if (fuelOption) console.log(`[FUEL DEBUG] Found gasoline variant:`, fuelOption);
       }
       
       if (!fuelOption && normalized === 'Hybrid') {
-        console.log(`[FUEL DEBUG] Trying hybrid variations`);
-        const scope = optionsContainer || document;
-        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
-        fuelOption = opts.find(o => {
-          const text = (o.textContent || '').trim().toLowerCase();
-          return text.includes('hybrid') || text === 'plug-in hybrid';
+        console.log(`[FUEL DEBUG] Method 3: Trying hybrid variations...`);
+        fuelOption = Array.from(optionsAfterClick).find(opt => {
+          const text = (opt.textContent || '').trim().toLowerCase();
+          return text === 'hybrid' || text.includes('hybrid');
         });
+        if (fuelOption) console.log(`[FUEL DEBUG] Found hybrid variant:`, fuelOption);
       }
       
-      // Ultimate fallback: any element with the text inside the container
+      // Method 4: Fuzzy match as final fallback  
       if (!fuelOption) {
-        console.log(`[FUEL DEBUG] Trying ultimate fallback search`);
-        const elem = this.findElementByText(normalized, ['div','span','li'], optionsContainer || document);
-        if (elem) fuelOption = elem.closest('[role="option"]') || elem;
-        if (fuelOption) console.log(`[FUEL DEBUG] Ultimate fallback found:`, fuelOption);
+        console.log(`[FUEL DEBUG] Method 4: Trying fuzzy match...`);
+        fuelOption = Array.from(optionsAfterClick).find(opt => {
+          const text = (opt.textContent || '').toLowerCase();
+          return text.includes(normalized.toLowerCase()) && text.length <= normalized.length + 10;
+        });
+        if (fuelOption) console.log(`[FUEL DEBUG] Found via fuzzy match:`, fuelOption);
       }
       
       if (!fuelOption) {
-        console.log(`[FUEL DEBUG] No fuel option found for "${normalized}"`);
-        // Log available options for debugging
-        const scope = optionsContainer || document;
-        const opts = Array.from(scope.querySelectorAll('[role="option"]'));
-        console.log(`[FUEL DEBUG] Available options:`, opts.map(opt => opt.textContent?.trim()));
+        console.log(`[FUEL DEBUG] ❌ No fuel option found for "${normalized}"`);
+        console.log(`[FUEL DEBUG] Available options:`, Array.from(optionsAfterClick).map(opt => opt.textContent?.trim()));
         throw new Error(`Fuel type option not found for "${normalized}"`);
       }
       
-      console.log(`[FUEL DEBUG] Selected fuel option:`, fuelOption);
+      console.log(`[FUEL DEBUG] Final selected option:`, fuelOption);
+      console.log(`[FUEL DEBUG] Option text content:`, fuelOption.textContent?.trim());
+      
       await this.scrollIntoView(fuelOption);
-      await this.delay(this.randomDelay(300, 600));
+      await this.delay(this.randomDelay(500, 1000));
+      
+      this.log('⛽ Clicking fuel type option...');
       fuelOption.click();
       await this.delay(this.randomDelay(1000, 1500)); // Wait for selection to register
       
-      // Enhanced verification with multiple checks (same as vehicle condition)
+      // Enhanced verification with multiple checks (same as year method)
       const verifications = {
         dropdownText: false,
         selectedValue: false,
@@ -2246,7 +2291,7 @@ class SalesonatorAutomator {
       }
       
       // Check if the option is marked as selected
-      if (fuelOption.getAttribute('aria-selected') === 'true') {
+      if (fuelOption && fuelOption.getAttribute('aria-selected') === 'true') {
         verifications.ariaSelected = true;
         console.log(`[FUEL DEBUG] Aria-selected verification: ${verifications.ariaSelected}`);
       }
@@ -2256,6 +2301,19 @@ class SalesonatorAutomator {
       if (success) {
         this.log('✅ Successfully selected fuel type:', normalized);
         return true;
+      } else {
+        console.log(`[FUEL DEBUG] Fuel type selection may have failed - no evidence of selection found`);
+        this.log('⚠️ Fuel type selection verification failed for:', normalized);
+        return false;
+      }
+      
+    } catch (error) {
+      console.log(`[FUEL DEBUG] Error in selectFuelType:`, error);
+      this.log(`⚠️ Could not select fuel type: ${fuelType}`, error);
+      return false;
+    }
+  }
+      
       } else {
         console.log(`[FUEL DEBUG] Fuel type selection may have failed - no evidence of selection found`);
         this.log('⚠️ Fuel type selection verification failed for:', normalized);
