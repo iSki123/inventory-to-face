@@ -535,19 +535,26 @@ class SalesonatorAutomator {
           if (success) {
             this.log('✅ Vehicle posted successfully');
             
-            // Record the posting in backend and deduct credits
+            // Record the posting in backend and deduct credits - CRITICAL STEP
             try {
-              console.log('🚀 CREDIT DEDUCTION ATTEMPT STARTING');
+              console.log('🚀🚀🚀 CREDIT DEDUCTION ATTEMPT STARTING 🚀🚀🚀');
               console.log('🚀 Vehicle ID for recording:', vehicleData.id);
+              console.log('🚀 Vehicle data available:', !!vehicleData);
               this.log('📝 Recording vehicle posting in backend...');
               this.log('🔍 Current URL before recording:', window.location.href);
               
+              // Add console logging to track this call
+              this.consoleLog('CRITICAL', 'Starting credit deduction for vehicle: ' + vehicleData.id);
+              
               const recordResult = await this.recordVehiclePosting(vehicleData.id);
               
-              console.log('🚀 CREDIT DEDUCTION RESULT:', recordResult);
+              console.log('🚀🚀🚀 CREDIT DEDUCTION RESULT:', recordResult);
               console.log('🚀 Credits after posting:', recordResult.credits);
               this.log('✅ Vehicle posting recorded in backend', recordResult);
               this.log('💰 Credits after posting:', recordResult.credits);
+              
+              // Add console logging for successful deduction
+              this.consoleLog('SUCCESS', 'Credit deducted successfully, remaining credits: ' + recordResult.credits);
               
               // Notify popup to update credit display
               if (recordResult.credits !== undefined) {
@@ -3620,19 +3627,28 @@ class SalesonatorAutomator {
   // Record vehicle posting in backend and deduct credits using proper endpoint
   async recordVehiclePosting(vehicleId) {
     try {
+      console.log('🔥🔥🔥 RECORD VEHICLE POSTING CALLED FOR:', vehicleId);
       this.log('📝 Starting vehicle posting record process for ID:', vehicleId);
+      
+      // Log to console logs for tracking
+      this.consoleLog('INFO', 'recordVehiclePosting called for vehicle: ' + vehicleId);
       
       // Get user token from extension storage using direct access
       this.log('🔍 Getting user token from storage...');
       const storageResult = await chrome.storage.sync.get(['userToken']);
       const userToken = storageResult.userToken;
       
+      console.log('🔑 Storage result:', storageResult);
+      console.log('🔑 User token found:', !!userToken);
+      
       if (!userToken) {
         this.log('❌ No user token found in storage');
+        this.consoleLog('ERROR', 'No user token found in storage during credit deduction');
         throw new Error('User not authenticated - no token found');
       }
       
       this.log('🔑 Token found, proceeding with recording...');
+      this.consoleLog('INFO', 'User token found, proceeding with credit deduction');
       
       // Generate Facebook post ID
       const facebookPostId = this.extractFacebookPostId();
@@ -3655,6 +3671,9 @@ class SalesonatorAutomator {
       const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/rpc/deduct_credit_and_update_vehicle';
       this.log('🌐 API URL:', apiUrl);
       
+      console.log('🚀 Making API call to deduct credits...');
+      this.consoleLog('INFO', 'Making API call to deduct_credit_and_update_vehicle');
+      
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -3669,6 +3688,8 @@ class SalesonatorAutomator {
           p_update_data: updateData
         })
       });
+      
+      console.log('🚀 API Response received:', response.status, response.statusText);
       
       this.log('📨 Backend response status:', response.status);
       
