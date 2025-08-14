@@ -12,6 +12,7 @@ import { useLeads, Lead } from "@/hooks/useLeads";
 import { useLeadMessages, LeadMessage } from "@/hooks/useLeadMessages";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { AddLeadDialog } from "@/components/AddLeadDialog";
 
 export default function Leads() {
   const { leads, loading, updateLead, deleteLead } = useLeads();
@@ -21,6 +22,7 @@ export default function Leads() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [replyText, setReplyText] = useState("");
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [showAddLeadDialog, setShowAddLeadDialog] = useState(false);
   
   const { messages, addMessage, generateAIResponse } = useLeadMessages(selectedLead?.id);
 
@@ -161,7 +163,7 @@ export default function Leads() {
             Manage customer inquiries and follow-ups
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setShowAddLeadDialog(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Add Lead
         </Button>
@@ -471,6 +473,12 @@ export default function Leads() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Add Lead Dialog */}
+      <AddLeadDialog 
+        open={showAddLeadDialog} 
+        onOpenChange={setShowAddLeadDialog} 
+      />
     </div>
   );
 }
