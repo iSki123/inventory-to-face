@@ -789,7 +789,7 @@ class SalesonatorExtension {
         body: JSON.stringify({
           action: 'update_vehicle_status',
           vehicleId: vehicleId,
-          status: 'posted',
+          status: 'processing',
           facebookPostId: facebookPostId
         })
       });
