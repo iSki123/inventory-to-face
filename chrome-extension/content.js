@@ -2453,6 +2453,13 @@ class SalesonatorAutomator {
       await this.typeHumanLike(descriptionInput, description, 'fast');
       
       this.log(`✅ Successfully filled description`);
+      
+      // Send message to popup to trigger debug credit deduction
+      chrome.runtime.sendMessage({
+        action: 'descriptionFilled',
+        success: true
+      });
+      
       return true;
     } catch (error) {
       this.log(`⚠️ Could not fill description`, error);

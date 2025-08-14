@@ -1275,6 +1275,10 @@ class SalesonatorExtension {
         setTimeout(() => {
           this.postNextVehicle();
         }, 4000);
+      } else if (message.action === 'descriptionFilled' && message.success) {
+        console.log('📝 Description filled successfully, triggering debug credit deduction...');
+        // Automatically call debug credit deduction after description is filled
+        this.debugCreditDeduction();
       }
     });
   }
