@@ -28,10 +28,16 @@ serve(async (req) => {
       throw new Error('Vehicle ID and data are required');
     }
 
-    // Initialize Supabase client
+    // Initialize Supabase client with service role for database updates
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
     );
 
     // Check if AI image generation is enabled site-wide
@@ -224,11 +230,29 @@ serve(async (req) => {
     
     // Update vehicle with generated images even if only some were successful
     if (generatedImages.length > 0) {
-      // Update vehicle with generated images
+      // Get current vehicle to preserve existing images
+      const { data: currentVehicle, error: fetchError } = await supabaseClient
+        .from('vehicles')
+        .select('images')
+        .eq('id', vehicleId)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching current vehicle images:', fetchError);
+        throw new Error(`Failed to fetch vehicle: ${fetchError.message}`);
+      }
+
+      // Combine existing images with newly generated ones
+      const existingImages = currentVehicle?.images || [];
+      const allImages = [...existingImages, ...generatedImages];
+      
+      console.log(`Combining ${existingImages.length} existing images with ${generatedImages.length} AI-generated images`);
+
+      // Update vehicle with combined images
       const { error: updateError } = await supabaseClient
         .from('vehicles')
         .update({
-          images: generatedImages,
+          images: allImages,
           ai_images_generated: true,
           ai_image_generation_completed_at: new Date().toISOString()
         })
