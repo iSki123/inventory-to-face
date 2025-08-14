@@ -3306,6 +3306,11 @@ class SalesonatorAutomator {
       this.originalConsole.error('Failed to capture log:', error);
     }
   }
+
+  // Helper method for manual console logging
+  consoleLog(level, message) {
+    this.captureLog(level.toLowerCase(), [message]);
+  }
   
   async startLogTransmission() {
     const transmitLogs = async () => {
