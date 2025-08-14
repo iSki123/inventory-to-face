@@ -561,9 +561,9 @@ class SalesonatorAutomator {
               // Wait a moment for any page processing
               await this.delay(2000);
               
-              // Set flag that we're waiting for the next vehicle posting
-              console.log('🚀 SETTING WAITING FOR NEXT VEHICLE FLAG');
-              this.isWaitingForNextVehicle = true;
+      // Set flag that we're waiting for the next vehicle posting
+      // console.log('🚀 SETTING WAITING FOR NEXT VEHICLE FLAG'); // DEBUG: Commented for production
+      this.isWaitingForNextVehicle = true;
               
               // Navigate to create page immediately for next vehicle (same as error path)
               this.log('🔄 Posting complete, navigating to create page...');
@@ -573,8 +573,8 @@ class SalesonatorAutomator {
               this.log('🎯 Navigation to:', createVehicleUrl);
               window.location.href = createVehicleUrl;
               
-              console.log('🚀 POSTING FLOW COMPLETE - NAVIGATED TO CREATE PAGE');
-              console.log('🚀 Current URL after posting:', window.location.href);
+      // console.log('🚀 POSTING FLOW COMPLETE - NAVIGATED TO CREATE PAGE'); // DEBUG: Commented for production
+      // console.log('🚀 Current URL after posting:', window.location.href); // DEBUG: Commented for production
               
               // Return success to popup for processing next vehicle
               return { 
@@ -3119,10 +3119,10 @@ class SalesonatorAutomator {
       // DEDUCT CREDITS AND UPDATE STATUS IMMEDIATELY AFTER NEXT BUTTON
       try {
         this.log('💳 Deducting credits and updating vehicle status...');
-        console.log('🚀 DEDUCTING CREDITS AFTER NEXT BUTTON CLICK');
+        // console.log('🚀 DEDUCTING CREDITS AFTER NEXT BUTTON CLICK'); // DEBUG: Commented for production
         
         const updateResult = await this.updateVehicleStatusToPosted(this.currentVehicleData.id);
-        console.log('🚀 CREDIT DEDUCTION RESULT:', updateResult);
+        // console.log('🚀 CREDIT DEDUCTION RESULT:', updateResult); // DEBUG: Commented for production
         
         // Send credit update to popup immediately
         chrome.runtime.sendMessage({
@@ -3531,8 +3531,8 @@ class SalesonatorAutomator {
       }
       
       if (request.action === 'postVehicle') {
-        console.log('🚀 DEBUG: Processing postVehicle request...');
-        console.log('🚀 DEBUG: Vehicle data received:', request.vehicle?.id, request.vehicle?.year, request.vehicle?.make, request.vehicle?.model);
+        // console.log('🚀 DEBUG: Processing postVehicle request...'); // DEBUG: Commented for production
+        // console.log('🚀 DEBUG: Vehicle data received:', request.vehicle?.id, request.vehicle?.year, request.vehicle?.make, request.vehicle?.model); // DEBUG: Commented for production
         this.log('🚀 Starting vehicle posting process...');
         
         // Validate vehicle data structure
@@ -3728,7 +3728,7 @@ class SalesonatorAutomator {
       const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/functions/v1/facebook-poster';
       this.log('🌐 API URL:', apiUrl);
       
-      console.log('🚀 Making API call to edge function...');
+      // console.log('🚀 Making API call to edge function...'); // DEBUG: Commented for production
       this.consoleLog('INFO', 'Making API call to facebook-poster edge function');
       
       const response = await fetch(apiUrl, {
@@ -3750,7 +3750,7 @@ class SalesonatorAutomator {
         })
       });
       
-      console.log('🚀 API Response received:', response.status, response.statusText);
+      // console.log('🚀 API Response received:', response.status, response.statusText); // DEBUG: Commented for production
       
       this.log('📨 Backend response status:', response.status);
       
@@ -3808,10 +3808,10 @@ class SalesonatorAutomator {
     const oldUrl = this.currentUrl;
     
     if (newUrl !== oldUrl) {
-      console.log('🚀 URL CHANGE DETECTED:');
-      console.log('🚀 From:', oldUrl);
-      console.log('🚀 To:', newUrl);
-      console.log('🚀 isWaitingForNextVehicle:', this.isWaitingForNextVehicle);
+      // console.log('🚀 URL CHANGE DETECTED:'); // DEBUG: Commented for production
+      // console.log('🚀 From:', oldUrl); // DEBUG: Commented for production
+      // console.log('🚀 To:', newUrl); // DEBUG: Commented for production
+      // console.log('🚀 isWaitingForNextVehicle:', this.isWaitingForNextVehicle); // DEBUG: Commented for production
       
       this.log('🔄 URL changed detected:');
       this.log('  From:', oldUrl);
@@ -3821,7 +3821,7 @@ class SalesonatorAutomator {
       
       // Check if we've been redirected to vehicles category after posting
       if (newUrl.includes('/marketplace/category/vehicles') && this.isWaitingForNextVehicle) {
-        console.log('🚀 DETECTED REDIRECT TO VEHICLES CATEGORY - POSTING COMPLETED');
+        // console.log('🚀 DETECTED REDIRECT TO VEHICLES CATEGORY - POSTING COMPLETED'); // DEBUG: Commented for production
         this.log('🎯 Detected redirect to vehicles category after posting - vehicle posted successfully');
         
         // Send immediate success notification to popup
@@ -3849,14 +3849,14 @@ class SalesonatorAutomator {
         
         // Navigate to create page immediately for next vehicle
         setTimeout(() => {
-          console.log('🚀 NAVIGATING TO CREATE PAGE FOR NEXT VEHICLE');
+          // console.log('🚀 NAVIGATING TO CREATE PAGE FOR NEXT VEHICLE'); // DEBUG: Commented for production
           this.navigateToCreateVehiclePage();
         }, 1500);
       }
       
       // Check if we're on the create vehicle page and ready for next posting
       else if (newUrl.includes('/marketplace/create/vehicle') && this.isWaitingForNextVehicle) {
-        console.log('🚀 SUCCESSFULLY ON CREATE VEHICLE PAGE - READY FOR NEXT');
+        // console.log('🚀 SUCCESSFULLY ON CREATE VEHICLE PAGE - READY FOR NEXT'); // DEBUG: Commented for production
         this.log('✅ Successfully navigated to create vehicle page - ready for next posting');
         
         // Send status update to popup
@@ -3871,7 +3871,7 @@ class SalesonatorAutomator {
         
         // Wait a moment for page to fully load then notify popup
         setTimeout(() => {
-          console.log('🚀 NOTIFYING POPUP - READY FOR NEXT VEHICLE');
+          // console.log('🚀 NOTIFYING POPUP - READY FOR NEXT VEHICLE'); // DEBUG: Commented for production
           chrome.runtime.sendMessage({
             action: 'readyForNextVehicle',
             url: newUrl
@@ -3881,7 +3881,7 @@ class SalesonatorAutomator {
       
       // Handle any other URL changes after successful posting
       else if (this.isWaitingForNextVehicle) {
-        console.log('🚀 URL CHANGED WHILE WAITING - FORCING NAVIGATION:', newUrl);
+        // console.log('🚀 URL CHANGED WHILE WAITING - FORCING NAVIGATION:', newUrl); // DEBUG: Commented for production
         this.log('🔄 URL changed while waiting for next vehicle:', newUrl);
         
         // If we're on any Facebook page but not the vehicles category or create page,
@@ -3889,7 +3889,7 @@ class SalesonatorAutomator {
         if (newUrl.includes('facebook.com') && 
             !newUrl.includes('/marketplace/create/vehicle') && 
             !newUrl.includes('/marketplace/category/vehicles')) {
-          console.log('🚀 FORCING NAVIGATION TO CREATE FROM UNEXPECTED URL');
+          // console.log('🚀 FORCING NAVIGATION TO CREATE FROM UNEXPECTED URL'); // DEBUG: Commented for production
           this.log('🎯 Forcing navigation to create vehicle page from unexpected URL');
           setTimeout(() => {
             this.navigateToCreateVehiclePage();
