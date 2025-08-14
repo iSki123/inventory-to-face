@@ -709,30 +709,7 @@ class SalesonatorExtension {
         throw new Error('Insufficient credits to post vehicle');
       }
       
-      // Step 3: Deduct credits before posting attempt
-      await this.sendLogToContent('💰 Deducting credit before posting...', { vehicle: vehicleLabel });
-      console.log('💰🚨🚨 DEDUCTING CREDIT BEFORE POSTING - THIS SHOULD SHOW IN LOGS 🚨🚨💰');
-      console.log('💰 Vehicle ID for deduction:', vehicle.id);
-      console.log('💰 Current credits before deduction:', this.credits);
-      
-      try {
-        const deductionResult = await this.deductCreditForPosting(vehicle.id);
-        console.log('✅ Credit deducted successfully:', deductionResult);
-        this.credits = deductionResult.credits; // Update local credit count
-        this.updateCreditDisplay();
-        
-        await this.sendLogToContent('✅ Credit deducted, proceeding with posting', { 
-          vehicle: vehicleLabel, 
-          remainingCredits: deductionResult.credits 
-        });
-        
-      } catch (creditError) {
-        console.error('❌ Failed to deduct credit:', creditError);
-        await this.sendErrorToContent('❌ Failed to deduct credit', { error: creditError.message, vehicle });
-        throw new Error(`Failed to deduct credit: ${creditError.message}`);
-      }
-      
-      // Step 4: Send vehicle to content script for posting (credit already deducted)
+      // Step 3: Send vehicle to content script for posting (credit deduction will happen pre-publish in content script)
       await this.sendVehicleToContentScript(vehicle);
     } catch (error) {
       console.error('Error posting vehicle:', error);
@@ -758,61 +735,10 @@ class SalesonatorExtension {
     return true;
   }
 
-  // New method to deduct credit before posting
+  // Legacy method (no longer used): deduction moved to content script pre-publish stage
   async deductCreditForPosting(vehicleId) {
-    try {
-      console.log('💰 Starting credit deduction for vehicle:', vehicleId);
-      
-      // Get user token from storage
-      const { userToken } = await chrome.storage.sync.get(['userToken']);
-      if (!userToken) {
-        throw new Error('User not authenticated - no token found');
-      }
-      
-      // Generate Facebook post ID (placeholder since posting hasn't happened yet)
-      const facebookPostId = `fb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      // Prepare update data
-      const updateData = {
-        facebook_post_status: 'processing',
-        last_posted_at: new Date().toISOString()
-      };
-      
-      const apiUrl = 'https://urdkaedsfnscgtyvcwlf.supabase.co/rest/v1/rpc/deduct_credit_and_update_vehicle';
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userToken}`,
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZGthZWRzZm5zY2d0eXZjd2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODc4MDUsImV4cCI6MjA2OTY2MzgwNX0.Ho4_1O_3QVzQG7102sjrsv60dOyH9IfsERnB0FVmYrQ'
-        },
-        body: JSON.stringify({
-          p_vehicle_id: vehicleId,
-          p_user_id: null, // Will use auth.uid()
-          p_facebook_post_id: facebookPostId,
-          p_update_data: updateData
-        })
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
-      }
-      
-      const result = await response.json();
-      console.log('✅ Credit deduction successful:', result);
-      
-      return {
-        success: true,
-        credits: result.credits,
-        message: 'Credit deducted successfully'
-      };
-      
-    } catch (error) {
-      console.error('❌ Error deducting credit:', error);
-      throw error;
-    }
+    console.warn('deductCreditForPosting is deprecated; deduction occurs in content script.');
+    return { success: true, credits: this.credits };
   }
 
   // New method to show buy credits message and redirect
@@ -1221,7 +1147,13 @@ class SalesonatorExtension {
       chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       console.log('📨 Popup received message:', message);
       
-      if (message.action === 'extensionReloaded') {
+      if (message.action === 'creditsUpdated') {
+        if (typeof message.credits === 'number') {
+          this.credits = message.credits;
+          this.updateCreditDisplay();
+        }
+        return;
+      } else if (message.action === 'extensionReloaded') {
         document.getElementById('status').textContent = 'Extension reloaded. Please refresh this popup.';
       } else if (message.action === 'imagesPreDownloaded') {
         console.log('✅ All images pre-downloaded successfully');
