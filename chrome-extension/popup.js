@@ -1354,17 +1354,18 @@ class SalesonatorExtension {
   }
 
   async debugCreditDeduction() {
-    console.log('🐛 DEBUG: Testing credit deduction...');
+    console.log('🐛 DEBUG: ========== Starting Credit Deduction Test ==========');
     
     try {
       // Get user token
       const settings = await chrome.storage.sync.get(['userToken']);
       if (!settings.userToken) {
+        console.log('🐛 DEBUG: No user token found');
         alert('❌ No user token found. Please login first.');
         return;
       }
 
-      console.log('🐛 DEBUG: User token found:', settings.userToken.substring(0, 20) + '...');
+      console.log('🐛 DEBUG: User token found, length:', settings.userToken.length);
 
       // Get the same vehicle that would be posted next (first available draft)
       await this.fetchVehicles();
@@ -1404,6 +1405,13 @@ class SalesonatorExtension {
       
       // Call the edge function to deduct credit and update status
       console.log('🐛 DEBUG: Making fetch request...');
+      console.log('🐛 DEBUG: URL:', apiUrl);
+      console.log('🐛 DEBUG: Headers:', {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${settings.userToken.substring(0, 20)}...`
+      });
+      console.log('🐛 DEBUG: Body:', JSON.stringify(requestPayload, null, 2));
+      
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -1447,7 +1455,14 @@ class SalesonatorExtension {
       
     } catch (error) {
       console.error('🐛 DEBUG EXCEPTION:', error);
-      alert(`❌ DEBUG EXCEPTION!\n\nError: ${error.message}`);
+      console.error('🐛 DEBUG Error Stack:', error.stack);
+      
+      // Check if it's a network error
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        alert(`❌ NETWORK ERROR!\n\nCannot reach the API endpoint.\nCheck if the API URL is correct and the server is running.\n\nError: ${error.message}`);
+      } else {
+        alert(`❌ DEBUG EXCEPTION!\n\nError: ${error.message}`);
+      }
     }
   }
 
