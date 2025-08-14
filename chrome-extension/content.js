@@ -2313,7 +2313,7 @@ class SalesonatorAutomator {
       return false;
     }
   }
-  // Transmission dropdown using successful field pattern
+  // Transmission dropdown using successful field pattern (Updated)
   async selectTransmission(transmission) {
     try {
       this.log(`⚙️ Selecting transmission: ${transmission}`);
