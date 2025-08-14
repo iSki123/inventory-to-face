@@ -3487,14 +3487,25 @@ class SalesonatorAutomator {
 
   // Message listener setup
   setupMessageListener() {
-    console.log('🔧 Setting up message listener in content script...');
+    console.log('🔧 DEBUG: Setting up message listener in content script...');
+    console.log('🔧 DEBUG: Content script URL:', window.location.href);
+    console.log('🔧 DEBUG: Content script ready at:', new Date().toISOString());
     
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-      console.log('📨 Message received in content script:', request.action, request);
+      console.log('📨 DEBUG: Message received in content script:', request.action, request);
+      console.log('📨 DEBUG: Sender details:', sender);
+      console.log('📨 DEBUG: Current URL when message received:', window.location.href);
       this.log('📨 Received message in content script:', request);
       
+      if (request.action === 'ping') {
+        console.log('📨 DEBUG: Ping received, responding...');
+        sendResponse({ status: 'ready', timestamp: new Date().toISOString(), url: window.location.href });
+        return true;
+      }
+      
       if (request.action === 'postVehicle') {
-        console.log('🚀 Processing postVehicle request...');
+        console.log('🚀 DEBUG: Processing postVehicle request...');
+        console.log('🚀 DEBUG: Vehicle data received:', request.vehicle?.id, request.vehicle?.year, request.vehicle?.make, request.vehicle?.model);
         this.log('🚀 Starting vehicle posting process...');
         
         // Validate vehicle data structure

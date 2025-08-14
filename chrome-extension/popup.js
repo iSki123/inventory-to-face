@@ -943,53 +943,64 @@ class SalesonatorExtension {
         const maxRetries = 10;
         
         const checkContentScript = () => {
-          console.log(`Attempting to ping content script (attempt ${retries + 1}/${maxRetries})...`);
-          console.log('Current tab:', currentTab.url, 'Tab ID:', currentTab.id);
+          console.log(`🔄 DEBUG: Attempting to ping content script (attempt ${retries + 1}/${maxRetries})...`);
+          console.log('🔄 DEBUG: Current tab:', currentTab.url, 'Tab ID:', currentTab.id);
+          console.log('🔄 DEBUG: Tab active?', currentTab.active, 'URL valid?', currentTab.url?.includes('facebook.com'));
           
           // Try to inject content script if not already present
           if (retries === 0) {
-            console.log('Attempting to inject content script...');
+            console.log('🔄 DEBUG: Attempting to inject content script...');
             chrome.scripting.executeScript({
               target: { tabId: currentTab.id },
               files: ['content.js']
+            }).then(result => {
+              console.log('🔄 DEBUG: Content script injection result:', result);
             }).catch(err => {
-              console.log('Content script injection failed (may already be injected):', err.message);
+              console.log('🔄 DEBUG: Content script injection failed (may already be injected):', err.message);
             });
           }
           
+          console.log('🔄 DEBUG: Sending ping message to tab ID:', currentTab.id);
           chrome.tabs.sendMessage(currentTab.id, { action: 'ping' }, (response) => {
             if (chrome.runtime.lastError) {
-              console.log(`Ping failed with error: ${chrome.runtime.lastError.message}`);
+              console.log(`🔄 DEBUG: Ping failed with error: ${chrome.runtime.lastError.message}`);
+              console.log('🔄 DEBUG: Runtime error details:', chrome.runtime.lastError);
               retries++;
               if (retries < maxRetries) {
-                console.log(`Content script not ready, retrying... (${retries}/${maxRetries})`);
+                console.log(`🔄 DEBUG: Content script not ready, retrying... (${retries}/${maxRetries})`);
                 setTimeout(checkContentScript, 1000);
               } else {
+                console.log('🔄 DEBUG: Max retries reached, failing');
                 reject(new Error(`Content script not responding after multiple attempts. Current page: ${currentTab.url}. Please reload the extension and refresh the Facebook page.`));
               }
             } else if (!response) {
-              console.log('Ping returned no response');
+              console.log('🔄 DEBUG: Ping returned no response (response is falsy)');
+              console.log('🔄 DEBUG: Response value:', response);
               retries++;
               if (retries < maxRetries) {
-                console.log(`No response from content script, retrying... (${retries}/${maxRetries})`);
+                console.log(`🔄 DEBUG: No response from content script, retrying... (${retries}/${maxRetries})`);
                 setTimeout(checkContentScript, 1000);
               } else {
+                console.log('🔄 DEBUG: Max retries reached with no response, failing');
                 reject(new Error(`Content script not responding after multiple attempts. Current page: ${currentTab.url}. Please reload the extension and refresh the Facebook page.`));
               }
             } else {
-              console.log('✅ Content script is ready, received response:', response);
+              console.log('🔄 DEBUG: ✅ Content script is ready, received response:', response);
+              console.log('🔄 DEBUG: About to send postVehicle message with vehicle:', vehicle?.id);
               // Content script is ready, now send the actual message
               chrome.tabs.sendMessage(currentTab.id, {
                 action: 'postVehicle',
                 vehicle: vehicle
               }, (response) => {
                 if (chrome.runtime.lastError) {
-                  console.error('Error sending postVehicle message:', chrome.runtime.lastError.message);
+                  console.error('🔄 DEBUG: Error sending postVehicle message:', chrome.runtime.lastError.message);
+                  console.error('🔄 DEBUG: PostVehicle error details:', chrome.runtime.lastError);
                   return reject(new Error(chrome.runtime.lastError.message));
                 }
                 
                 // Don't wait for response - the content script will notify us via message when done
-                console.log('✅ Vehicle posting command sent, waiting for notification...');
+                console.log('🔄 DEBUG: ✅ Vehicle posting command sent successfully, waiting for notification...');
+                console.log('🔄 DEBUG: PostVehicle response:', response);
                 document.getElementById('status').textContent = 'Posting vehicle...';
                 resolve({ success: true, message: 'Posting initiated' });
               });
