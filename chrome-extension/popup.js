@@ -1387,14 +1387,14 @@ class SalesonatorExtension {
       const apiUrl = document.getElementById('apiUrl').value;
       console.log('🐛 DEBUG: API URL:', apiUrl);
       
-      // Prepare request payload
+      // Prepare request payload for DEBUG ONLY - use 'debug' status to test credit deduction without changing actual status
       const requestPayload = {
         action: 'update_vehicle_status',
         vehicleId: draftVehicle.id,
-        status: 'posted',
+        status: 'debug',
         facebookPostId: 'debug_test_' + Date.now(),
         updateData: {
-          facebook_post_status: 'posted',
+          facebook_post_status: 'debug',
           last_posted_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }

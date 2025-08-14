@@ -178,6 +178,45 @@ async function updateVehicleStatus(supabaseClient: any, vehicleId: string, statu
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    } else if (status === 'debug') {
+      // For debug mode, test credit deduction without updating vehicle status
+      const { data: currentCredits, error: creditsError } = await supabaseClient
+        .from('profiles')
+        .select('credits')
+        .eq('user_id', userId)
+        .single();
+
+      if (creditsError) {
+        console.error('Error fetching credits for debug:', creditsError);
+        throw new Error('Failed to fetch current credits');
+      }
+
+      if (currentCredits.credits < 1) {
+        throw new Error('Insufficient credits to post vehicle');
+      }
+
+      // Get vehicle info for debug response without changing it
+      const { data: vehicle, error: vehicleError } = await supabaseClient
+        .from('vehicles')
+        .select('*')
+        .eq('id', vehicleId)
+        .eq('user_id', userId)
+        .single();
+
+      if (vehicleError) {
+        console.error('Error fetching vehicle for debug:', vehicleError);
+        throw new Error('Failed to fetch vehicle for debug');
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          vehicle: vehicle,
+          credits: currentCredits.credits,
+          message: `DEBUG: Credit test successful. You have ${currentCredits.credits} credits. Vehicle status NOT changed.`
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     } else {
       // For non-posted status updates, just update the vehicle normally
       const { data, error } = await supabaseClient
