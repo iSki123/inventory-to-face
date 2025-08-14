@@ -2404,7 +2404,7 @@ class SalesonatorAutomator {
     if (v.includes('diesel')) return 'Diesel';
     if (v.includes('electric')) return 'Electric';
     if (v.includes('hybrid') || v.includes('phev') || v.includes('hev')) return 'Hybrid';
-    if (v.includes('flex') || v.includes('e85')) return 'Flex fuel';
+    if (v.includes('flex') || v.includes('e85')) return 'Flex'; // Map to "Flex" not "Flex fuel"
     if (v.includes('gas') || v.includes('petrol')) return 'Gasoline';
     return null;
   }
