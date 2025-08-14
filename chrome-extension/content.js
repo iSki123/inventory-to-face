@@ -484,6 +484,9 @@ class SalesonatorAutomator {
     try {
       this.log('🚗 Starting enhanced vehicle posting process...', vehicleData);
       
+      // Store current vehicle data for later use (credit deduction)
+      this.currentVehicleData = vehicleData;
+      
       // Check if we're on the correct page first
       if (!window.location.href.includes('/marketplace/create/vehicle')) {
         this.log('⚠️ Not on create vehicle page, current URL:', window.location.href);
