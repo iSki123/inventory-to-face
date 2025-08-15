@@ -17,6 +17,7 @@ import { useVehicleSources } from "@/hooks/useVehicleSources";
 import { VehicleForm } from "@/components/VehicleForm";
 import { VehicleSourceForm } from "@/components/VehicleSourceForm";
 import { VehicleImageWithBlur } from "@/components/VehicleImageWithBlur";
+import { VehicleImageGallery } from "@/components/VehicleImageGallery";
 import { useToast } from "@/hooks/use-toast";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 

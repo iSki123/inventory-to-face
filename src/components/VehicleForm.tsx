@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Eye, X } from "lucide-react";
+import { VehicleImageGallery } from './VehicleImageGallery';
 
 interface VehicleFormProps {
   open: boolean;
@@ -636,30 +637,11 @@ export function VehicleForm({ open, onOpenChange, onSubmit, vehicle, isEditing }
 
           {/* Vehicle Images Gallery */}
           {formData.images && formData.images.length > 0 && (
-            <div className="space-y-3">
-              <Label>Vehicle Images ({formData.images.length})</Label>
-              <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-                {formData.images.map((image, index) => (
-                  <div
-                    key={index}
-                    className="relative aspect-square bg-muted rounded-md overflow-hidden cursor-pointer hover:opacity-75 transition-opacity group"
-                    onClick={() => setSelectedImageIndex(index)}
-                  >
-                    <img
-                      src={image}
-                      alt={`Vehicle image ${index + 1}`}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <Eye className="w-4 h-4 text-white" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <VehicleImageGallery
+              images={formData.images}
+              vehicleName={`${formData.year} ${formData.make} ${formData.model}`}
+              className="space-y-3"
+            />
           )}
 
           {/* Image Viewer Modal */}

@@ -594,7 +594,7 @@ async function processScrapedData(supabaseClient: any, sourceId: string, userId:
             view_count: 0,
             lead_count: 0,
             user_id: userId,
-            ai_images_generated: true, // Set to true since we have images
+            ai_images_generated: false, // Will be set to true only after AI generation completes
             // Include NHTSA data if available from VIN decoding
             body_style_nhtsa: vehicle.body_style_nhtsa || null,
             fuel_type_nhtsa: vehicle.fuel_type_nhtsa || null,
@@ -1622,7 +1622,7 @@ async function importSpecificTask(supabaseClient: any, taskId: string, userId: s
               user_id: userId,
               status: 'available',
               facebook_post_status: 'draft',
-              ai_images_generated: vehicle.images && vehicle.images.length > 0,
+              ai_images_generated: false, // Will be set to true only after AI generation completes
               // Include NHTSA VIN decoded fields
               body_style_nhtsa: vehicle.body_style_nhtsa,
               fuel_type_nhtsa: vehicle.fuel_type_nhtsa,

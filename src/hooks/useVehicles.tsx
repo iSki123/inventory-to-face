@@ -652,13 +652,39 @@ export const useVehicles = () => {
       return;
     }
     
-    toast.info(`Starting AI image generation for ${vehicleIds.length} vehicle${vehicleIds.length > 1 ? 's' : ''}...`);
+    // Filter to only include vehicles that haven't been processed or need reprocessing
+    const vehiclesToProcess = vehicleIds.filter(vehicleId => {
+      const vehicle = vehicles.find(v => v.id === vehicleId);
+      if (!vehicle) return false;
+      
+      // Process vehicles that:
+      // 1. Haven't been marked as having AI images generated, OR
+      // 2. Were marked as generated but don't have the request timestamp (indicating incomplete processing), OR
+      // 3. Have fewer than 3 total images (need more images)
+      const hasValidAIImages = vehicle.ai_images_generated && vehicle.ai_image_generation_requested_at;
+      const hasEnoughImages = vehicle.images && vehicle.images.length >= 3;
+      
+      return !hasValidAIImages || !hasEnoughImages;
+    });
+    
+    if (vehiclesToProcess.length === 0) {
+      toast.info("All selected vehicles already have AI images generated.");
+      setLoading(false);
+      return;
+    }
+    
+    if (vehiclesToProcess.length !== vehicleIds.length) {
+      const skippedCount = vehicleIds.length - vehiclesToProcess.length;
+      toast.info(`Processing ${vehiclesToProcess.length} vehicles (${skippedCount} already have AI images)`);
+    } else {
+      toast.info(`Starting AI image generation for ${vehiclesToProcess.length} vehicle${vehiclesToProcess.length > 1 ? 's' : ''}...`);
+    }
 
     try {
       let successCount = 0;
       let errorCount = 0;
 
-      for (const vehicleId of vehicleIds) {
+      for (const vehicleId of vehiclesToProcess) {
         try {
           const vehicle = vehicles.find(v => v.id === vehicleId);
           if (!vehicle) continue;
