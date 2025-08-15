@@ -169,11 +169,39 @@ License Plate:
     // Helper function to wait for a specific amount of time
     const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-    // Helper function to make API request with retry logic
-    const generateImageWithRetry = async (imageConfig: any, maxRetries = 3): Promise<string | null> => {
+    // Enhanced rate limiting with jitter to prevent thundering herd
+    const getBackoffDelay = (attempt: number, baseDelay: number = 2000): number => {
+      const exponentialDelay = Math.pow(2, attempt - 1) * baseDelay;
+      const jitter = Math.random() * 1000; // Add 0-1 second jitter
+      return Math.min(exponentialDelay + jitter, 120000); // Cap at 2 minutes
+    };
+
+    // Helper function to parse rate limit delay from OpenAI response
+    const parseRateLimitDelay = (errorMessage: string): number => {
+      const retryAfterMatch = errorMessage.match(/(\d+\.?\d*) seconds/);
+      if (retryAfterMatch) {
+        const seconds = parseFloat(retryAfterMatch[1]);
+        // Add buffer time to be safe and include jitter
+        return Math.ceil(seconds * 1000) + Math.random() * 5000 + 5000; // Add 5-10 seconds buffer
+      }
+      return 60000; // Default 1 minute if can't parse
+    };
+
+    // Helper function to make API request with enhanced retry logic
+    const generateImageWithRetry = async (imageConfig: any, maxRetries = 5): Promise<string | null> => {
+      let lastRateLimitDelay = 0;
+      
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           console.log(`Generating ${imageConfig.angle} image (attempt ${attempt}/${maxRetries})...`);
+          
+          // Add progressive delay between attempts to reduce rate limit hits
+          if (attempt > 1) {
+            let delayTime = lastRateLimitDelay > 0 ? lastRateLimitDelay : getBackoffDelay(attempt, 3000);
+            console.log(`Waiting ${Math.ceil(delayTime/1000)} seconds before attempt ${attempt}...`);
+            await wait(delayTime);
+            lastRateLimitDelay = 0; // Reset after using
+          }
           
           const response = await fetch('https://api.openai.com/v1/images/generations', {
             method: 'POST',
@@ -196,20 +224,27 @@ License Plate:
             const errorData = await response.text();
             console.error(`OpenAI API error for ${imageConfig.angle}:`, response.status, errorData);
             
-            // Handle rate limit specifically
+            // Handle rate limit specifically with enhanced logic
             if (response.status === 429) {
               try {
                 const errorJson = JSON.parse(errorData);
-                const retryAfter = errorJson.error?.message?.match(/(\d+\.?\d*) seconds/);
-                const waitTime = retryAfter ? Math.ceil(parseFloat(retryAfter[1])) * 1000 : 30000; // Default 30s
+                const waitTime = parseRateLimitDelay(errorJson.error?.message || '');
+                lastRateLimitDelay = waitTime;
                 
                 if (attempt < maxRetries) {
-                  console.log(`Rate limited. Waiting ${waitTime/1000} seconds before retry...`);
-                  await wait(waitTime);
+                  console.log(`Rate limited. Will wait ${Math.ceil(waitTime/1000)} seconds before retry...`);
+                  // Don't wait here, let the next iteration handle the delay
                   continue;
+                } else {
+                  console.error(`Max retries reached for ${imageConfig.angle} due to rate limiting`);
+                  imageGenerationErrors.push(`${imageConfig.angle}: Rate limit exceeded after ${maxRetries} attempts`);
+                  return null;
                 }
               } catch (parseError) {
                 console.error('Error parsing rate limit response:', parseError);
+                lastRateLimitDelay = 60000; // Default to 1 minute
+                if (attempt < maxRetries) continue;
+                return null;
               }
             }
             
@@ -221,14 +256,28 @@ License Plate:
               return null;
             }
             
-            imageGenerationErrors.push(`${imageConfig.angle}: ${response.status} ${response.statusText}`);
-            if (attempt < maxRetries && response.status >= 500) {
-              // Retry on server errors with exponential backoff
-              const backoffTime = Math.pow(2, attempt) * 1000;
-              console.log(`Server error. Retrying in ${backoffTime/1000} seconds...`);
-              await wait(backoffTime);
-              continue;
+            // Handle other client errors (don't retry)
+            if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+              const errorMsg = `Client error ${response.status}: ${response.statusText}`;
+              console.error(errorMsg);
+              imageGenerationErrors.push(`${imageConfig.angle}: ${errorMsg}`);
+              return null;
             }
+            
+            // Handle server errors (retry with backoff)
+            if (response.status >= 500) {
+              if (attempt < maxRetries) {
+                const backoffTime = getBackoffDelay(attempt, 2000);
+                console.log(`Server error. Retrying in ${Math.ceil(backoffTime/1000)} seconds...`);
+                await wait(backoffTime);
+                continue;
+              }
+              imageGenerationErrors.push(`${imageConfig.angle}: Server error after ${maxRetries} attempts`);
+              return null;
+            }
+            
+            // Other errors
+            imageGenerationErrors.push(`${imageConfig.angle}: ${response.status} ${response.statusText}`);
             return null;
           }
 
@@ -271,8 +320,8 @@ License Plate:
         } catch (error) {
           console.error(`Error generating ${imageConfig.angle} image (attempt ${attempt}):`, error);
           if (attempt < maxRetries) {
-            const backoffTime = Math.pow(2, attempt) * 1000;
-            console.log(`Retrying in ${backoffTime/1000} seconds...`);
+            const backoffTime = getBackoffDelay(attempt, 2000);
+            console.log(`Network error. Retrying in ${Math.ceil(backoffTime/1000)} seconds...`);
             await wait(backoffTime);
             continue;
           }
@@ -283,17 +332,27 @@ License Plate:
       return null;
     };
 
-    // Generate each image sequentially with proper rate limiting
-    for (const imageConfig of imagePrompts) {
+    // Generate each image sequentially with enhanced rate limiting
+    for (let i = 0; i < imagePrompts.length; i++) {
+      const imageConfig = imagePrompts[i];
+      
+      // Add initial delay before first request to stagger multiple concurrent function calls
+      if (i === 0) {
+        const initialDelay = Math.random() * 5000; // 0-5 second random delay
+        console.log(`Initial stagger delay: ${Math.ceil(initialDelay/1000)} seconds`);
+        await wait(initialDelay);
+      }
+      
       const imageUrl = await generateImageWithRetry(imageConfig);
       if (imageUrl) {
         generatedImages.push(imageUrl);
       }
       
-      // Add delay between requests to prevent rate limiting (reduced for timeout prevention)
-      if (imageConfig !== imagePrompts[imagePrompts.length - 1]) {
-        console.log('Waiting 1 second before next image generation...');
-        await wait(1000); // Reduced from 3000ms to 1000ms
+      // Add delay between different image requests to prevent rate limiting
+      if (i < imagePrompts.length - 1) {
+        const betweenDelay = 8000 + Math.random() * 4000; // 8-12 seconds between images
+        console.log(`Waiting ${Math.ceil(betweenDelay/1000)} seconds before next image generation...`);
+        await wait(betweenDelay);
       }
     }
 
