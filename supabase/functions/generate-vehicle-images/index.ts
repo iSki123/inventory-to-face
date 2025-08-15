@@ -113,45 +113,48 @@ serve(async (req) => {
     // Check if we have a reference image to use as seed
     const seedImageUrl = currentVehicle?.images?.[0];
     
-    // Helper function to build the new prompt structure
+    // New prompt template with variables populated from Supabase data
     const buildPrompt = (viewDescription: string) => {
-      const seedImageReference = seedImageUrl 
-        ? `Reference this image for vehicle styling, lighting, background, damage, and customization:
-${seedImageUrl}
+      const promptTemplate = `Reference this image for vehicle styling, lighting, background, damage, and customization:
+${seedImageUrl || 'N/A'}
 
-Analyze and replicate the vehicle's exact appearance, including color, reflections, weathering, and all visible modifications or wear from the seed image, such as:
-• Aftermarket wheels, tires, body kits, spoilers, step bars, lift/leveling kits, vinyl wraps, badges, mismatched panels
-• Window rain guards, bed racks, roof accessories
-• All visible lighting modifications — off-road LED bars, fog lights, auxiliary pods, halo rings, aftermarket headlights/taillights — including the exact style, housing, lens, placement, mounting method, and color temperature as seen in the seed image
-• Scratches, dents, paint chips, rust, scuffs, cracked or aged components
+GOAL: Generate a clean, realistic photo that matches the seed image in **near-identical likeness**. The seed image is the **single source of truth**.
 
-` : '';
+HARD CONSTRAINTS — DO NOT VIOLATE:
+• Do NOT add, invent, or "upgrade" any feature that is not clearly visible in the seed image.
+• Default to OEM/STOCK appearance for any part that is not clearly visible.
+• If uncertain about a feature (occluded, blurry, partially cropped), OMIT it and keep OEM/STOCK.
+• Ignore and REMOVE ad frames, banners, price boxes, watermarks, emoji/stickers, lot signage graphics, or any non-vehicle overlays from the seed image. These are NOT vehicle features.
+• Keep the vehicle's ride height and stance exactly as in the seed image. **No lift/no lower** unless clearly shown.
+• Keep wheels/tires exactly as shown (diameter/width/style/finish/sidewall look). Do NOT swap styles or sizes.
+• Lighting mods: ONLY replicate lights that are clearly visible in the seed image (e.g., roof LED bar, grille lights, fogs, halos, pods). Match the **exact style, housing, lens, mounting location, and color temperature**. If not clearly present, DO NOT add any extra lights.
+• Other mods/damage to replicate ONLY if clearly visible: step/nerf bars, racks, rain guards, body kits/flares, vinyl/wraps/decals, badges, mismatched panels, scratches, dents, chips, rust, scuffs, cracked parts. Match their exact location, size, and severity.
 
-      return `${seedImageReference}Vehicle data:
-${vehicleData.year} ${vehicleData.make} ${vehicleData.model} ${vehicleData.trim || ''}, exterior: ${vehicleData.exterior_color || 'N/A'}, interior: ${vehicleData.interior_color || 'N/A'}, mileage: ${vehicleData.mileage || 'N/A'}, engine: ${vehicleData.engine || vehicleData.engine_nhtsa || 'N/A'}, drivetrain: ${vehicleData.drivetrain || vehicleData.drivetrain_nhtsa || 'N/A'}, fuel: ${vehicleData.fuel_type || vehicleData.fuel_type_nhtsa || 'N/A'}
+Vehicle data for accuracy:
+${vehicleData.year} ${vehicleData.make} ${vehicleData.model} ${vehicleData.trim || 'N/A'}, exterior: ${vehicleData.exterior_color || 'N/A'}, interior: ${vehicleData.interior_color || 'N/A'}, mileage: ${vehicleData.mileage || 'N/A'}, engine: ${vehicleData.engine || vehicleData.engine_nhtsa || 'N/A'}, drivetrain: ${vehicleData.drivetrain || vehicleData.drivetrain_nhtsa || 'N/A'}, fuel: ${vehicleData.fuel_type || vehicleData.fuel_type_nhtsa || 'N/A'}.
 
 View / Angle:
 ${viewDescription}
 
 Composition:
-• Vertical 9:16 format (iPhone portrait style)
+• Vertical 9:16 (iPhone portrait)
 • Vehicle occupies 65–70% of the frame
-• At least 100px clear margin on both left and right sides
-• Balanced top & bottom spacing
-• Preserve original background, lighting, shadows, and ground textures from the seed image
-• Ensure no part of the vehicle is cropped or cut off
+• ≥ 100px clear margin on both left & right sides
+• Balanced space above & below
+• Preserve the original background & lighting from the seed (sky, shadows, pavement/ground texture)
+• Ensure the full vehicle is visible — no cropping/cutoffs
 
-Strict No-Text Policy:
-No visible text of any kind: no labels, overlays, price tags, watermarks, UI boxes, dealership signage, borders, captions, or numbers. (Only the physical license plate text is allowed.)
+STRICT NO-TEXT POLICY:
+No visible text of any kind in the image (no labels, overlays, price tags, UI boxes, borders, captions, numbers, or dealership graphics). The only allowed text is the **physical license plate** rendered as part of the car:
+License plate: "${dealershipName}".
 
 Photography Style:
-Ultra-high-resolution, realistic automotive photography with natural dynamic range, sharp focus, subtle depth-of-field, and a candid iPhone feel. Lighting and perspective must match the seed image.
+Ultra-high-resolution, realistic automotive photography with natural dynamic range, sharp focus, subtle depth-of-field. Keep the candid, modern iPhone look. Match perspective and lighting direction from the seed image.`;
 
-License Plate:
-"My plate reads: ${dealershipName}" (render as part of the vehicle plate, not an overlay).`;
+      return promptTemplate;
     };
 
-    // Define 2 key image prompts with new structure
+    // Define 2 key image prompts using the new template
     const imagePrompts = [
       {
         angle: 'front_angled',
