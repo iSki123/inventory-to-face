@@ -110,23 +110,56 @@ serve(async (req) => {
       .eq('id', vehicleId)
       .single();
 
-    // Check if we have a reference image to use
-    const referenceImageUrl = currentVehicle?.images?.[0];
-    const referenceImagePrefix = referenceImageUrl 
-      ? `Reference this image for accurate vehicle styling, lighting, and background composition: ${referenceImageUrl}. Match the vehicle's exact appearance, paint color accuracy, reflections, and natural background elements present in the reference image. `
-      : '';
+    // Check if we have a reference image to use as seed
+    const seedImageUrl = currentVehicle?.images?.[0];
+    
+    // Helper function to build the new prompt structure
+    const buildPrompt = (viewDescription: string) => {
+      const seedImageReference = seedImageUrl 
+        ? `Reference this image for vehicle styling, lighting, background, damage, and customization:
+${seedImageUrl}
 
-    const basePromptSuffix = `Image must be composed in vertical 9:16 format, as if taken on a brand new iPhone in portrait orientation. Vehicle should fill approximately 65–70% of the total frame area, while leaving at least 100px of clear space on both the left and right sides. Maintain proportional space above and below the vehicle for balance. Preserve the original environmental setting and lighting conditions from the reference image, including sky, ground texture, shadows, and surroundings. Absolutely no text, titles, labels, captions, borders, boxes, price tags, watermarks, or any graphic overlays are allowed in the image — it must be a clean, natural photograph of the vehicle only. No part of the vehicle should be cropped or cut off. Use ultra-high-resolution, realistic automotive photography with professional clarity, natural dynamic range, sharp focus, and subtle depth-of-field. Keep the natural feel of a candid iPhone photo. Display "${dealershipName}" on the license plate.`;
+Analyze and replicate the vehicle's exact appearance, including color, reflections, weathering, and all visible modifications or wear from the seed image, such as:
+• Aftermarket wheels, tires, body kits, spoilers, step bars, lift/leveling kits, vinyl wraps, badges, mismatched panels
+• Window rain guards, bed racks, roof accessories
+• All visible lighting modifications — off-road LED bars, fog lights, auxiliary pods, halo rings, aftermarket headlights/taillights — including the exact style, housing, lens, placement, mounting method, and color temperature as seen in the seed image
+• Scratches, dents, paint chips, rust, scuffs, cracked or aged components
 
-    // Define 2 key image prompts (reduced from 4 to prevent timeouts)
+` : '';
+
+      return `${seedImageReference}Vehicle data:
+${vehicleData.year} ${vehicleData.make} ${vehicleData.model} ${vehicleData.trim || ''}, exterior: ${vehicleData.exterior_color || 'N/A'}, interior: ${vehicleData.interior_color || 'N/A'}, mileage: ${vehicleData.mileage || 'N/A'}, engine: ${vehicleData.engine || vehicleData.engine_nhtsa || 'N/A'}, drivetrain: ${vehicleData.drivetrain || vehicleData.drivetrain_nhtsa || 'N/A'}, fuel: ${vehicleData.fuel_type || vehicleData.fuel_type_nhtsa || 'N/A'}
+
+View / Angle:
+${viewDescription}
+
+Composition:
+• Vertical 9:16 format (iPhone portrait style)
+• Vehicle occupies 65–70% of the frame
+• At least 100px clear margin on both left and right sides
+• Balanced top & bottom spacing
+• Preserve original background, lighting, shadows, and ground textures from the seed image
+• Ensure no part of the vehicle is cropped or cut off
+
+Strict No-Text Policy:
+No visible text of any kind: no labels, overlays, price tags, watermarks, UI boxes, dealership signage, borders, captions, or numbers. (Only the physical license plate text is allowed.)
+
+Photography Style:
+Ultra-high-resolution, realistic automotive photography with natural dynamic range, sharp focus, subtle depth-of-field, and a candid iPhone feel. Lighting and perspective must match the seed image.
+
+License Plate:
+"My plate reads: ${dealershipName}" (render as part of the vehicle plate, not an overlay).`;
+    };
+
+    // Define 2 key image prompts with new structure
     const imagePrompts = [
       {
         angle: 'front_angled',
-        prompt: `${referenceImagePrefix}${vehicleDetails}. Front 3/4 angle view showing the front grille, headlights, and driver's side of the vehicle. ${basePromptSuffix}`
+        prompt: buildPrompt('Front 3/4 — grille, headlights, driver\'s side')
       },
       {
         angle: 'side_profile',
-        prompt: `${referenceImagePrefix}${vehicleDetails}. Pure side profile view showing the complete side silhouette, wheels, and body lines of the vehicle. ${basePromptSuffix}`
+        prompt: buildPrompt('Side profile — all wheels, full body')
       }
     ];
 
