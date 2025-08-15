@@ -300,10 +300,6 @@ export default function Inventory() {
             
             {selectedVehicles.length > 0 && (
               <>
-                <Button onClick={handleBulkPost} variant="outline">
-                  <Facebook className="mr-2 h-4 w-4" />
-                  Post Selected ({selectedVehicles.length})
-                </Button>
                 <Button 
                   onClick={() => generateAIDescriptions(selectedVehicles)} 
                   variant="outline"
