@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { RefreshCw, Database, Car, Zap, Clock, CheckCircle2, Image, Shield } from "lucide-react";
+import { RefreshCw, Database, Car, Zap, Clock, CheckCircle2, Image, Shield, Server, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
@@ -188,6 +188,36 @@ export default function AdminPanel() {
     await updateSetting('ai_image_generation_enabled', { enabled });
   };
 
+  // Edge function control handlers
+  const handleGlobalEdgeFunctionsToggle = async (enabled: boolean) => {
+    await updateSetting('edge_functions_enabled', { enabled });
+    toast.success(`Edge functions ${enabled ? 'enabled' : 'disabled'} globally`);
+  };
+
+  const handleSpecificEdgeFunctionToggle = async (functionName: string, enabled: boolean) => {
+    const currentSettings = getSetting('edge_function_overrides', {}) || {};
+    const newSettings = {
+      ...currentSettings,
+      [functionName]: enabled
+    };
+    await updateSetting('edge_function_overrides', newSettings);
+    toast.success(`${functionName} ${enabled ? 'enabled' : 'disabled'}`);
+  };
+
+  // List of edge functions that can be controlled
+  const edgeFunctions = [
+    { name: 'generate-vehicle-images', label: 'AI Vehicle Image Generation', description: 'Generates AI images for vehicles using OpenAI' },
+    { name: 'generate-vehicle-description', label: 'AI Vehicle Descriptions', description: 'Generates AI-powered vehicle descriptions' },
+    { name: 'facebook-poster', label: 'Facebook Poster', description: 'Posts vehicles to Facebook Marketplace' },
+    { name: 'octoparse-scraper', label: 'Octoparse Scraper', description: 'Scrapes vehicle data from dealership websites' },
+    { name: 'generate-lead-response', label: 'AI Lead Responses', description: 'Generates AI responses for customer leads' },
+    { name: 'vin-decoder', label: 'VIN Decoder', description: 'Decodes vehicle VIN numbers' },
+    { name: 'scrape-vehicle', label: 'Vehicle Scraper', description: 'Individual vehicle scraping functionality' }
+  ];
+
+  const globalEdgeFunctionsEnabled = getSetting('edge_functions_enabled', { enabled: true })?.enabled;
+  const edgeFunctionOverrides = getSetting('edge_function_overrides', {}) || {};
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="space-y-2">
@@ -275,6 +305,101 @@ export default function AdminPanel() {
               disabled={settingsLoading}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Edge Functions Control */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Server className="h-5 w-5" />
+            Edge Functions Control
+          </CardTitle>
+          <CardDescription>
+            Enable or disable edge functions globally or individually
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Global Toggle */}
+          <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="global-edge-functions-toggle" className="font-semibold">Global Edge Functions</Label>
+                {!globalEdgeFunctionsEnabled && (
+                  <Badge variant="destructive" className="text-xs">
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    DISABLED
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Master switch to enable/disable all edge functions system-wide
+              </p>
+            </div>
+            <Switch
+              id="global-edge-functions-toggle"
+              checked={globalEdgeFunctionsEnabled}
+              onCheckedChange={handleGlobalEdgeFunctionsToggle}
+              disabled={settingsLoading}
+            />
+          </div>
+          
+          <Separator />
+          
+          {/* Individual Function Controls */}
+          <div className="space-y-1">
+            <Label className="text-sm font-medium">Individual Function Controls</Label>
+            <p className="text-xs text-muted-foreground mb-4">
+              Override individual functions (requires global functions to be enabled)
+            </p>
+          </div>
+          
+          <div className="grid gap-3">
+            {edgeFunctions.map((func) => {
+              const isEnabled = globalEdgeFunctionsEnabled && (edgeFunctionOverrides[func.name] !== false);
+              const isOverridden = edgeFunctionOverrides.hasOwnProperty(func.name);
+              
+              return (
+                <div key={func.name} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor={`${func.name}-toggle`} className="text-sm font-medium">
+                        {func.label}
+                      </Label>
+                      {!isEnabled && (
+                        <Badge variant="outline" className="text-xs">
+                          DISABLED
+                        </Badge>
+                      )}
+                      {isOverridden && (
+                        <Badge variant="secondary" className="text-xs">
+                          OVERRIDE
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {func.description}
+                    </p>
+                  </div>
+                  <Switch
+                    id={`${func.name}-toggle`}
+                    checked={edgeFunctionOverrides[func.name] !== false}
+                    onCheckedChange={(enabled) => handleSpecificEdgeFunctionToggle(func.name, enabled)}
+                    disabled={settingsLoading || !globalEdgeFunctionsEnabled}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          
+          {!globalEdgeFunctionsEnabled && (
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-sm font-medium text-destructive">⚠️ Edge Functions Disabled</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                All edge functions are currently disabled. Enable global edge functions to allow individual controls.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

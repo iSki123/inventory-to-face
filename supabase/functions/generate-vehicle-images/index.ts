@@ -16,6 +16,69 @@ serve(async (req) => {
   try {
     console.log('=== AI Vehicle Image Generation Started ===');
     
+    // Initialize Supabase client early to check settings
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    );
+
+    // Check if edge functions are enabled globally
+    const { data: globalSettings, error: globalError } = await supabaseClient
+      .from('site_settings')
+      .select('setting_value')
+      .eq('setting_key', 'edge_functions_enabled')
+      .maybeSingle();
+
+    if (globalError) {
+      console.error('Error fetching global edge function settings:', globalError);
+    }
+
+    const globalEnabled = globalSettings?.setting_value?.enabled !== false; // Default to true if not found
+    
+    if (!globalEnabled) {
+      console.log('Edge functions are disabled globally');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'Edge functions are currently disabled by administrator',
+          code: 'EDGE_FUNCTIONS_DISABLED'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 503 }
+      );
+    }
+
+    // Check specific function override
+    const { data: overrideSettings, error: overrideError } = await supabaseClient
+      .from('site_settings')
+      .select('setting_value')
+      .eq('setting_key', 'edge_function_overrides')
+      .maybeSingle();
+
+    if (overrideError) {
+      console.error('Error fetching edge function overrides:', overrideError);
+    }
+
+    const overrides = overrideSettings?.setting_value || {};
+    const functionEnabled = overrides['generate-vehicle-images'] !== false; // Default to enabled if not overridden
+    
+    if (!functionEnabled) {
+      console.log('AI Vehicle Image Generation is disabled by administrator');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'AI Vehicle Image Generation is currently disabled by administrator',
+          code: 'FUNCTION_DISABLED'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 503 }
+      );
+    }
+    
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAIApiKey) {
       console.error('OpenAI API key not configured');
@@ -37,16 +100,7 @@ serve(async (req) => {
     }
 
     // Initialize Supabase client with service role for database updates
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    );
+    // (Already initialized above for settings check)
 
     // Check if AI image generation is enabled site-wide
     const { data: settings, error: settingsError } = await supabaseClient
