@@ -103,17 +103,30 @@ serve(async (req) => {
       vehicleData.features && vehicleData.features.length > 0 ? `with features: ${vehicleData.features.slice(0, 5).join(', ')}` : null
     ].filter(Boolean).join(', ');
 
+    // Get current vehicle images for reference (if available)
+    const { data: currentVehicle } = await supabaseClient
+      .from('vehicles')
+      .select('images')
+      .eq('id', vehicleId)
+      .single();
+
+    // Check if we have a reference image to use
+    const referenceImageUrl = currentVehicle?.images?.[0];
+    const referenceImagePrefix = referenceImageUrl 
+      ? `Reference this image for accurate vehicle styling, lighting, and composition: ${referenceImageUrl}. Use this as a visual guide to match the vehicle's actual appearance, color accuracy, and photographic style. `
+      : '';
+
     const basePromptSuffix = `Professional automotive dealership photography with the ENTIRE vehicle well-centered in the frame with generous white space around all edges. The vehicle should occupy approximately 60-70% of the image frame, leaving substantial empty space on all sides - top, bottom, left, and right. Think of it like a product photo where the subject is prominently displayed but never touches the edges. Clean, bright modern dealership showroom floor or outdoor lot with professional lighting. The vehicle has a visible license plate reading "${dealershipName}". Ultra high resolution, realistic automotive photography style with professional product photography composition. The vehicle should appear pristine and ready for sale with complete vehicle visibility and ample breathing room around the entire perimeter.`;
 
     // Define 2 key image prompts (reduced from 4 to prevent timeouts)
     const imagePrompts = [
       {
         angle: 'front_angled',
-        prompt: `${vehicleDetails}. Front 3/4 angle view showing the front grille, headlights, and driver's side of the vehicle. ${basePromptSuffix}`
+        prompt: `${referenceImagePrefix}${vehicleDetails}. Front 3/4 angle view showing the front grille, headlights, and driver's side of the vehicle. ${basePromptSuffix}`
       },
       {
         angle: 'side_profile',
-        prompt: `${vehicleDetails}. Pure side profile view showing the complete side silhouette, wheels, and body lines of the vehicle. ${basePromptSuffix}`
+        prompt: `${referenceImagePrefix}${vehicleDetails}. Pure side profile view showing the complete side silhouette, wheels, and body lines of the vehicle. ${basePromptSuffix}`
       }
     ];
 
@@ -255,8 +268,8 @@ serve(async (req) => {
     
     // Update vehicle with generated images even if only some were successful
     if (generatedImages.length > 0) {
-      // Get current vehicle to preserve existing images
-      const { data: currentVehicle, error: fetchError } = await supabaseClient
+      // Get updated current vehicle to preserve existing images
+      const { data: updatedVehicle, error: fetchError } = await supabaseClient
         .from('vehicles')
         .select('images')
         .eq('id', vehicleId)
@@ -271,7 +284,7 @@ serve(async (req) => {
       }
 
       // Combine existing images with newly generated ones (filter out any nulls/undefined)
-      const existingImages = (currentVehicle?.images || []).filter(img => img && img.trim() !== '');
+      const existingImages = (updatedVehicle?.images || []).filter(img => img && img.trim() !== '');
       const filteredGeneratedImages = generatedImages.filter(img => img && img.trim() !== '');
       const allImages = [...existingImages, ...filteredGeneratedImages];
       
