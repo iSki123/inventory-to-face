@@ -25,11 +25,11 @@ const Index = () => {
   gyroControls: false,
   minHeight: 200.00,
   minWidth: 200.00,
-  scale: 0.25,
-  scaleMobile: 0.25,
+  scale: 0.15,
+  scaleMobile: 0.15,
   color: 0x4d99d9,
   backgroundColor: 0x0,
-  points: 5.00,
+  points: 8.00,
   maxDistance: 18.00,
   spacing: 16.00
     });
