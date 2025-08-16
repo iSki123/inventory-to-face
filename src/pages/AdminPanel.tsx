@@ -439,7 +439,7 @@ export default function AdminPanel() {
           <div className="space-y-6">
             <div>
               <Label className="text-base font-medium">Individual Image Settings</Label>
-              <p className="text-sm text-muted-foreground break-words">
+              <p className="text-sm text-muted-foreground break-words whitespace-normal overflow-wrap-anywhere">
                 Configure each image angle individually. Available variables: {`{{SEED_IMAGE_URL}}, {{YEAR}}, {{MAKE}}, {{MODEL}}, {{TRIM}}, {{EXTERIOR_COLOR}}, {{INTERIOR_COLOR}}, {{MILEAGE}}, {{ENGINE}}, {{DRIVETRAIN}}, {{FUEL_TYPE}}, {{DEALERSHIP_NAME}}, {{VIEW_DESCRIPTION}}`}
               </p>
             </div>
