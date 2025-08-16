@@ -296,15 +296,15 @@ const Index = () => {
         </section>
 
         {/* Pricing CTA */}
-        <section className="py-20 px-4 bg-gradient-to-r from-blue-600 to-blue-800 text-white">
+        <section className="py-20 px-4 bg-gradient-to-r from-[#4a84cb] to-blue-800 text-white">
           <div className="container max-w-4xl mx-auto text-center">
             <h2 className="text-3xl md:text-5xl font-bold mb-6">Only Pay For What You Use</h2>
             <p className="text-xl mb-10 text-blue-100 max-w-2xl mx-auto">Purchase credits for postings and AI replies. Scale up when you need to—no subscriptions required.</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" asChild className="bg-white text-blue-600 hover:bg-gray-100 text-lg px-8 py-6">
+              <Button size="lg" asChild className="bg-white text-black hover:bg-gray-100 text-lg px-8 py-6">
                 <Link to="/billing">View Credit Options</Link>
               </Button>
-              <Button size="lg" variant="outline" asChild className="border-white text-white hover:bg-white hover:text-blue-600 text-lg px-8 py-6">
+              <Button size="lg" variant="outline" asChild className="border-white text-black hover:bg-gray-100 hover:text-black text-lg px-8 py-6">
                 <Link to="/auth">Create a Free Account</Link>
               </Button>
             </div>
