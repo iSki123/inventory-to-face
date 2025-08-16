@@ -132,7 +132,7 @@ export default function ConsoleLogsViewer() {
           </Select>
 
           <Select value={selectedSession} onValueChange={setSelectedSession}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-40 sm:w-48">
               <SelectValue placeholder="Session" />
             </SelectTrigger>
             <SelectContent>
@@ -145,7 +145,7 @@ export default function ConsoleLogsViewer() {
             </SelectContent>
           </Select>
 
-          <div className="flex-1 min-w-64">
+          <div className="flex-1 min-w-0 w-full sm:w-auto">
             <Input
               placeholder="Search logs..."
               value={searchTerm}
@@ -214,23 +214,23 @@ export default function ConsoleLogsViewer() {
             <div className="space-y-2 p-2">
               {logs.map((log, index) => (
                 <div key={`${log.id}-${index}`} className="border-b pb-2 last:border-b-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
                     <Badge variant={getLogLevelColor(log.log_level)}>
                       {log.log_level.toUpperCase()}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
                       {formatTimestamp(log.created_at)}
                     </span>
-                    <span className="text-xs text-muted-foreground truncate max-w-32">
+                    <span className="text-xs text-muted-foreground truncate max-w-20 sm:max-w-32">
                       {log.session_id}
                     </span>
                     {log.url && (
-                      <span className="text-xs text-blue-600 truncate max-w-48">
+                      <span className="text-xs text-blue-600 truncate max-w-24 sm:max-w-48">
                         {new URL(log.url).pathname}
                       </span>
                     )}
                   </div>
-                  <div className="text-sm font-mono bg-muted/30 p-2 rounded">
+                  <div className="text-sm font-mono bg-muted/30 p-2 rounded break-words overflow-wrap-anywhere">
                     {log.message}
                   </div>
                   {log.data && (
@@ -238,7 +238,7 @@ export default function ConsoleLogsViewer() {
                       <summary className="text-xs text-muted-foreground cursor-pointer">
                         Additional Data
                       </summary>
-                      <pre className="text-xs mt-1 bg-muted/50 p-2 rounded overflow-x-auto">
+                      <pre className="text-xs mt-1 bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap break-words">
                         {JSON.stringify(log.data, null, 2)}
                       </pre>
                     </details>
