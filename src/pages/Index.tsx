@@ -197,8 +197,8 @@ const Index = () => {
                 <Button size="lg" asChild style={{backgroundColor: 'black', color: 'white', borderColor: 'black'}} className="black-button">
                   <Link to="/auth" style={{backgroundColor: 'black', color: 'white'}}>Start Free</Link>
                 </Button>
-                <Button size="lg" variant="outline" asChild className="text-white border-white hover:bg-white hover:text-black">
-                  <a href="#how-it-works">See how it works</a>
+                <Button size="lg" variant="outline" asChild className="text-black border-white hover:bg-white hover:text-black" style={{color: 'black', borderColor: 'white'}}>
+                  <a href="#how-it-works" style={{color: 'black'}}>See how it works</a>
                 </Button>
               </div>
 
@@ -328,7 +328,7 @@ const Index = () => {
         <section className="py-20 px-4">
           <div className="container max-w-6xl mx-auto">
             <div className="text-center mb-10">
-              <h2 className="text-3xl md:text-4xl font-bold mb-3">What Dealers Say</h2>
+              <h2 className="text-3xl md:text-4xl font-bold mb-3" style={{color: 'black'}}>What Dealers Say</h2>
               <p className="text-sm text-muted-foreground">Sample reviews for layout—replace with real customer feedback when available.</p>
             </div>
             <div className="grid md:grid-cols-3 gap-6">
@@ -377,8 +377,8 @@ const Index = () => {
         {/* Final CTA */}
         <section className="py-20 px-4">
           <div className="container max-w-4xl mx-auto text-center">
-            <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Sell More Cars?</h2>
-            <p className="text-xl text-muted-foreground mb-8">Start posting to Facebook Marketplace and engaging leads today.</p>
+            <h2 className="text-3xl md:text-4xl font-bold mb-6" style={{color: 'black'}}>Ready to Sell More Cars?</h2>
+            <p className="text-xl text-muted-foreground mb-8" style={{color: '#666'}}>Start posting to Facebook Marketplace and engaging leads today.</p>
             <Button size="lg" asChild style={{backgroundColor: 'black', color: 'white', borderColor: 'black'}} className="black-button">
               <Link to="/auth" style={{backgroundColor: 'black', color: 'white'}}>Get Started</Link>
             </Button>
@@ -388,8 +388,8 @@ const Index = () => {
 
       {/* Footer */}
       <footer className="border-t py-8 px-4">
-        <div className="container text-center text-muted-foreground">
-          <p>&copy; 2025 Salesonator. All rights reserved.</p>
+        <div className="container text-center">
+          <p style={{color: 'black'}}>&copy; 2025 Salesonator. All rights reserved.</p>
         </div>
       </footer>
     </div>
