@@ -223,30 +223,30 @@ const Index = () => {
               <div className="grid grid-cols-2 gap-4">
                 <Card>
                   <CardHeader>
-                    <TrendingUp className="h-10 w-10 text-primary mb-2" />
-                    <CardTitle className="text-xl">Boost Efficiency</CardTitle>
-                    <CardDescription>Automate repetitive steps and save hours weekly.</CardDescription>
+                    <TrendingUp className="h-10 w-10 text-black mb-2" />
+                    <CardTitle className="text-xl text-black">Boost Efficiency</CardTitle>
+                    <CardDescription className="text-gray-600">Automate repetitive steps and save hours weekly.</CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
                   <CardHeader>
-                    <Shield className="h-10 w-10 text-primary mb-2" />
-                    <CardTitle className="text-xl">Human‑like Automation</CardTitle>
-                    <CardDescription>Engineered to mimic real behavior to reduce flags.</CardDescription>
+                    <Shield className="h-10 w-10 text-black mb-2" />
+                    <CardTitle className="text-xl text-black">Human‑like Automation</CardTitle>
+                    <CardDescription className="text-gray-600">Engineered to mimic real behavior to reduce flags.</CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
                   <CardHeader>
-                    <Users className="h-10 w-10 text-primary mb-2" />
-                    <CardTitle className="text-xl">Lead Inbox</CardTitle>
-                    <CardDescription>Track conversations and statuses in one place.</CardDescription>
+                    <Users className="h-10 w-10 text-black mb-2" />
+                    <CardTitle className="text-xl text-black">Lead Inbox</CardTitle>
+                    <CardDescription className="text-gray-600">Track conversations and statuses in one place.</CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
                   <CardHeader>
-                    <Clock className="h-10 w-10 text-primary mb-2" />
-                    <CardTitle className="text-xl">Real‑time Updates</CardTitle>
-                    <CardDescription>Refresh leads, retry posts, and monitor activity.</CardDescription>
+                    <Clock className="h-10 w-10 text-black mb-2" />
+                    <CardTitle className="text-xl text-black">Real‑time Updates</CardTitle>
+                    <CardDescription className="text-gray-600">Refresh leads, retry posts, and monitor activity.</CardDescription>
                   </CardHeader>
                 </Card>
               </div>
