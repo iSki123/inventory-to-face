@@ -4,42 +4,51 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Car, Users, MessageSquare, TrendingUp, Zap, Shield, CreditCard, Clock } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import * as THREE from 'three';
 // @ts-ignore - Vanta doesn't have TypeScript definitions
 import NET from 'vanta/dist/vanta.net.min';
 
 const Index = () => {
   const { user, loading } = useAuth();
+  const isMobile = useIsMobile();
   const vantaRef = useRef<HTMLDivElement>(null);
   const vantaEffect = useRef<any>(null);
 
-  // Vanta NET effect for hero section only
+  // Vanta NET effect for hero section only - skip on mobile to prevent crashes
   useEffect(() => {
-    if (!vantaRef.current) return;
+    if (!vantaRef.current || isMobile) return;
 
-    vantaEffect.current = NET({
-      el: vantaRef.current,
-      THREE: THREE,
-      mouseControls: true,
-  touchControls: true,
-  gyroControls: false,
-  minHeight: 200.00,
-  minWidth: 200.00,
-  scale: 0.25,
-  scaleMobile: 0.15,
-  color: 0x4d99d9,
-  backgroundColor: 0x0,
-  points: 8.00,
-  maxDistance: 18.00,
-  spacing: 16.00
-    });
+    try {
+      vantaEffect.current = NET({
+        el: vantaRef.current,
+        THREE: THREE,
+        mouseControls: true,
+        touchControls: false, // Disable on desktop to avoid conflicts
+        gyroControls: false,
+        minHeight: 200.00,
+        minWidth: 200.00,
+        scale: 0.25,
+        color: 0x4d99d9,
+        backgroundColor: 0x0,
+        points: 8.00,
+        maxDistance: 18.00,
+        spacing: 16.00
+      });
+    } catch (error) {
+      console.error('Vanta initialization failed:', error);
+    }
 
     return () => {
       if (vantaEffect.current) {
-        vantaEffect.current.destroy();
+        try {
+          vantaEffect.current.destroy();
+        } catch (error) {
+          console.error('Vanta cleanup failed:', error);
+        }
       }
     };
-  }, []);
+  }, [isMobile]);
 
   // SEO: dynamic title, description and canonical
   useEffect(() => {
@@ -139,8 +148,10 @@ const Index = () => {
       <main className="pt-16">
         {/* Hero Section with Vanta Background */}
         <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-          {/* Vanta Background Container */}
-          <div ref={vantaRef} className="absolute inset-0 z-0"></div>
+          {/* Vanta Background Container - only on desktop */}
+          {!isMobile && <div ref={vantaRef} className="absolute inset-0 z-0"></div>}
+          {/* Mobile gradient background */}
+          {isMobile && <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-blue-800 to-blue-600 z-0"></div>}
           {/* Content overlay with minimal interference */}
           <div className="absolute inset-0 bg-black/10 z-10"></div>
           <div className="container relative z-20 grid lg:grid-cols-2 gap-10 items-center min-h-screen py-20">
