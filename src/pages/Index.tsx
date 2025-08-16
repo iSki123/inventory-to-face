@@ -2,17 +2,18 @@ import { useAuth } from '@/hooks/useAuth';
 import { Navigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Car, Users, MessageSquare, TrendingUp, ArrowRight, Zap, Shield, CreditCard, Clock } from 'lucide-react';
+import { Car, Users, MessageSquare, TrendingUp, Zap, Shield, CreditCard, Clock } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 // @ts-ignore - Vanta doesn't have TypeScript definitions
 import NET from 'vanta/dist/vanta.net.min';
+
 const Index = () => {
   const { user, loading } = useAuth();
   const vantaRef = useRef<HTMLDivElement>(null);
   const vantaEffect = useRef<any>(null);
 
-  // Vanta NET effect
+  // Vanta NET effect for hero section only
   useEffect(() => {
     if (!vantaRef.current) return;
 
@@ -24,14 +25,14 @@ const Index = () => {
       gyroControls: false,
       minHeight: 200.00,
       minWidth: 200.00,
-      scale: 0.5, // Reduced scale to make animation smaller
-      scaleMobile: 0.3, // Even smaller on mobile
-      color: '#ffffff', // White color for the network lines
-      backgroundColor: '#000000', // Black background
-      points: 4.00, // Reduced from 6 to make it even less busy
-      maxDistance: 10.00, // Reduced from 15 to make connections shorter
-      spacing: 25.00, // Increased from 20 to spread out points more
-      backgroundAlpha: 0.3 // Make background more transparent
+      scale: 0.8,
+      scaleMobile: 0.5,
+      color: '#ffffff',
+      backgroundColor: '#000000',
+      points: 8.00,
+      maxDistance: 18.00,
+      spacing: 22.00,
+      backgroundAlpha: 0.95
     });
 
     return () => {
@@ -99,7 +100,7 @@ const Index = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
@@ -111,181 +112,156 @@ const Index = () => {
   }
 
   return (
-    <div ref={vantaRef} className="min-h-screen relative text-white">
-      <style>
-        {`
-          .white-text h1, .white-text h2, .white-text h3, .white-text p, .white-text span {
-            color: white !important;
-          }
-          .white-text .text-muted-foreground {
-            color: rgba(255, 255, 255, 0.7) !important;
-          }
-          .white-text .text-primary {
-            color: white !important;
-          }
-          .black-header .text-primary {
-            color: black !important;
-          }
-          .black-button, .black-button:hover, .black-button:focus, .black-button:active {
-            background-color: black !important;
-            color: white !important;
-            border-color: black !important;
-          }
-          .black-button:hover {
-            background-color: #333 !important;
-          }
-          .black-text * {
-            color: black !important;
-          }
-          .black-text .text-muted-foreground {
-            color: #666 !important;
-          }
-          /* Force all buttons with black-button class to be black */
-          button.black-button, a.black-button, .black-button button, .black-button a {
-            background-color: black !important;
-            color: white !important;
-            border-color: black !important;
-          }
-          /* White cards should have black text */
-          .bg-card, .bg-white {
-            color: black !important;
-          }
-          .bg-card *, .bg-white * {
-            color: black !important;
-          }
-          .bg-card .text-muted-foreground, .bg-white .text-muted-foreground {
-            color: #666 !important;
-          }
-        `}
-      </style>
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 black-header">
+      <header className="fixed top-0 w-full z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center space-x-2">
-            <Car className="h-8 w-8 text-black" />
-            <span className="text-2xl font-bold text-black">Salesonator</span>
+            <Car className="h-8 w-8 text-foreground" />
+            <span className="text-2xl font-bold text-foreground">Salesonator</span>
           </div>
           <nav className="flex items-center gap-4">
-            <Button variant="ghost" asChild className="text-black hover:text-black">
+            <Button variant="ghost" asChild>
               <Link to="#features">Features</Link>
             </Button>
-            <Button variant="ghost" asChild className="text-black hover:text-black">
+            <Button variant="ghost" asChild>
               <Link to="#how-it-works">How it works</Link>
             </Button>
-            <Button variant="ghost" asChild className="text-black hover:text-black">
+            <Button variant="ghost" asChild>
               <Link to="#faq">FAQ</Link>
             </Button>
-            <Button asChild style={{backgroundColor: 'black', color: 'white', borderColor: 'black'}} className="black-button">
-              <Link to="/auth" style={{backgroundColor: 'black', color: 'white'}}>Get Started</Link>
+            <Button asChild className="bg-foreground text-background hover:bg-foreground/90">
+              <Link to="/auth">Get Started</Link>
             </Button>
           </nav>
         </div>
       </header>
 
-      <main>
-        {/* Hero Section */}
-        <section className="py-20 px-4">
-          <div className="container max-w-6xl mx-auto grid lg:grid-cols-2 gap-10 items-center">
-            <div>
-              <h1 className="text-4xl md:text-6xl font-bold mb-6" style={{color: 'black !important', WebkitTextFillColor: 'black'}}>
-                Pay‑As‑You‑Go Facebook Marketplace Automation
+      <main className="pt-16">
+        {/* Hero Section with Vanta Background */}
+        <section ref={vantaRef} className="relative min-h-screen flex items-center justify-center overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/40 z-10"></div>
+          <div className="container relative z-20 grid lg:grid-cols-2 gap-10 items-center min-h-screen py-20">
+            
+            {/* Hero Content */}
+            <div className="text-center lg:text-left text-white">
+              <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
+                Pay‑As‑You‑Go
+                <br />
+                <span className="text-blue-400">Facebook</span>
+                <br />
+                Marketplace
+                <br />
+                Automation
               </h1>
-              <p className="text-xl text-muted-foreground mb-8">
+              <p className="text-xl md:text-2xl mb-8 text-gray-200 max-w-2xl">
                 Built for dealership owners, managers, and salespeople: post vehicles, handle leads, and send AI‑powered replies—all from one dashboard.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Button size="lg" asChild style={{backgroundColor: 'black', color: 'white', borderColor: 'black'}} className="black-button">
-                  <Link to="/auth" style={{backgroundColor: 'black', color: 'white'}}>Start Free</Link>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-12">
+                <Button size="lg" asChild className="bg-white text-black hover:bg-gray-100 text-lg px-8 py-6">
+                  <Link to="/auth">Start Free</Link>
                 </Button>
-                <Button size="lg" variant="outline" asChild className="text-black border-white hover:bg-white hover:text-black" style={{color: 'black', borderColor: 'white'}}>
-                  <a href="#how-it-works" style={{color: 'black'}}>See how it works</a>
+                <Button size="lg" variant="outline" asChild className="border-white text-white hover:bg-white hover:text-black text-lg px-8 py-6">
+                  <a href="#how-it-works">See how it works</a>
                 </Button>
               </div>
 
-              {/* Proof strip */}
-              <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-6 text-left">
-                <div>
-                  <div className="flex items-center gap-2 font-semibold"><Zap className="h-5 w-5 text-white" /> Faster Listings</div>
-                  <p className="text-muted-foreground text-sm">Automated posting to Marketplace</p>
+              {/* Feature Pills */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto lg:mx-0">
+                <div className="flex items-center gap-2 text-sm bg-white/10 backdrop-blur rounded-full px-4 py-2">
+                  <Zap className="h-4 w-4 text-blue-400" />
+                  <span>Faster Listings</span>
                 </div>
-                <div>
-                  <div className="flex items-center gap-2 font-semibold"><MessageSquare className="h-5 w-5 text-white" /> AI Replies</div>
-                  <p className="text-muted-foreground text-sm">Human‑like responses, instantly</p>
+                <div className="flex items-center gap-2 text-sm bg-white/10 backdrop-blur rounded-full px-4 py-2">
+                  <MessageSquare className="h-4 w-4 text-blue-400" />
+                  <span>AI Replies</span>
                 </div>
-                <div>
-                  <div className="flex items-center gap-2 font-semibold"><CreditCard className="h-5 w-5 text-white" /> Pay‑As‑You‑Go</div>
-                  <p className="text-muted-foreground text-sm">Only pay for the credits you use</p>
+                <div className="flex items-center gap-2 text-sm bg-white/10 backdrop-blur rounded-full px-4 py-2">
+                  <CreditCard className="h-4 w-4 text-blue-400" />
+                  <span>Pay‑As‑You‑Go</span>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-lg border bg-card p-6 shadow-sm text-foreground">
-              <div className="grid grid-cols-2 gap-4">
-                <Card style={{color: 'black'}}>
-                  <CardHeader>
-                    <TrendingUp className="h-10 w-10 mb-2" style={{color: 'black'}} />
-                    <CardTitle className="text-xl" style={{color: 'black'}}>Boost Efficiency</CardTitle>
-                    <CardDescription style={{color: '#666'}}>Automate repetitive steps and save hours weekly.</CardDescription>
-                  </CardHeader>
-                </Card>
-                <Card style={{color: 'black'}}>
-                  <CardHeader>
-                    <Shield className="h-10 w-10 mb-2" style={{color: 'black'}} />
-                    <CardTitle className="text-xl" style={{color: 'black'}}>Human‑like Automation</CardTitle>
-                    <CardDescription style={{color: '#666'}}>Engineered to mimic real behavior to reduce flags.</CardDescription>
-                  </CardHeader>
-                </Card>
-                <Card style={{color: 'black'}}>
-                  <CardHeader>
-                    <Users className="h-10 w-10 mb-2" style={{color: 'black'}} />
-                    <CardTitle className="text-xl" style={{color: 'black'}}>Lead Inbox</CardTitle>
-                    <CardDescription style={{color: '#666'}}>Track conversations and statuses in one place.</CardDescription>
-                  </CardHeader>
-                </Card>
-                <Card style={{color: 'black'}}>
-                  <CardHeader>
-                    <Clock className="h-10 w-10 mb-2" style={{color: 'black'}} />
-                    <CardTitle className="text-xl" style={{color: 'black'}}>Real‑time Updates</CardTitle>
-                    <CardDescription style={{color: '#666'}}>Refresh leads, retry posts, and monitor activity.</CardDescription>
-                  </CardHeader>
-                </Card>
-              </div>
+            {/* Hero Cards */}
+            <div className="grid grid-cols-2 gap-4 max-w-lg mx-auto">
+              <Card className="bg-white/95 backdrop-blur border-0 shadow-xl">
+                <CardHeader className="pb-3">
+                  <TrendingUp className="h-10 w-10 text-blue-600 mb-2" />
+                  <CardTitle className="text-lg">Boost Efficiency</CardTitle>
+                  <CardDescription className="text-sm">
+                    Automate repetitive steps and save hours weekly.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+              <Card className="bg-white/95 backdrop-blur border-0 shadow-xl">
+                <CardHeader className="pb-3">
+                  <Shield className="h-10 w-10 text-blue-600 mb-2" />
+                  <CardTitle className="text-lg">Human‑like Automation</CardTitle>
+                  <CardDescription className="text-sm">
+                    Engineered to mimic real behavior to reduce flags.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+              <Card className="bg-white/95 backdrop-blur border-0 shadow-xl">
+                <CardHeader className="pb-3">
+                  <Users className="h-10 w-10 text-blue-600 mb-2" />
+                  <CardTitle className="text-lg">Lead Inbox</CardTitle>
+                  <CardDescription className="text-sm">
+                    Track conversations and statuses in one place.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+              <Card className="bg-white/95 backdrop-blur border-0 shadow-xl">
+                <CardHeader className="pb-3">
+                  <Clock className="h-10 w-10 text-blue-600 mb-2" />
+                  <CardTitle className="text-lg">Real‑time Updates</CardTitle>
+                  <CardDescription className="text-sm">
+                    Refresh leads, retry posts, and monitor activity.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
             </div>
           </div>
         </section>
 
         {/* How it works */}
-        <section id="how-it-works" className="py-20 px-4 bg-muted/50">
+        <section id="how-it-works" className="py-20 px-4 bg-gray-50">
           <div className="container max-w-6xl mx-auto">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl md:text-4xl font-bold mb-3" style={{color: 'black'}}>How It Works</h2>
-              <p className="text-lg text-muted-foreground" style={{color: '#666'}}>From inventory to conversations in four simple steps</p>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-5xl font-bold mb-4 text-foreground">How It Works</h2>
+              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">From inventory to conversations in four simple steps</p>
             </div>
-            <div className="grid md:grid-cols-4 gap-6">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
               {[
-                { step: 1, title: 'Connect Inventory', desc: 'Pull vehicles via our scraper integration.' },
-                { step: 2, title: 'Post to Marketplace', desc: 'Human‑like automation publishes your listings.' },
-                { step: 3, title: 'Engage Leads', desc: 'AI crafts replies; track every conversation.' },
-                { step: 4, title: 'Pay As You Go', desc: 'Use credits only when you post or reply.' },
+                { step: 1, title: 'Connect Inventory', desc: 'Pull vehicles via our scraper integration.', icon: Car },
+                { step: 2, title: 'Post to Marketplace', desc: 'Human‑like automation publishes your listings.', icon: Zap },
+                { step: 3, title: 'Engage Leads', desc: 'AI crafts replies; track every conversation.', icon: MessageSquare },
+                { step: 4, title: 'Pay As You Go', desc: 'Use credits only when you post or reply.', icon: CreditCard },
               ].map((s) => (
-                <div key={s.step} className="rounded-lg border bg-card p-6" style={{color: 'black'}}>
-                  <div className="text-sm font-semibold mb-1" style={{color: '#333'}}>Step {s.step}</div>
-                  <h3 className="text-xl font-semibold mb-2" style={{color: 'black'}}>{s.title}</h3>
-                  <p className="text-muted-foreground" style={{color: '#666'}}>{s.desc}</p>
-                </div>
+                <Card key={s.step} className="relative border-0 shadow-lg bg-white hover:shadow-xl transition-shadow">
+                  <CardHeader className="text-center pb-6">
+                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                      {s.step}
+                    </div>
+                    <s.icon className="h-12 w-12 text-blue-600 mb-4 mx-auto mt-4" />
+                    <CardTitle className="text-xl text-foreground">{s.title}</CardTitle>
+                    <CardDescription className="text-muted-foreground">{s.desc}</CardDescription>
+                  </CardHeader>
+                </Card>
               ))}
             </div>
           </div>
         </section>
 
         {/* Features */}
-        <section id="features" className="py-20 px-4">
+        <section id="features" className="py-20 px-4 bg-white">
           <div className="container max-w-6xl mx-auto">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl md:text-4xl font-bold mb-3" style={{color: 'black'}}>Everything You Need</h2>
-              <p className="text-lg text-muted-foreground" style={{color: '#666'}}>Use the tools we built to scale your dealership operations</p>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-5xl font-bold mb-4 text-foreground">Everything You Need</h2>
+              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">Use the tools we built to scale your dealership operations</p>
             </div>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
               {[
                 { Icon: Car, title: 'Inventory Management', desc: 'Scrape and sync vehicles with images, VIN, and details.' },
                 { Icon: MessageSquare, title: 'AI Lead Responses', desc: 'Personalized, human‑like replies with simulated typing.' },
@@ -294,11 +270,11 @@ const Index = () => {
                 { Icon: Shield, title: 'Human‑Behavior Automation', desc: 'Reduce detection risk with thoughtful pacing.' },
                 { Icon: CreditCard, title: 'Credits‑Based Billing', desc: 'Flexible, scalable pricing—no contracts.' },
               ].map(({ Icon, title, desc }) => (
-                <Card key={title} className="hover-scale" style={{color: 'black'}}>
-                  <CardHeader>
-                    <Icon className="h-12 w-12 mb-4" style={{color: 'black'}} />
-                    <CardTitle style={{color: 'black'}}>{title}</CardTitle>
-                    <CardDescription style={{color: '#666'}}>{desc}</CardDescription>
+                <Card key={title} className="border-0 shadow-lg bg-white hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                  <CardHeader className="text-center">
+                    <Icon className="h-16 w-16 text-blue-600 mb-4 mx-auto" />
+                    <CardTitle className="text-xl text-foreground mb-2">{title}</CardTitle>
+                    <CardDescription className="text-muted-foreground">{desc}</CardDescription>
                   </CardHeader>
                 </Card>
               ))}
@@ -307,40 +283,38 @@ const Index = () => {
         </section>
 
         {/* Pricing CTA */}
-        <section className="py-20 px-4 bg-muted/50">
-          <div className="container max-w-5xl mx-auto">
-            <div className="rounded-xl border bg-card p-8 md:p-12 text-center shadow-sm">
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">Only Pay For What You Use</h2>
-              <p className="text-lg text-muted-foreground mb-8">Purchase credits for postings and AI replies. Scale up when you need to—no subscriptions required.</p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button size="lg" asChild style={{backgroundColor: 'black', color: 'white', borderColor: 'black'}} className="black-button">
-                  <Link to="/billing" style={{backgroundColor: 'black', color: 'white'}}>View Credit Options</Link>
-                </Button>
-                <Button size="lg" variant="outline" asChild className="border-black text-black hover:bg-black hover:text-white">
-                  <Link to="/auth">Create a Free Account</Link>
-                </Button>
-              </div>
+        <section className="py-20 px-4 bg-gradient-to-r from-blue-600 to-blue-800 text-white">
+          <div className="container max-w-4xl mx-auto text-center">
+            <h2 className="text-3xl md:text-5xl font-bold mb-6">Only Pay For What You Use</h2>
+            <p className="text-xl mb-10 text-blue-100 max-w-2xl mx-auto">Purchase credits for postings and AI replies. Scale up when you need to—no subscriptions required.</p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button size="lg" asChild className="bg-white text-blue-600 hover:bg-gray-100 text-lg px-8 py-6">
+                <Link to="/billing">View Credit Options</Link>
+              </Button>
+              <Button size="lg" variant="outline" asChild className="border-white text-white hover:bg-white hover:text-blue-600 text-lg px-8 py-6">
+                <Link to="/auth">Create a Free Account</Link>
+              </Button>
             </div>
           </div>
         </section>
 
-        {/* Testimonials (Sample placeholders) */}
-        <section className="py-20 px-4">
+        {/* Testimonials */}
+        <section className="py-20 px-4 bg-gray-50">
           <div className="container max-w-6xl mx-auto">
-            <div className="text-center mb-10">
-              <h2 className="text-3xl md:text-4xl font-bold mb-3" style={{color: 'black'}}>What Dealers Say</h2>
-              <p className="text-sm text-muted-foreground">Sample reviews for layout—replace with real customer feedback when available.</p>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-5xl font-bold mb-4 text-foreground">What Dealers Say</h2>
+              <p className="text-lg text-muted-foreground">Sample reviews for layout—replace with real customer feedback when available.</p>
             </div>
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid md:grid-cols-3 gap-8">
               {[
                 'Posted 30 cars in an afternoon and closed 3 deals the same week.',
                 'Our team replies faster with AI suggestions—conversations feel natural.',
                 'Credits keep costs predictable. We pay more only when we sell more.'
               ].map((quote, i) => (
-                <Card key={i}>
+                <Card key={i} className="border-0 shadow-lg bg-white">
                   <CardHeader>
-                    <CardTitle className="text-xl">Sample Review</CardTitle>
-                    <CardDescription>“{quote}”</CardDescription>
+                    <CardTitle className="text-lg text-foreground">Sample Review</CardTitle>
+                    <CardDescription className="text-muted-foreground italic">"{quote}"</CardDescription>
                   </CardHeader>
                 </Card>
               ))}
@@ -349,25 +323,37 @@ const Index = () => {
         </section>
 
         {/* FAQ */}
-        <section id="faq" className="py-20 px-4 bg-muted/50">
+        <section id="faq" className="py-20 px-4 bg-white">
           <div className="container max-w-4xl mx-auto">
-            <div className="text-center mb-10">
-              <h2 className="text-3xl md:text-4xl font-bold mb-3" style={{color: 'black'}}>Frequently Asked Questions</h2>
-              <p className="text-lg text-muted-foreground" style={{color: '#666'}}>Quick answers about pricing, setup, and workflow</p>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-5xl font-bold mb-4 text-foreground">Frequently Asked Questions</h2>
+              <p className="text-xl text-muted-foreground">Quick answers about pricing, setup, and workflow</p>
             </div>
-            <div className="space-y-4">
-              <details className="rounded-lg border bg-card p-4" open style={{color: 'black'}}>
-                <summary className="cursor-pointer font-semibold" style={{color: 'black'}}>How does pricing work?</summary>
-                <p className="mt-2 text-muted-foreground" style={{color: '#666'}}>Salesonator uses credits. Use them for postings and AI replies. Buy more anytime.</p>
-              </details>
-              <details className="rounded-lg border bg-card p-4" style={{color: 'black'}}>
-                <summary className="cursor-pointer font-semibold" style={{color: 'black'}}>Do I need a long‑term contract?</summary>
-                <p className="mt-2 text-muted-foreground" style={{color: '#666'}}>No. Start small and scale up as needed—pay only for what you use.</p>
-              </details>
-              <details className="rounded-lg border bg-card p-4" style={{color: 'black'}}>
-                <summary className="cursor-pointer font-semibold" style={{color: 'black'}}>Can my whole team use it?</summary>
-                <p className="mt-2 text-muted-foreground" style={{color: '#666'}}>Yes. Owners, managers, and salespeople can collaborate using the shared lead inbox.</p>
-              </details>
+            <div className="space-y-6">
+              <Card className="border shadow-lg">
+                <CardHeader>
+                  <details open>
+                    <summary className="cursor-pointer font-semibold text-lg text-foreground hover:text-blue-600">How does pricing work?</summary>
+                    <p className="mt-4 text-muted-foreground">Salesonator uses credits. Use them for postings and AI replies. Buy more anytime.</p>
+                  </details>
+                </CardHeader>
+              </Card>
+              <Card className="border shadow-lg">
+                <CardHeader>
+                  <details>
+                    <summary className="cursor-pointer font-semibold text-lg text-foreground hover:text-blue-600">Do I need a long‑term contract?</summary>
+                    <p className="mt-4 text-muted-foreground">No. Start small and scale up as needed—pay only for what you use.</p>
+                  </details>
+                </CardHeader>
+              </Card>
+              <Card className="border shadow-lg">
+                <CardHeader>
+                  <details>
+                    <summary className="cursor-pointer font-semibold text-lg text-foreground hover:text-blue-600">Can my whole team use it?</summary>
+                    <p className="mt-4 text-muted-foreground">Yes. Owners, managers, and salespeople can collaborate using the shared lead inbox.</p>
+                  </details>
+                </CardHeader>
+              </Card>
             </div>
           </div>
           {/* Structured data for FAQ */}
@@ -375,21 +361,21 @@ const Index = () => {
         </section>
 
         {/* Final CTA */}
-        <section className="py-20 px-4">
+        <section className="py-20 px-4 bg-foreground text-background">
           <div className="container max-w-4xl mx-auto text-center">
-            <h2 className="text-3xl md:text-4xl font-bold mb-6" style={{color: 'black'}}>Ready to Sell More Cars?</h2>
-            <p className="text-xl text-muted-foreground mb-8" style={{color: '#666'}}>Start posting to Facebook Marketplace and engaging leads today.</p>
-            <Button size="lg" asChild style={{backgroundColor: 'black', color: 'white', borderColor: 'black'}} className="black-button">
-              <Link to="/auth" style={{backgroundColor: 'black', color: 'white'}}>Get Started</Link>
+            <h2 className="text-3xl md:text-5xl font-bold mb-6">Ready to Sell More Cars?</h2>
+            <p className="text-xl mb-10 opacity-80 max-w-2xl mx-auto">Start posting to Facebook Marketplace and engaging leads today.</p>
+            <Button size="lg" asChild className="bg-background text-foreground hover:bg-background/90 text-lg px-8 py-6">
+              <Link to="/auth">Get Started</Link>
             </Button>
           </div>
         </section>
       </main>
 
       {/* Footer */}
-      <footer className="border-t py-8 px-4">
+      <footer className="border-t py-12 px-4 bg-background">
         <div className="container text-center">
-          <p style={{color: 'black'}}>&copy; 2025 Salesonator. All rights reserved.</p>
+          <p className="text-muted-foreground">&copy; 2025 Salesonator. All rights reserved.</p>
         </div>
       </footer>
     </div>
