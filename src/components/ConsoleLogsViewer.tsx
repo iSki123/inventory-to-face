@@ -229,37 +229,45 @@ export default function ConsoleLogsViewer() {
 
         {/* Log entries */}
         {logs && filteredLogs.length > 0 && (
-          <div className="space-y-2 max-h-96 overflow-y-auto w-full">
-            <div className="space-y-2 p-2">
+          <div className="space-y-1 max-h-96 overflow-y-auto overflow-x-hidden w-full">
+            <div className="space-y-1 p-1">
               {logs.map((log, index) => (
-                <div key={`${log.id}-${index}`} className="border-b pb-2 last:border-b-0 w-full overflow-hidden">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <Badge variant={getLogLevelColor(log.log_level)}>
-                      {log.log_level.toUpperCase()}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {formatTimestamp(log.created_at)}
-                    </span>
-                    <span className="text-xs text-muted-foreground truncate max-w-20 sm:max-w-32">
-                      {log.session_id}
-                    </span>
-                    {log.url && (
-                      <span className="text-xs text-blue-600 truncate max-w-24 sm:max-w-48">
-                        {new URL(log.url).pathname}
+                <div key={`${log.id}-${index}`} className="border-b pb-1 last:border-b-0 w-full overflow-hidden">
+                  <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-1 sm:gap-2 mb-1">
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Badge variant={getLogLevelColor(log.log_level)} className="text-xs px-1 py-0">
+                        {log.log_level.toUpperCase()}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {new Date(log.created_at).toLocaleTimeString()}
                       </span>
-                    )}
+                    </div>
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="text-xs text-muted-foreground truncate max-w-16 sm:max-w-20">
+                        {log.session_id.substring(0, 8)}...
+                      </span>
+                      {log.url && (
+                        <span className="text-xs text-blue-600 truncate max-w-20 sm:max-w-32">
+                          {new URL(log.url).pathname.split('/').pop() || '/'}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-sm font-mono bg-muted/30 p-2 rounded break-words overflow-wrap-anywhere w-full">
-                    {log.message}
+                  <div className="text-xs bg-muted/30 p-2 rounded overflow-hidden w-full">
+                    <div className="break-all overflow-wrap-anywhere line-clamp-3">
+                      {log.message}
+                    </div>
                   </div>
                   {log.data && (
                     <details className="mt-1">
                       <summary className="text-xs text-muted-foreground cursor-pointer">
-                        Additional Data
+                        Data
                       </summary>
-                      <pre className="text-xs mt-1 bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap break-words w-full">
-                        {JSON.stringify(log.data, null, 2)}
-                      </pre>
+                      <div className="text-xs mt-1 bg-muted/50 p-2 rounded overflow-hidden w-full">
+                        <div className="break-all overflow-wrap-anywhere max-h-20 overflow-y-auto">
+                          {JSON.stringify(log.data, null, 2)}
+                        </div>
+                      </div>
                     </details>
                   )}
                 </div>
