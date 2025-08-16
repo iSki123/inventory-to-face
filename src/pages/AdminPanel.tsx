@@ -219,7 +219,7 @@ export default function AdminPanel() {
   const edgeFunctionOverrides = getSetting('edge_function_overrides', {}) || {};
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-6 space-y-6 max-w-full overflow-x-hidden">{/* Add max-width and overflow control */}
       <div className="space-y-2">
         <h1 className="text-3xl font-bold">Admin Panel</h1>
         <p className="text-muted-foreground">
