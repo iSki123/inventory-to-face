@@ -26,8 +26,8 @@ const Index = () => {
         mouseControls: true,
         touchControls: false, // Disable on desktop to avoid conflicts
         gyroControls: false,
-        minHeight: 200.00,
-        minWidth: 200.00,
+        minHeight: 100.00,
+        minWidth: 100.00,
         scale: 0.25,
         color: 0x4d99d9,
         backgroundColor: 0x0,
