@@ -21,17 +21,17 @@ const Index = () => {
       el: vantaRef.current,
       THREE: THREE,
       mouseControls: true,
-      touchControls: true,
-      gyroControls: false,
-      minHeight: 200.00,
-      minWidth: 200.00,
-      scale: 1.00,
-      scaleMobile: 1.00,
-      color: 0x4d99d9, // Blue connections
-      backgroundColor: 0x000000, // Black background
-      points: 9.00,
-      maxDistance: 26.00,
-      spacing: 16.00
+  touchControls: true,
+  gyroControls: false,
+  minHeight: 200.00,
+  minWidth: 200.00,
+  scale: 1.00,
+  scaleMobile: 1.00,
+  color: 0x4d99d9,
+  backgroundColor: 0x0,
+  points: 9.00,
+  maxDistance: 26.00,
+  spacing: 16.00
     });
 
     return () => {
