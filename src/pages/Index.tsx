@@ -152,8 +152,6 @@ const Index = () => {
           {!isMobile && <div ref={vantaRef} className="absolute inset-0 z-0"></div>}
           {/* Mobile gradient background */}
           {isMobile && <div className="absolute inset-0 bg-black z-0"></div>}
-          {/* Content overlay with minimal interference */}
-          <div className="absolute inset-0 bg-black/10 z-10"></div>
           <div className="container relative z-20 grid lg:grid-cols-2 gap-10 items-center min-h-screen py-20">
             
             {/* Hero Content */}
