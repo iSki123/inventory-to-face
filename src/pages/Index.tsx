@@ -24,14 +24,14 @@ const Index = () => {
       gyroControls: false,
       minHeight: 200.00,
       minWidth: 200.00,
-      scale: 1.00,
-      scaleMobile: 1.00,
+      scale: 0.5, // Reduced scale to make animation smaller
+      scaleMobile: 0.3, // Even smaller on mobile
       color: '#ffffff', // White color for the network lines
       backgroundColor: '#000000', // Black background
-      points: 6.00, // Reduced from 10 to make it less busy
-      maxDistance: 15.00, // Reduced from 20 to make connections shorter
-      spacing: 20.00, // Increased from 15 to spread out points more
-      backgroundAlpha: 0.8 // Make background slightly transparent
+      points: 4.00, // Reduced from 6 to make it even less busy
+      maxDistance: 10.00, // Reduced from 15 to make connections shorter
+      spacing: 25.00, // Increased from 20 to spread out points more
+      backgroundAlpha: 0.3 // Make background more transparent
     });
 
     return () => {
@@ -186,7 +186,7 @@ const Index = () => {
               </div>
             </div>
 
-            <div className="rounded-lg border bg-card p-6 shadow-sm">
+            <div className="rounded-lg border bg-card p-6 shadow-sm text-foreground">
               <div className="grid grid-cols-2 gap-4">
                 <Card>
                   <CardHeader>
