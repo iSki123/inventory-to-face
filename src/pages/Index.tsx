@@ -22,18 +22,14 @@ const Index = () => {
     try {
       vantaEffect.current = NET({
         el: vantaRef.current,
-        THREE: THREE,
-        mouseControls: true,
-        touchControls: false, // Disable on desktop to avoid conflicts
-        gyroControls: false,
-        minHeight: 100.00,
-        minWidth: 100.00,
-        scale: 0.30,
-        color: 0x4d99d9,
-        backgroundColor: 0x0,
-        points: 8.00,
-        maxDistance: 18.00,
-        spacing: 16.00
+         mouseControls: true,
+  touchControls: true,
+  gyroControls: false,
+  minHeight: 200.00,
+  minWidth: 200.00,
+  scale: 1.00,
+  scaleMobile: 1.00,
+  color: 0x3f8eff
       });
     } catch (error) {
       console.error('Vanta initialization failed:', error);
