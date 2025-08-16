@@ -174,7 +174,7 @@ const Index = () => {
                 <Button size="lg" asChild className="bg-white text-black hover:bg-gray-100 text-lg px-8 py-6">
                   <Link to="/auth">Start Free</Link>
                 </Button>
-                <Button size="lg" variant="outline" asChild className="border-white text-white hover:bg-white hover:text-black text-lg px-8 py-6">
+                <Button size="lg" variant="outline" asChild className="border-white text-black hover:bg-[#65a6f7] hover:text-white hover:border-[#65a6f7] text-lg px-8 py-6">
                   <a href="#how-it-works">See how it works</a>
                 </Button>
               </div>
