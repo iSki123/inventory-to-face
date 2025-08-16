@@ -544,48 +544,49 @@ Ultra-high-resolution, realistic automotive photography with natural dynamic ran
                     <CardContent className="space-y-4 pt-0">
                       <div className="space-y-2">
                         <Label htmlFor={`${imageConfig.key}-view`}>View Description</Label>
-                        <Input
-                          id={`${imageConfig.key}-view`}
-                          value={currentSettings[imageConfig.key]?.view || imageConfig.defaultView}
-                          onChange={(e) => {
-                            const newSettings = {
-                              ...currentSettings,
-                              [imageConfig.key]: {
-                                ...currentSettings[imageConfig.key],
-                                enabled: currentSettings[imageConfig.key]?.enabled ?? (index < 2),
-                                prompt: currentSettings[imageConfig.key]?.prompt || defaultPrompt,
-                                view: e.target.value
-                              }
-                            };
-                            updateSetting('ai_image_generation_individual', newSettings);
-                          }}
-                          disabled={settingsLoading}
-                          placeholder={imageConfig.defaultView}
-                        />
+                         <Input
+                           id={`${imageConfig.key}-view`}
+                           value={currentSettings[imageConfig.key]?.view || imageConfig.defaultView}
+                           onChange={(e) => {
+                             const newSettings = {
+                               ...currentSettings,
+                               [imageConfig.key]: {
+                                 ...currentSettings[imageConfig.key],
+                                 enabled: currentSettings[imageConfig.key]?.enabled ?? (index < 2),
+                                 prompt: currentSettings[imageConfig.key]?.prompt || defaultPrompt,
+                                 view: e.target.value
+                               }
+                             };
+                             updateSetting('ai_image_generation_individual', newSettings);
+                           }}
+                           disabled={settingsLoading}
+                           placeholder={imageConfig.defaultView}
+                           className="w-full min-w-0 overflow-hidden break-words"
+                         />
                       </div>
                       
                       <div className="space-y-2">
                         <Label htmlFor={`${imageConfig.key}-prompt`}>Custom Prompt Template</Label>
-                        <Textarea
-                          id={`${imageConfig.key}-prompt`}
-                          rows={6}
-                          value={currentSettings[imageConfig.key]?.prompt || defaultPrompt}
-                          onChange={(e) => {
-                            const newSettings = {
-                              ...currentSettings,
-                              [imageConfig.key]: {
-                                ...currentSettings[imageConfig.key],
-                                enabled: currentSettings[imageConfig.key]?.enabled ?? (index < 2),
-                                prompt: e.target.value,
-                                view: currentSettings[imageConfig.key]?.view || imageConfig.defaultView
-                              }
-                            };
-                            updateSetting('ai_image_generation_individual', newSettings);
-                          }}
-                          disabled={settingsLoading}
-                          className="font-mono text-xs resize-y"
-                        />
-                      </div>
+                         <Textarea
+                           id={`${imageConfig.key}-prompt`}
+                           rows={6}
+                           value={currentSettings[imageConfig.key]?.prompt || defaultPrompt}
+                           onChange={(e) => {
+                             const newSettings = {
+                               ...currentSettings,
+                               [imageConfig.key]: {
+                                 ...currentSettings[imageConfig.key],
+                                 enabled: currentSettings[imageConfig.key]?.enabled ?? (index < 2),
+                                 prompt: e.target.value,
+                                 view: currentSettings[imageConfig.key]?.view || imageConfig.defaultView
+                               }
+                             };
+                             updateSetting('ai_image_generation_individual', newSettings);
+                           }}
+                           disabled={settingsLoading}
+                           className="font-mono text-xs resize-y w-full min-w-0 overflow-hidden whitespace-pre-wrap break-words"
+                         />
+                       </div>
                     </CardContent>
                   )}
                 </Card>
@@ -716,7 +717,7 @@ Ultra-high-resolution, realistic automotive photography with natural dynamic ran
             <Textarea
               value={JSON.stringify(result, null, 2)}
               readOnly
-              className="font-mono text-sm"
+              className="font-mono text-sm w-full min-w-0 overflow-hidden whitespace-pre-wrap break-words"
               rows={10}
             />
           </CardContent>
