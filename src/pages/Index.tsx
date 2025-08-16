@@ -187,7 +187,7 @@ const Index = () => {
         <section className="py-20 px-4 white-text">
           <div className="container max-w-6xl mx-auto grid lg:grid-cols-2 gap-10 items-center">
             <div>
-              <h1 className="text-4xl md:text-6xl font-bold mb-6" style={{color: 'white'}}>
+              <h1 className="text-4xl md:text-6xl font-bold mb-6" style={{color: 'black'}}>
                 Pay‑As‑You‑Go Facebook Marketplace Automation
               </h1>
               <p className="text-xl text-muted-foreground mb-8">
