@@ -138,8 +138,11 @@ const Index = () => {
 
       <main className="pt-16">
         {/* Hero Section with Vanta Background */}
-        <section ref={vantaRef} className="relative min-h-screen flex items-center justify-center overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/40 z-10"></div>
+        <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+          {/* Vanta Background Container */}
+          <div ref={vantaRef} className="absolute inset-0 z-0"></div>
+          {/* Content overlay with minimal interference */}
+          <div className="absolute inset-0 bg-black/10 z-10"></div>
           <div className="container relative z-20 grid lg:grid-cols-2 gap-10 items-center min-h-screen py-20">
             
             {/* Hero Content */}
