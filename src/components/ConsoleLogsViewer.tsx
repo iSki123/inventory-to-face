@@ -176,31 +176,31 @@ export default function ConsoleLogsViewer() {
 
         {/* Stats */}
         {logs && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 w-full">
+          <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 w-full">
             <div className="text-center p-2 bg-muted/30 rounded min-w-0">
-              <div className="text-lg font-bold">{logs.length}</div>
+              <div className="text-base sm:text-lg font-bold">{logs.length}</div>
               <div className="text-xs text-muted-foreground">Total</div>
             </div>
             <div className="text-center p-2 bg-red-100 dark:bg-red-900/20 rounded min-w-0">
-              <div className="text-lg font-bold text-red-600">
+              <div className="text-base sm:text-lg font-bold text-red-600">
                 {logs.filter(l => l.log_level === 'error').length}
               </div>
               <div className="text-xs text-muted-foreground">Errors</div>
             </div>
             <div className="text-center p-2 bg-yellow-100 dark:bg-yellow-900/20 rounded min-w-0">
-              <div className="text-lg font-bold text-yellow-600">
+              <div className="text-base sm:text-lg font-bold text-yellow-600">
                 {logs.filter(l => l.log_level === 'warn').length}
               </div>
               <div className="text-xs text-muted-foreground">Warnings</div>
             </div>
             <div className="text-center p-2 bg-blue-100 dark:bg-blue-900/20 rounded min-w-0">
-              <div className="text-lg font-bold text-blue-600">
+              <div className="text-base sm:text-lg font-bold text-blue-600">
                 {logs.filter(l => l.log_level === 'info').length}
               </div>
               <div className="text-xs text-muted-foreground">Info</div>
             </div>
             <div className="text-center p-2 bg-gray-100 dark:bg-gray-900/20 rounded min-w-0">
-              <div className="text-lg font-bold text-gray-600">
+              <div className="text-base sm:text-lg font-bold text-gray-600">
                 {logs.filter(l => l.log_level === 'debug').length}
               </div>
               <div className="text-xs text-muted-foreground">Debug</div>
