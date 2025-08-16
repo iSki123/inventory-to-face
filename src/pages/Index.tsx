@@ -29,8 +29,8 @@ const Index = () => {
   scaleMobile: 0.25,
   color: 0x4d99d9,
   backgroundColor: 0x0,
-  points: 3.00,
-  maxDistance: 26.00,
+  points: 5.00,
+  maxDistance: 18.00,
   spacing: 16.00
     });
 
