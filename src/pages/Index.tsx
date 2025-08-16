@@ -121,28 +121,46 @@ const Index = () => {
             color: rgba(255, 255, 255, 0.7) !important;
           }
           .white-text .text-primary {
-            color: #3b82f6 !important;
+            color: white !important;
+          }
+          .black-header .text-primary {
+            color: black !important;
+          }
+          .black-button {
+            background-color: black !important;
+            color: white !important;
+            border-color: black !important;
+          }
+          .black-button:hover {
+            background-color: #333 !important;
+            color: white !important;
+          }
+          .black-text * {
+            color: black !important;
+          }
+          .black-text .text-muted-foreground {
+            color: #666 !important;
           }
         `}
       </style>
       {/* Header */}
-      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 black-header">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center space-x-2">
-            <Car className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold text-primary">Salesonator</span>
+            <Car className="h-8 w-8 text-black" />
+            <span className="text-2xl font-bold text-black">Salesonator</span>
           </div>
           <nav className="flex items-center gap-4">
-            <Button variant="ghost" asChild>
+            <Button variant="ghost" asChild className="text-black hover:text-black">
               <Link to="#features">Features</Link>
             </Button>
-            <Button variant="ghost" asChild>
+            <Button variant="ghost" asChild className="text-black hover:text-black">
               <Link to="#how-it-works">How it works</Link>
             </Button>
-            <Button variant="ghost" asChild>
+            <Button variant="ghost" asChild className="text-black hover:text-black">
               <Link to="#faq">FAQ</Link>
             </Button>
-            <Button asChild>
+            <Button asChild className="black-button">
               <Link to="/auth">Get Started</Link>
             </Button>
           </nav>
@@ -161,10 +179,10 @@ const Index = () => {
                 Built for dealership owners, managers, and salespeople: post vehicles, handle leads, and send AI‑powered replies—all from one dashboard.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
-                <Button size="lg" asChild>
+                <Button size="lg" asChild className="black-button">
                   <Link to="/auth">Start Free</Link>
                 </Button>
-                <Button size="lg" variant="outline" asChild>
+                <Button size="lg" variant="outline" asChild className="text-white border-white hover:bg-white hover:text-black">
                   <a href="#how-it-works">See how it works</a>
                 </Button>
               </div>
@@ -172,15 +190,15 @@ const Index = () => {
               {/* Proof strip */}
               <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-6 text-left">
                 <div>
-                  <div className="flex items-center gap-2 font-semibold"><Zap className="h-5 w-5 text-primary" /> Faster Listings</div>
+                  <div className="flex items-center gap-2 font-semibold"><Zap className="h-5 w-5 text-white" /> Faster Listings</div>
                   <p className="text-muted-foreground text-sm">Automated posting to Marketplace</p>
                 </div>
                 <div>
-                  <div className="flex items-center gap-2 font-semibold"><MessageSquare className="h-5 w-5 text-primary" /> AI Replies</div>
+                  <div className="flex items-center gap-2 font-semibold"><MessageSquare className="h-5 w-5 text-white" /> AI Replies</div>
                   <p className="text-muted-foreground text-sm">Human‑like responses, instantly</p>
                 </div>
                 <div>
-                  <div className="flex items-center gap-2 font-semibold"><CreditCard className="h-5 w-5 text-primary" /> Pay‑As‑You‑Go</div>
+                  <div className="flex items-center gap-2 font-semibold"><CreditCard className="h-5 w-5 text-white" /> Pay‑As‑You‑Go</div>
                   <p className="text-muted-foreground text-sm">Only pay for the credits you use</p>
                 </div>
               </div>
@@ -280,10 +298,10 @@ const Index = () => {
               <h2 className="text-3xl md:text-4xl font-bold mb-4">Only Pay For What You Use</h2>
               <p className="text-lg text-muted-foreground mb-8">Purchase credits for postings and AI replies. Scale up when you need to—no subscriptions required.</p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button size="lg" asChild>
+                <Button size="lg" asChild className="black-button">
                   <Link to="/billing">View Credit Options</Link>
                 </Button>
-                <Button size="lg" variant="outline" asChild>
+                <Button size="lg" variant="outline" asChild className="border-black text-black hover:bg-black hover:text-white">
                   <Link to="/auth">Create a Free Account</Link>
                 </Button>
               </div>
@@ -346,7 +364,7 @@ const Index = () => {
           <div className="container max-w-4xl mx-auto text-center">
             <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Sell More Cars?</h2>
             <p className="text-xl text-muted-foreground mb-8">Start posting to Facebook Marketplace and engaging leads today.</p>
-            <Button size="lg" asChild>
+            <Button size="lg" asChild className="black-button">
               <Link to="/auth">Get Started</Link>
             </Button>
           </div>
