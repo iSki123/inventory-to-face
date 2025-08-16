@@ -167,10 +167,32 @@ serve(async (req) => {
     // Check if we have a reference image to use as seed
     const seedImageUrl = currentVehicle?.images?.[0];
     
-    // New prompt template with variables populated from Supabase data
-    const buildPrompt = (viewDescription: string) => {
-      const promptTemplate = `Reference this image for vehicle styling, lighting, background, damage, and customization:
-${seedImageUrl || 'N/A'}
+    // Get configurable prompt template and views from site settings
+    const { data: promptSettings, error: promptError } = await supabaseClient
+      .from('site_settings')
+      .select('setting_value')
+      .eq('setting_key', 'ai_image_generation_prompt')
+      .maybeSingle();
+
+    const { data: viewsSettings, error: viewsError } = await supabaseClient
+      .from('site_settings')
+      .select('setting_value')
+      .eq('setting_key', 'ai_image_generation_views')
+      .maybeSingle();
+
+    const { data: countSettings, error: countError } = await supabaseClient
+      .from('site_settings')
+      .select('setting_value')
+      .eq('setting_key', 'ai_image_generation_count')
+      .maybeSingle();
+
+    if (promptError || viewsError || countError) {
+      console.error('Error fetching image generation settings:', { promptError, viewsError, countError });
+    }
+
+    // Default prompt template if not configured
+    const defaultPrompt = `Reference this image for vehicle styling, lighting, background, damage, and customization:
+{{SEED_IMAGE_URL}}
 
 GOAL: Generate a clean, realistic photo that matches the seed image in **near-identical likeness**. The seed image is the **single source of truth**.
 
@@ -185,10 +207,10 @@ HARD CONSTRAINTS — DO NOT VIOLATE:
 • Other mods/damage to replicate ONLY if clearly visible: step/nerf bars, racks, rain guards, body kits/flares, vinyl/wraps/decals, badges, mismatched panels, scratches, dents, chips, rust, scuffs, cracked parts. Match their exact location, size, and severity.
 
 Vehicle data for accuracy:
-${vehicleData.year} ${vehicleData.make} ${vehicleData.model} ${vehicleData.trim || 'N/A'}, exterior: ${vehicleData.exterior_color || 'N/A'}, interior: ${vehicleData.interior_color || 'N/A'}, mileage: ${vehicleData.mileage || 'N/A'}, engine: ${vehicleData.engine || vehicleData.engine_nhtsa || 'N/A'}, drivetrain: ${vehicleData.drivetrain || vehicleData.drivetrain_nhtsa || 'N/A'}, fuel: ${vehicleData.fuel_type || vehicleData.fuel_type_nhtsa || 'N/A'}.
+{{YEAR}} {{MAKE}} {{MODEL}} {{TRIM}}, exterior: {{EXTERIOR_COLOR}}, interior: {{INTERIOR_COLOR}}, mileage: {{MILEAGE}}, engine: {{ENGINE}}, drivetrain: {{DRIVETRAIN}}, fuel: {{FUEL_TYPE}}.
 
 View / Angle:
-${viewDescription}
+{{VIEW_DESCRIPTION}}
 
 Composition:
 • Vertical 9:16 (iPhone portrait)
@@ -200,25 +222,51 @@ Composition:
 
 STRICT NO-TEXT POLICY:
 No visible text of any kind in the image (no labels, overlays, price tags, UI boxes, borders, captions, numbers, or dealership graphics). The only allowed text is the **physical license plate** rendered as part of the car:
-License plate: "${dealershipName}".
+License plate: "{{DEALERSHIP_NAME}}".
 
 Photography Style:
 Ultra-high-resolution, realistic automotive photography with natural dynamic range, sharp focus, subtle depth-of-field. Keep the candid, modern iPhone look. Match perspective and lighting direction from the seed image.`;
 
-      return promptTemplate;
+    const defaultViews = [
+      'Front 3/4 — grille, headlights, driver\'s side',
+      'Side profile — all wheels, full body',
+      'Rear 3/4 — taillights, passenger side',
+      'Interior — dashboard, seats, controls'
+    ];
+
+    // Get configured values or use defaults
+    const promptTemplate = promptSettings?.setting_value || defaultPrompt;
+    const viewDescriptions = viewsSettings?.setting_value || defaultViews;
+    const imageCount = Math.min(4, Math.max(1, countSettings?.setting_value || 2));
+
+    console.log(`Generating ${imageCount} images with configured prompt template`);
+
+    // Function to replace all variables in the prompt template
+    const buildPrompt = (viewDescription: string) => {
+      return promptTemplate
+        .replace(/\{\{SEED_IMAGE_URL\}\}/g, seedImageUrl || 'N/A')
+        .replace(/\{\{YEAR\}\}/g, vehicleData.year?.toString() || 'N/A')
+        .replace(/\{\{MAKE\}\}/g, vehicleData.make || 'N/A')
+        .replace(/\{\{MODEL\}\}/g, vehicleData.model || 'N/A')
+        .replace(/\{\{TRIM\}\}/g, vehicleData.trim || 'N/A')
+        .replace(/\{\{EXTERIOR_COLOR\}\}/g, vehicleData.exterior_color || 'N/A')
+        .replace(/\{\{INTERIOR_COLOR\}\}/g, vehicleData.interior_color || 'N/A')
+        .replace(/\{\{MILEAGE\}\}/g, vehicleData.mileage?.toString() || 'N/A')
+        .replace(/\{\{ENGINE\}\}/g, vehicleData.engine || vehicleData.engine_nhtsa || 'N/A')
+        .replace(/\{\{DRIVETRAIN\}\}/g, vehicleData.drivetrain || vehicleData.drivetrain_nhtsa || 'N/A')
+        .replace(/\{\{FUEL_TYPE\}\}/g, vehicleData.fuel_type || vehicleData.fuel_type_nhtsa || 'N/A')
+        .replace(/\{\{DEALERSHIP_NAME\}\}/g, dealershipName || 'N/A')
+        .replace(/\{\{VIEW_DESCRIPTION\}\}/g, viewDescription);
     };
 
-    // Define 2 key image prompts using the new template
-    const imagePrompts = [
-      {
-        angle: 'front_angled',
-        prompt: buildPrompt('Front 3/4 — grille, headlights, driver\'s side')
-      },
-      {
-        angle: 'side_profile',
-        prompt: buildPrompt('Side profile — all wheels, full body')
-      }
-    ];
+    // Build image prompts based on configured views and count
+    const imagePrompts = viewDescriptions
+      .slice(0, imageCount)
+      .map((viewDescription: string, index: number) => ({
+        angle: `image_${index + 1}`,
+        prompt: buildPrompt(viewDescription),
+        viewDescription
+      }));
 
     const generatedImages: string[] = [];
     const imageGenerationErrors: string[] = [];

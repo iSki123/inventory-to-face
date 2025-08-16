@@ -403,6 +403,132 @@ export default function AdminPanel() {
         </CardContent>
       </Card>
 
+      {/* AI Features Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Image className="h-5 w-5" />
+            AI Image Generation Control
+          </CardTitle>
+          <CardDescription>
+            Configure AI vehicle image generation settings globally
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* AI Image Generation Toggle */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="ai-image-gen">AI Vehicle Image Generation</Label>
+              <p className="text-sm text-muted-foreground">
+                Enable or disable AI-generated vehicle images for all users
+              </p>
+            </div>
+            <Switch
+              id="ai-image-gen"
+              checked={getSetting('ai_image_generation_enabled', { enabled: true })?.enabled !== false}
+              onCheckedChange={(checked) => {
+                updateSetting('ai_image_generation_enabled', { enabled: checked });
+              }}
+              disabled={settingsLoading}
+            />
+          </div>
+
+          <Separator />
+
+          {/* AI Image Generation Configuration */}
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="image-count">Number of Images to Generate</Label>
+              <p className="text-sm text-muted-foreground mb-2">
+                How many AI images to generate per vehicle (1-4)
+              </p>
+              <Input
+                id="image-count"
+                type="number"
+                min="1"
+                max="4"
+                value={getSetting('ai_image_generation_count', 2)}
+                onChange={(e) => {
+                  const value = Math.min(4, Math.max(1, parseInt(e.target.value) || 2));
+                  updateSetting('ai_image_generation_count', value);
+                }}
+                disabled={settingsLoading}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="image-prompts">AI Image Generation Prompt Template</Label>
+              <p className="text-sm text-muted-foreground mb-2">
+                Configure the prompt template used for AI image generation. Available variables: {`{{SEED_IMAGE_URL}}, {{YEAR}}, {{MAKE}}, {{MODEL}}, {{TRIM}}, {{EXTERIOR_COLOR}}, {{INTERIOR_COLOR}}, {{MILEAGE}}, {{ENGINE}}, {{DRIVETRAIN}}, {{FUEL_TYPE}}, {{DEALERSHIP_NAME}}, {{VIEW_DESCRIPTION}}`}
+              </p>
+              <Textarea
+                id="image-prompts"
+                rows={12}
+                value={getSetting('ai_image_generation_prompt', `Reference this image for vehicle styling, lighting, background, damage, and customization:
+{{SEED_IMAGE_URL}}
+
+GOAL: Generate a clean, realistic photo that matches the seed image in **near-identical likeness**. The seed image is the **single source of truth**.
+
+HARD CONSTRAINTS — DO NOT VIOLATE:
+• Do NOT add, invent, or "upgrade" any feature that is not clearly visible in the seed image.
+• Default to OEM/STOCK appearance for any part that is not clearly visible.
+• If uncertain about a feature (occluded, blurry, partially cropped), OMIT it and keep OEM/STOCK.
+• Ignore and REMOVE ad frames, banners, price boxes, watermarks, emoji/stickers, lot signage graphics, or any non-vehicle overlays from the seed image. These are NOT vehicle features.
+• Keep the vehicle's ride height and stance exactly as in the seed image. **No lift/no lower** unless clearly shown.
+• Keep wheels/tires exactly as shown (diameter/width/style/finish/sidewall look). Do NOT swap styles or sizes.
+• Lighting mods: ONLY replicate lights that are clearly visible in the seed image (e.g., roof LED bar, grille lights, fogs, halos, pods). Match the **exact style, housing, lens, mounting location, and color temperature**. If not clearly present, DO NOT add any extra lights.
+• Other mods/damage to replicate ONLY if clearly visible: step/nerf bars, racks, rain guards, body kits/flares, vinyl/wraps/decals, badges, mismatched panels, scratches, dents, chips, rust, scuffs, cracked parts. Match their exact location, size, and severity.
+
+Vehicle data for accuracy:
+{{YEAR}} {{MAKE}} {{MODEL}} {{TRIM}}, exterior: {{EXTERIOR_COLOR}}, interior: {{INTERIOR_COLOR}}, mileage: {{MILEAGE}}, engine: {{ENGINE}}, drivetrain: {{DRIVETRAIN}}, fuel: {{FUEL_TYPE}}.
+
+View / Angle:
+{{VIEW_DESCRIPTION}}
+
+Composition:
+• Vertical 9:16 (iPhone portrait)
+• Vehicle occupies 65–70% of the frame
+• ≥ 100px clear margin on both left & right sides
+• Balanced space above & below
+• Preserve the original background & lighting from the seed (sky, shadows, pavement/ground texture)
+• Ensure the full vehicle is visible — no cropping/cutoffs
+
+STRICT NO-TEXT POLICY:
+No visible text of any kind in the image (no labels, overlays, price tags, UI boxes, borders, captions, numbers, or dealership graphics). The only allowed text is the **physical license plate** rendered as part of the car:
+License plate: "{{DEALERSHIP_NAME}}".
+
+Photography Style:
+Ultra-high-resolution, realistic automotive photography with natural dynamic range, sharp focus, subtle depth-of-field. Keep the candid, modern iPhone look. Match perspective and lighting direction from the seed image.`)}
+                onChange={(e) => updateSetting('ai_image_generation_prompt', e.target.value)}
+                disabled={settingsLoading}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="image-views">Image View Descriptions</Label>
+              <p className="text-sm text-muted-foreground mb-2">
+                Define the view descriptions for each image (one per line, up to 4). These will replace {`{{VIEW_DESCRIPTION}}`} in the prompt.
+              </p>
+              <Textarea
+                id="image-views"
+                rows={4}
+                value={getSetting('ai_image_generation_views', [
+                  'Front 3/4 — grille, headlights, driver\'s side',
+                  'Side profile — all wheels, full body',
+                  'Rear 3/4 — taillights, passenger side',
+                  'Interior — dashboard, seats, controls'
+                ]).join('\n')}
+                onChange={(e) => {
+                  const views = e.target.value.split('\n').filter(v => v.trim()).slice(0, 4);
+                  updateSetting('ai_image_generation_views', views);
+                }}
+                disabled={settingsLoading}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Console Logs Viewer */}
       <ConsoleLogsViewer />
 
