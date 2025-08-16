@@ -221,32 +221,32 @@ const Index = () => {
 
             <div className="rounded-lg border bg-card p-6 shadow-sm text-foreground">
               <div className="grid grid-cols-2 gap-4">
-                <Card>
+                <Card style={{color: 'black'}}>
                   <CardHeader>
-                    <TrendingUp className="h-10 w-10 text-black mb-2" />
-                    <CardTitle className="text-xl text-black">Boost Efficiency</CardTitle>
-                    <CardDescription className="text-gray-600">Automate repetitive steps and save hours weekly.</CardDescription>
+                    <TrendingUp className="h-10 w-10 mb-2" style={{color: 'black'}} />
+                    <CardTitle className="text-xl" style={{color: 'black'}}>Boost Efficiency</CardTitle>
+                    <CardDescription style={{color: '#666'}}>Automate repetitive steps and save hours weekly.</CardDescription>
                   </CardHeader>
                 </Card>
-                <Card>
+                <Card style={{color: 'black'}}>
                   <CardHeader>
-                    <Shield className="h-10 w-10 text-black mb-2" />
-                    <CardTitle className="text-xl text-black">Human‑like Automation</CardTitle>
-                    <CardDescription className="text-gray-600">Engineered to mimic real behavior to reduce flags.</CardDescription>
+                    <Shield className="h-10 w-10 mb-2" style={{color: 'black'}} />
+                    <CardTitle className="text-xl" style={{color: 'black'}}>Human‑like Automation</CardTitle>
+                    <CardDescription style={{color: '#666'}}>Engineered to mimic real behavior to reduce flags.</CardDescription>
                   </CardHeader>
                 </Card>
-                <Card>
+                <Card style={{color: 'black'}}>
                   <CardHeader>
-                    <Users className="h-10 w-10 text-black mb-2" />
-                    <CardTitle className="text-xl text-black">Lead Inbox</CardTitle>
-                    <CardDescription className="text-gray-600">Track conversations and statuses in one place.</CardDescription>
+                    <Users className="h-10 w-10 mb-2" style={{color: 'black'}} />
+                    <CardTitle className="text-xl" style={{color: 'black'}}>Lead Inbox</CardTitle>
+                    <CardDescription style={{color: '#666'}}>Track conversations and statuses in one place.</CardDescription>
                   </CardHeader>
                 </Card>
-                <Card>
+                <Card style={{color: 'black'}}>
                   <CardHeader>
-                    <Clock className="h-10 w-10 text-black mb-2" />
-                    <CardTitle className="text-xl text-black">Real‑time Updates</CardTitle>
-                    <CardDescription className="text-gray-600">Refresh leads, retry posts, and monitor activity.</CardDescription>
+                    <Clock className="h-10 w-10 mb-2" style={{color: 'black'}} />
+                    <CardTitle className="text-xl" style={{color: 'black'}}>Real‑time Updates</CardTitle>
+                    <CardDescription style={{color: '#666'}}>Refresh leads, retry posts, and monitor activity.</CardDescription>
                   </CardHeader>
                 </Card>
               </div>
