@@ -126,19 +126,34 @@ const Index = () => {
           .black-header .text-primary {
             color: black !important;
           }
-          .black-button {
+          .black-button, .black-button:hover, .black-button:focus, .black-button:active {
             background-color: black !important;
             color: white !important;
             border-color: black !important;
           }
           .black-button:hover {
             background-color: #333 !important;
-            color: white !important;
           }
           .black-text * {
             color: black !important;
           }
           .black-text .text-muted-foreground {
+            color: #666 !important;
+          }
+          /* Force all buttons with black-button class to be black */
+          button.black-button, a.black-button, .black-button button, .black-button a {
+            background-color: black !important;
+            color: white !important;
+            border-color: black !important;
+          }
+          /* White cards should have black text */
+          .bg-card, .bg-white {
+            color: black !important;
+          }
+          .bg-card *, .bg-white * {
+            color: black !important;
+          }
+          .bg-card .text-muted-foreground, .bg-white .text-muted-foreground {
             color: #666 !important;
           }
         `}
@@ -160,8 +175,8 @@ const Index = () => {
             <Button variant="ghost" asChild className="text-black hover:text-black">
               <Link to="#faq">FAQ</Link>
             </Button>
-            <Button asChild className="black-button">
-              <Link to="/auth">Get Started</Link>
+            <Button asChild style={{backgroundColor: 'black', color: 'white', borderColor: 'black'}} className="black-button">
+              <Link to="/auth" style={{backgroundColor: 'black', color: 'white'}}>Get Started</Link>
             </Button>
           </nav>
         </div>
@@ -179,8 +194,8 @@ const Index = () => {
                 Built for dealership owners, managers, and salespeople: post vehicles, handle leads, and send AI‑powered replies—all from one dashboard.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
-                <Button size="lg" asChild className="black-button">
-                  <Link to="/auth">Start Free</Link>
+                <Button size="lg" asChild style={{backgroundColor: 'black', color: 'white', borderColor: 'black'}} className="black-button">
+                  <Link to="/auth" style={{backgroundColor: 'black', color: 'white'}}>Start Free</Link>
                 </Button>
                 <Button size="lg" variant="outline" asChild className="text-white border-white hover:bg-white hover:text-black">
                   <a href="#how-it-works">See how it works</a>
@@ -298,8 +313,8 @@ const Index = () => {
               <h2 className="text-3xl md:text-4xl font-bold mb-4">Only Pay For What You Use</h2>
               <p className="text-lg text-muted-foreground mb-8">Purchase credits for postings and AI replies. Scale up when you need to—no subscriptions required.</p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button size="lg" asChild className="black-button">
-                  <Link to="/billing">View Credit Options</Link>
+                <Button size="lg" asChild style={{backgroundColor: 'black', color: 'white', borderColor: 'black'}} className="black-button">
+                  <Link to="/billing" style={{backgroundColor: 'black', color: 'white'}}>View Credit Options</Link>
                 </Button>
                 <Button size="lg" variant="outline" asChild className="border-black text-black hover:bg-black hover:text-white">
                   <Link to="/auth">Create a Free Account</Link>
@@ -364,8 +379,8 @@ const Index = () => {
           <div className="container max-w-4xl mx-auto text-center">
             <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Sell More Cars?</h2>
             <p className="text-xl text-muted-foreground mb-8">Start posting to Facebook Marketplace and engaging leads today.</p>
-            <Button size="lg" asChild className="black-button">
-              <Link to="/auth">Get Started</Link>
+            <Button size="lg" asChild style={{backgroundColor: 'black', color: 'white', borderColor: 'black'}} className="black-button">
+              <Link to="/auth" style={{backgroundColor: 'black', color: 'white'}}>Get Started</Link>
             </Button>
           </div>
         </section>
