@@ -22,6 +22,7 @@ const Index = () => {
     try {
       vantaEffect.current = NET({
         el: vantaRef.current,
+        THREE: THREE,
          mouseControls: true,
   touchControls: true,
   gyroControls: false,
