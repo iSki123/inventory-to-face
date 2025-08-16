@@ -182,15 +182,15 @@ const Index = () => {
               {/* Feature Pills */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto lg:mx-0">
                 <div className="flex items-center gap-2 text-sm bg-white/10 backdrop-blur rounded-full px-4 py-2">
-                  <Zap className="h-4 w-4 text-blue-400" />
+                  <Zap className="h-4 w-4" style={{ color: '#669bde' }} />
                   <span>Faster Listings</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm bg-white/10 backdrop-blur rounded-full px-4 py-2">
-                  <MessageSquare className="h-4 w-4 text-blue-400" />
+                  <MessageSquare className="h-4 w-4" style={{ color: '#669bde' }} />
                   <span>AI Replies</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm bg-white/10 backdrop-blur rounded-full px-4 py-2">
-                  <CreditCard className="h-4 w-4 text-blue-400" />
+                  <CreditCard className="h-4 w-4" style={{ color: '#669bde' }} />
                   <span>Pay‑As‑You‑Go</span>
                 </div>
               </div>
@@ -200,7 +200,7 @@ const Index = () => {
             <div className="grid grid-cols-2 gap-4 max-w-lg mx-auto">
               <Card className="bg-white/95 backdrop-blur border-0 shadow-xl">
                 <CardHeader className="pb-3">
-                  <TrendingUp className="h-10 w-10 text-blue-600 mb-2" />
+                  <TrendingUp className="h-10 w-10 mb-2" style={{ color: '#669bde' }} />
                   <CardTitle className="text-lg">Boost Efficiency</CardTitle>
                   <CardDescription className="text-sm">
                     Automate repetitive steps and save hours weekly.
@@ -209,7 +209,7 @@ const Index = () => {
               </Card>
               <Card className="bg-white/95 backdrop-blur border-0 shadow-xl">
                 <CardHeader className="pb-3">
-                  <Shield className="h-10 w-10 text-blue-600 mb-2" />
+                  <Shield className="h-10 w-10 mb-2" style={{ color: '#669bde' }} />
                   <CardTitle className="text-lg">Human‑like Automation</CardTitle>
                   <CardDescription className="text-sm">
                     Engineered to mimic real behavior to reduce flags.
@@ -218,7 +218,7 @@ const Index = () => {
               </Card>
               <Card className="bg-white/95 backdrop-blur border-0 shadow-xl">
                 <CardHeader className="pb-3">
-                  <Users className="h-10 w-10 text-blue-600 mb-2" />
+                  <Users className="h-10 w-10 mb-2" style={{ color: '#669bde' }} />
                   <CardTitle className="text-lg">Lead Inbox</CardTitle>
                   <CardDescription className="text-sm">
                     Track conversations and statuses in one place.
@@ -227,7 +227,7 @@ const Index = () => {
               </Card>
               <Card className="bg-white/95 backdrop-blur border-0 shadow-xl">
                 <CardHeader className="pb-3">
-                  <Clock className="h-10 w-10 text-blue-600 mb-2" />
+                  <Clock className="h-10 w-10 mb-2" style={{ color: '#669bde' }} />
                   <CardTitle className="text-lg">Real‑time Updates</CardTitle>
                   <CardDescription className="text-sm">
                     Refresh leads, retry posts, and monitor activity.
@@ -254,10 +254,10 @@ const Index = () => {
               ].map((s) => (
                 <Card key={s.step} className="relative border-0 shadow-lg bg-white hover:shadow-xl transition-shadow">
                   <CardHeader className="text-center pb-6">
-                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 w-8 h-8 text-white rounded-full flex items-center justify-center text-sm font-bold" style={{ backgroundColor: '#669bde' }}>
                       {s.step}
                     </div>
-                    <s.icon className="h-12 w-12 text-blue-600 mb-4 mx-auto mt-4" />
+                    <s.icon className="h-12 w-12 mb-4 mx-auto mt-4" style={{ color: '#669bde' }} />
                     <CardTitle className="text-xl text-foreground">{s.title}</CardTitle>
                     <CardDescription className="text-muted-foreground">{s.desc}</CardDescription>
                   </CardHeader>
@@ -285,7 +285,7 @@ const Index = () => {
               ].map(({ Icon, title, desc }) => (
                 <Card key={title} className="border-0 shadow-lg bg-white hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                   <CardHeader className="text-center">
-                    <Icon className="h-16 w-16 text-blue-600 mb-4 mx-auto" />
+                    <Icon className="h-16 w-16 mb-4 mx-auto" style={{ color: '#669bde' }} />
                     <CardTitle className="text-xl text-foreground mb-2">{title}</CardTitle>
                     <CardDescription className="text-muted-foreground">{desc}</CardDescription>
                   </CardHeader>
