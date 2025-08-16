@@ -151,7 +151,7 @@ const Index = () => {
           {/* Vanta Background Container - only on desktop */}
           {!isMobile && <div ref={vantaRef} className="absolute inset-0 z-0"></div>}
           {/* Mobile gradient background */}
-          {isMobile && <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-blue-800 to-blue-600 z-0"></div>}
+          {isMobile && <div className="absolute inset-0 bg-black z-0"></div>}
           {/* Content overlay with minimal interference */}
           <div className="absolute inset-0 bg-black/10 z-10"></div>
           <div className="container relative z-20 grid lg:grid-cols-2 gap-10 items-center min-h-screen py-20">
