@@ -28,7 +28,7 @@ const Index = () => {
         gyroControls: false,
         minHeight: 100.00,
         minWidth: 100.00,
-        scale: 0.75,
+        scale: 0.40,
         color: 0x4d99d9,
         backgroundColor: 0x0,
         points: 8.00,
