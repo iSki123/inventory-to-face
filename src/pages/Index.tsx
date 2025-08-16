@@ -26,11 +26,12 @@ const Index = () => {
       minWidth: 200.00,
       scale: 1.00,
       scaleMobile: 1.00,
-      color: 'hsl(var(--primary))',
-      backgroundColor: 'hsl(var(--background))',
-      points: 10.00,
-      maxDistance: 20.00,
-      spacing: 15.00
+      color: '#ffffff', // White color for the network lines
+      backgroundColor: '#000000', // Black background
+      points: 6.00, // Reduced from 10 to make it less busy
+      maxDistance: 15.00, // Reduced from 20 to make connections shorter
+      spacing: 20.00, // Increased from 15 to spread out points more
+      backgroundAlpha: 0.8 // Make background slightly transparent
     });
 
     return () => {
@@ -110,7 +111,20 @@ const Index = () => {
   }
 
   return (
-    <div ref={vantaRef} className="min-h-screen relative">
+    <div ref={vantaRef} className="min-h-screen relative text-white">
+      <style>
+        {`
+          .white-text h1, .white-text h2, .white-text h3, .white-text p, .white-text span {
+            color: white !important;
+          }
+          .white-text .text-muted-foreground {
+            color: rgba(255, 255, 255, 0.7) !important;
+          }
+          .white-text .text-primary {
+            color: #3b82f6 !important;
+          }
+        `}
+      </style>
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
@@ -137,7 +151,7 @@ const Index = () => {
 
       <main>
         {/* Hero Section */}
-        <section className="py-20 px-4">
+        <section className="py-20 px-4 white-text">
           <div className="container max-w-6xl mx-auto grid lg:grid-cols-2 gap-10 items-center">
             <div>
               <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
