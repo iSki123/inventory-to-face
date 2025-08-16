@@ -3,9 +3,42 @@ import { Navigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Car, Users, MessageSquare, TrendingUp, ArrowRight, Zap, Shield, CreditCard, Clock } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import * as THREE from 'three';
+// @ts-ignore - Vanta doesn't have TypeScript definitions
+import NET from 'vanta/dist/vanta.net.min';
 const Index = () => {
   const { user, loading } = useAuth();
+  const vantaRef = useRef<HTMLDivElement>(null);
+  const vantaEffect = useRef<any>(null);
+
+  // Vanta NET effect
+  useEffect(() => {
+    if (!vantaRef.current) return;
+
+    vantaEffect.current = NET({
+      el: vantaRef.current,
+      THREE: THREE,
+      mouseControls: true,
+      touchControls: true,
+      gyroControls: false,
+      minHeight: 200.00,
+      minWidth: 200.00,
+      scale: 1.00,
+      scaleMobile: 1.00,
+      color: 'hsl(var(--primary))',
+      backgroundColor: 'hsl(var(--background))',
+      points: 10.00,
+      maxDistance: 20.00,
+      spacing: 15.00
+    });
+
+    return () => {
+      if (vantaEffect.current) {
+        vantaEffect.current.destroy();
+      }
+    };
+  }, []);
 
   // SEO: dynamic title, description and canonical
   useEffect(() => {
@@ -77,7 +110,7 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
+    <div ref={vantaRef} className="min-h-screen relative">
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
