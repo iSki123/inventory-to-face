@@ -167,7 +167,7 @@ export default function ConsoleLogsViewer() {
 
         {/* Stats */}
         {logs && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 overflow-hidden">
             <div className="text-center p-2 bg-muted/30 rounded">
               <div className="text-lg font-bold">{logs.length}</div>
               <div className="text-xs text-muted-foreground">Total</div>
