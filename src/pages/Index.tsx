@@ -27,8 +27,8 @@ const Index = () => {
       minWidth: 200.00,
       scale: 0.8,
       scaleMobile: 0.5,
-      color: '#ffffff',
-      backgroundColor: '#000000',
+      color: '#e5e7eb', // Light gray for the connection lines
+      backgroundColor: '#000000', // Black background
       points: 8.00,
       maxDistance: 18.00,
       spacing: 22.00,
