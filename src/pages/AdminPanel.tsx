@@ -411,11 +411,11 @@ export default function AdminPanel() {
             AI Image Generation Control
           </CardTitle>
           <CardDescription>
-            Configure AI vehicle image generation settings globally
+            Configure individual AI vehicle image generation settings globally
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* AI Image Generation Toggle */}
+          {/* Global AI Image Generation Toggle */}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label htmlFor="ai-image-gen">AI Vehicle Image Generation</Label>
@@ -435,36 +435,49 @@ export default function AdminPanel() {
 
           <Separator />
 
-          {/* AI Image Generation Configuration */}
-          <div className="space-y-4">
+          {/* Individual Image Configuration */}
+          <div className="space-y-6">
             <div>
-              <Label htmlFor="image-count">Number of Images to Generate</Label>
-              <p className="text-sm text-muted-foreground mb-2">
-                How many AI images to generate per vehicle (1-4)
+              <Label className="text-base font-medium">Individual Image Settings</Label>
+              <p className="text-sm text-muted-foreground">
+                Configure each image angle individually. Available variables: {`{{SEED_IMAGE_URL}}, {{YEAR}}, {{MAKE}}, {{MODEL}}, {{TRIM}}, {{EXTERIOR_COLOR}}, {{INTERIOR_COLOR}}, {{MILEAGE}}, {{ENGINE}}, {{DRIVETRAIN}}, {{FUEL_TYPE}}, {{DEALERSHIP_NAME}}, {{VIEW_DESCRIPTION}}`}
               </p>
-              <Input
-                id="image-count"
-                type="number"
-                min="1"
-                max="4"
-                value={getSetting('ai_image_generation_count', 2)}
-                onChange={(e) => {
-                  const value = Math.min(4, Math.max(1, parseInt(e.target.value) || 2));
-                  updateSetting('ai_image_generation_count', value);
-                }}
-                disabled={settingsLoading}
-              />
             </div>
 
-            <div>
-              <Label htmlFor="image-prompts">AI Image Generation Prompt Template</Label>
-              <p className="text-sm text-muted-foreground mb-2">
-                Configure the prompt template used for AI image generation. Available variables: {`{{SEED_IMAGE_URL}}, {{YEAR}}, {{MAKE}}, {{MODEL}}, {{TRIM}}, {{EXTERIOR_COLOR}}, {{INTERIOR_COLOR}}, {{MILEAGE}}, {{ENGINE}}, {{DRIVETRAIN}}, {{FUEL_TYPE}}, {{DEALERSHIP_NAME}}, {{VIEW_DESCRIPTION}}`}
-              </p>
-              <Textarea
-                id="image-prompts"
-                rows={12}
-                value={getSetting('ai_image_generation_prompt', `Reference this image for vehicle styling, lighting, background, damage, and customization:
+            {[
+              { 
+                key: 'front_34', 
+                label: 'Front 3/4 View', 
+                defaultView: 'Front 3/4 — grille, headlights, driver\'s side',
+                description: 'Front three-quarter angle showing grille and headlights' 
+              },
+              { 
+                key: 'side_profile', 
+                label: 'Side Profile', 
+                defaultView: 'Side profile — all wheels, full body',
+                description: 'Full side view showing complete vehicle profile' 
+              },
+              { 
+                key: 'rear_34', 
+                label: 'Rear 3/4 View', 
+                defaultView: 'Rear 3/4 — taillights, passenger side',
+                description: 'Rear three-quarter angle showing taillights' 
+              },
+              { 
+                key: 'interior', 
+                label: 'Interior View', 
+                defaultView: 'Interior — dashboard, seats, controls',
+                description: 'Inside view of dashboard and seating area' 
+              }
+            ].map((imageConfig, index) => {
+              const currentSettings = getSetting('ai_image_generation_individual', {
+                front_34: { enabled: true, prompt: '', view: 'Front 3/4 — grille, headlights, driver\'s side' },
+                side_profile: { enabled: true, prompt: '', view: 'Side profile — all wheels, full body' },
+                rear_34: { enabled: false, prompt: '', view: 'Rear 3/4 — taillights, passenger side' },
+                interior: { enabled: false, prompt: '', view: 'Interior — dashboard, seats, controls' }
+              });
+
+              const defaultPrompt = `Reference this image for vehicle styling, lighting, background, damage, and customization:
 {{SEED_IMAGE_URL}}
 
 GOAL: Generate a clean, realistic photo that matches the seed image in **near-identical likeness**. The seed image is the **single source of truth**.
@@ -498,33 +511,86 @@ No visible text of any kind in the image (no labels, overlays, price tags, UI bo
 License plate: "{{DEALERSHIP_NAME}}".
 
 Photography Style:
-Ultra-high-resolution, realistic automotive photography with natural dynamic range, sharp focus, subtle depth-of-field. Keep the candid, modern iPhone look. Match perspective and lighting direction from the seed image.`)}
-                onChange={(e) => updateSetting('ai_image_generation_prompt', e.target.value)}
-                disabled={settingsLoading}
-              />
-            </div>
+Ultra-high-resolution, realistic automotive photography with natural dynamic range, sharp focus, subtle depth-of-field. Keep the candid, modern iPhone look. Match perspective and lighting direction from the seed image.`;
 
-            <div>
-              <Label htmlFor="image-views">Image View Descriptions</Label>
-              <p className="text-sm text-muted-foreground mb-2">
-                Define the view descriptions for each image (one per line, up to 4). These will replace {`{{VIEW_DESCRIPTION}}`} in the prompt.
-              </p>
-              <Textarea
-                id="image-views"
-                rows={4}
-                value={getSetting('ai_image_generation_views', [
-                  'Front 3/4 — grille, headlights, driver\'s side',
-                  'Side profile — all wheels, full body',
-                  'Rear 3/4 — taillights, passenger side',
-                  'Interior — dashboard, seats, controls'
-                ]).join('\n')}
-                onChange={(e) => {
-                  const views = e.target.value.split('\n').filter(v => v.trim()).slice(0, 4);
-                  updateSetting('ai_image_generation_views', views);
-                }}
-                disabled={settingsLoading}
-              />
-            </div>
+              return (
+                <Card key={imageConfig.key} className="border-l-4 border-l-primary/20">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-lg">{imageConfig.label}</CardTitle>
+                        <CardDescription>{imageConfig.description}</CardDescription>
+                      </div>
+                      <Switch
+                        checked={currentSettings[imageConfig.key]?.enabled ?? (index < 2)}
+                        onCheckedChange={(enabled) => {
+                          const newSettings = {
+                            ...currentSettings,
+                            [imageConfig.key]: {
+                              ...currentSettings[imageConfig.key],
+                              enabled,
+                              prompt: currentSettings[imageConfig.key]?.prompt || defaultPrompt,
+                              view: currentSettings[imageConfig.key]?.view || imageConfig.defaultView
+                            }
+                          };
+                          updateSetting('ai_image_generation_individual', newSettings);
+                        }}
+                        disabled={settingsLoading}
+                      />
+                    </div>
+                  </CardHeader>
+                  
+                  {(currentSettings[imageConfig.key]?.enabled ?? (index < 2)) && (
+                    <CardContent className="space-y-4 pt-0">
+                      <div>
+                        <Label htmlFor={`${imageConfig.key}-view`}>View Description</Label>
+                        <Input
+                          id={`${imageConfig.key}-view`}
+                          value={currentSettings[imageConfig.key]?.view || imageConfig.defaultView}
+                          onChange={(e) => {
+                            const newSettings = {
+                              ...currentSettings,
+                              [imageConfig.key]: {
+                                ...currentSettings[imageConfig.key],
+                                enabled: currentSettings[imageConfig.key]?.enabled ?? (index < 2),
+                                prompt: currentSettings[imageConfig.key]?.prompt || defaultPrompt,
+                                view: e.target.value
+                              }
+                            };
+                            updateSetting('ai_image_generation_individual', newSettings);
+                          }}
+                          disabled={settingsLoading}
+                          placeholder={imageConfig.defaultView}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor={`${imageConfig.key}-prompt`}>Custom Prompt Template</Label>
+                        <Textarea
+                          id={`${imageConfig.key}-prompt`}
+                          rows={8}
+                          value={currentSettings[imageConfig.key]?.prompt || defaultPrompt}
+                          onChange={(e) => {
+                            const newSettings = {
+                              ...currentSettings,
+                              [imageConfig.key]: {
+                                ...currentSettings[imageConfig.key],
+                                enabled: currentSettings[imageConfig.key]?.enabled ?? (index < 2),
+                                prompt: e.target.value,
+                                view: currentSettings[imageConfig.key]?.view || imageConfig.defaultView
+                              }
+                            };
+                            updateSetting('ai_image_generation_individual', newSettings);
+                          }}
+                          disabled={settingsLoading}
+                          className="font-mono text-xs"
+                        />
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
+              );
+            })}
           </div>
         </CardContent>
       </Card>

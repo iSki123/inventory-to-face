@@ -167,27 +167,15 @@ serve(async (req) => {
     // Check if we have a reference image to use as seed
     const seedImageUrl = currentVehicle?.images?.[0];
     
-    // Get configurable prompt template and views from site settings
-    const { data: promptSettings, error: promptError } = await supabaseClient
+    // Get AI image generation settings - individual configurations
+    const { data: individualSettings, error: settingsError } = await supabaseClient
       .from('site_settings')
       .select('setting_value')
-      .eq('setting_key', 'ai_image_generation_prompt')
+      .eq('setting_key', 'ai_image_generation_individual')
       .maybeSingle();
 
-    const { data: viewsSettings, error: viewsError } = await supabaseClient
-      .from('site_settings')
-      .select('setting_value')
-      .eq('setting_key', 'ai_image_generation_views')
-      .maybeSingle();
-
-    const { data: countSettings, error: countError } = await supabaseClient
-      .from('site_settings')
-      .select('setting_value')
-      .eq('setting_key', 'ai_image_generation_count')
-      .maybeSingle();
-
-    if (promptError || viewsError || countError) {
-      console.error('Error fetching image generation settings:', { promptError, viewsError, countError });
+    if (settingsError) {
+      console.error('Error fetching individual image settings:', settingsError);
     }
 
     // Default prompt template if not configured
@@ -227,22 +215,41 @@ License plate: "{{DEALERSHIP_NAME}}".
 Photography Style:
 Ultra-high-resolution, realistic automotive photography with natural dynamic range, sharp focus, subtle depth-of-field. Keep the candid, modern iPhone look. Match perspective and lighting direction from the seed image.`;
 
-    const defaultViews = [
-      'Front 3/4 — grille, headlights, driver\'s side',
-      'Side profile — all wheels, full body',
-      'Rear 3/4 — taillights, passenger side',
-      'Interior — dashboard, seats, controls'
-    ];
+    const defaultIndividualSettings = {
+      front_34: { enabled: true, prompt: defaultPrompt, view: 'Front 3/4 — grille, headlights, driver\'s side' },
+      side_profile: { enabled: true, prompt: defaultPrompt, view: 'Side profile — all wheels, full body' },
+      rear_34: { enabled: false, prompt: defaultPrompt, view: 'Rear 3/4 — taillights, passenger side' },
+      interior: { enabled: false, prompt: defaultPrompt, view: 'Interior — dashboard, seats, controls' }
+    };
 
-    // Get configured values or use defaults
-    const promptTemplate = promptSettings?.setting_value || defaultPrompt;
-    const viewDescriptions = viewsSettings?.setting_value || defaultViews;
-    const imageCount = Math.min(4, Math.max(1, countSettings?.setting_value || 2));
+    const individualConfigs = individualSettings?.setting_value || defaultIndividualSettings;
 
-    console.log(`Generating ${imageCount} images with configured prompt template`);
+    // Get enabled image configurations
+    const enabledImages = Object.entries(individualConfigs)
+      .filter(([_, config]: [string, any]) => config.enabled)
+      .map(([key, config]: [string, any]) => ({
+        key,
+        prompt: config.prompt || defaultPrompt,
+        view: config.view || `${key.replace('_', ' ')} view`
+      }));
+
+    if (enabledImages.length === 0) {
+      console.log('No image configurations are enabled');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'No image configurations are enabled',
+          skipped: true 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Generating ${enabledImages.length} images with individual configurations`);
+    console.log('Enabled image types:', enabledImages.map(img => img.key));
 
     // Function to replace all variables in the prompt template
-    const buildPrompt = (viewDescription: string) => {
+    const buildPrompt = (promptTemplate: string, viewDescription: string) => {
       return promptTemplate
         .replace(/\{\{SEED_IMAGE_URL\}\}/g, seedImageUrl || 'N/A')
         .replace(/\{\{YEAR\}\}/g, vehicleData.year?.toString() || 'N/A')
@@ -259,14 +266,12 @@ Ultra-high-resolution, realistic automotive photography with natural dynamic ran
         .replace(/\{\{VIEW_DESCRIPTION\}\}/g, viewDescription);
     };
 
-    // Build image prompts based on configured views and count
-    const imagePrompts = viewDescriptions
-      .slice(0, imageCount)
-      .map((viewDescription: string, index: number) => ({
-        angle: `image_${index + 1}`,
-        prompt: buildPrompt(viewDescription),
-        viewDescription
-      }));
+    // Build image prompts based on enabled configurations
+    const imagePrompts = enabledImages.map((imageConfig) => ({
+      angle: imageConfig.key,
+      prompt: buildPrompt(imageConfig.prompt, imageConfig.view),
+      viewDescription: imageConfig.view
+    }));
 
     const generatedImages: string[] = [];
     const imageGenerationErrors: string[] = [];
