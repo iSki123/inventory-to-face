@@ -187,7 +187,7 @@ const Index = () => {
         <section className="py-20 px-4 white-text">
           <div className="container max-w-6xl mx-auto grid lg:grid-cols-2 gap-10 items-center">
             <div>
-              <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
+              <h1 className="text-4xl md:text-6xl font-bold mb-6" style={{color: 'white'}}>
                 Pay‑As‑You‑Go Facebook Marketplace Automation
               </h1>
               <p className="text-xl text-muted-foreground mb-8">
@@ -258,8 +258,8 @@ const Index = () => {
         <section id="how-it-works" className="py-20 px-4 bg-muted/50">
           <div className="container max-w-6xl mx-auto">
             <div className="text-center mb-12">
-              <h2 className="text-3xl md:text-4xl font-bold mb-3">How It Works</h2>
-              <p className="text-lg text-muted-foreground">From inventory to conversations in four simple steps</p>
+              <h2 className="text-3xl md:text-4xl font-bold mb-3" style={{color: 'black'}}>How It Works</h2>
+              <p className="text-lg text-muted-foreground" style={{color: '#666'}}>From inventory to conversations in four simple steps</p>
             </div>
             <div className="grid md:grid-cols-4 gap-6">
               {[
@@ -268,10 +268,10 @@ const Index = () => {
                 { step: 3, title: 'Engage Leads', desc: 'AI crafts replies; track every conversation.' },
                 { step: 4, title: 'Pay As You Go', desc: 'Use credits only when you post or reply.' },
               ].map((s) => (
-                <div key={s.step} className="rounded-lg border bg-card p-6">
-                  <div className="text-primary text-sm font-semibold mb-1">Step {s.step}</div>
-                  <h3 className="text-xl font-semibold mb-2">{s.title}</h3>
-                  <p className="text-muted-foreground">{s.desc}</p>
+                <div key={s.step} className="rounded-lg border bg-card p-6" style={{color: 'black'}}>
+                  <div className="text-sm font-semibold mb-1" style={{color: '#333'}}>Step {s.step}</div>
+                  <h3 className="text-xl font-semibold mb-2" style={{color: 'black'}}>{s.title}</h3>
+                  <p className="text-muted-foreground" style={{color: '#666'}}>{s.desc}</p>
                 </div>
               ))}
             </div>
@@ -282,8 +282,8 @@ const Index = () => {
         <section id="features" className="py-20 px-4">
           <div className="container max-w-6xl mx-auto">
             <div className="text-center mb-12">
-              <h2 className="text-3xl md:text-4xl font-bold mb-3">Everything You Need</h2>
-              <p className="text-lg text-muted-foreground">Use the tools we built to scale your dealership operations</p>
+              <h2 className="text-3xl md:text-4xl font-bold mb-3" style={{color: 'black'}}>Everything You Need</h2>
+              <p className="text-lg text-muted-foreground" style={{color: '#666'}}>Use the tools we built to scale your dealership operations</p>
             </div>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[
@@ -294,11 +294,11 @@ const Index = () => {
                 { Icon: Shield, title: 'Human‑Behavior Automation', desc: 'Reduce detection risk with thoughtful pacing.' },
                 { Icon: CreditCard, title: 'Credits‑Based Billing', desc: 'Flexible, scalable pricing—no contracts.' },
               ].map(({ Icon, title, desc }) => (
-                <Card key={title} className="hover-scale">
+                <Card key={title} className="hover-scale" style={{color: 'black'}}>
                   <CardHeader>
-                    <Icon className="h-12 w-12 text-primary mb-4" />
-                    <CardTitle>{title}</CardTitle>
-                    <CardDescription>{desc}</CardDescription>
+                    <Icon className="h-12 w-12 mb-4" style={{color: 'black'}} />
+                    <CardTitle style={{color: 'black'}}>{title}</CardTitle>
+                    <CardDescription style={{color: '#666'}}>{desc}</CardDescription>
                   </CardHeader>
                 </Card>
               ))}
@@ -352,21 +352,21 @@ const Index = () => {
         <section id="faq" className="py-20 px-4 bg-muted/50">
           <div className="container max-w-4xl mx-auto">
             <div className="text-center mb-10">
-              <h2 className="text-3xl md:text-4xl font-bold mb-3">Frequently Asked Questions</h2>
-              <p className="text-lg text-muted-foreground">Quick answers about pricing, setup, and workflow</p>
+              <h2 className="text-3xl md:text-4xl font-bold mb-3" style={{color: 'black'}}>Frequently Asked Questions</h2>
+              <p className="text-lg text-muted-foreground" style={{color: '#666'}}>Quick answers about pricing, setup, and workflow</p>
             </div>
             <div className="space-y-4">
-              <details className="rounded-lg border bg-card p-4" open>
-                <summary className="cursor-pointer font-semibold">How does pricing work?</summary>
-                <p className="mt-2 text-muted-foreground">Salesonator uses credits. Use them for postings and AI replies. Buy more anytime.</p>
+              <details className="rounded-lg border bg-card p-4" open style={{color: 'black'}}>
+                <summary className="cursor-pointer font-semibold" style={{color: 'black'}}>How does pricing work?</summary>
+                <p className="mt-2 text-muted-foreground" style={{color: '#666'}}>Salesonator uses credits. Use them for postings and AI replies. Buy more anytime.</p>
               </details>
-              <details className="rounded-lg border bg-card p-4">
-                <summary className="cursor-pointer font-semibold">Do I need a long‑term contract?</summary>
-                <p className="mt-2 text-muted-foreground">No. Start small and scale up as needed—pay only for what you use.</p>
+              <details className="rounded-lg border bg-card p-4" style={{color: 'black'}}>
+                <summary className="cursor-pointer font-semibold" style={{color: 'black'}}>Do I need a long‑term contract?</summary>
+                <p className="mt-2 text-muted-foreground" style={{color: '#666'}}>No. Start small and scale up as needed—pay only for what you use.</p>
               </details>
-              <details className="rounded-lg border bg-card p-4">
-                <summary className="cursor-pointer font-semibold">Can my whole team use it?</summary>
-                <p className="mt-2 text-muted-foreground">Yes. Owners, managers, and salespeople can collaborate using the shared lead inbox.</p>
+              <details className="rounded-lg border bg-card p-4" style={{color: 'black'}}>
+                <summary className="cursor-pointer font-semibold" style={{color: 'black'}}>Can my whole team use it?</summary>
+                <p className="mt-2 text-muted-foreground" style={{color: '#666'}}>Yes. Owners, managers, and salespeople can collaborate using the shared lead inbox.</p>
               </details>
             </div>
           </div>
