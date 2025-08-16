@@ -274,8 +274,8 @@ export default function AdminPanel() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-1 flex-1">
               <Label htmlFor="ai-image-toggle">AI Image Generation</Label>
               <p className="text-sm text-muted-foreground">
                 Enable or disable AI-generated images for vehicles site-wide
@@ -291,8 +291,8 @@ export default function AdminPanel() {
           
           <Separator />
           
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-1 flex-1">
               <Label htmlFor="console-logging-toggle">Console Logging</Label>
               <p className="text-sm text-muted-foreground">
                 Enable collection of console logs from Chrome extension for debugging
@@ -416,8 +416,8 @@ export default function AdminPanel() {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Global AI Image Generation Toggle */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-1 flex-1">
               <Label htmlFor="ai-image-gen">AI Vehicle Image Generation</Label>
               <p className="text-sm text-muted-foreground">
                 Enable or disable AI-generated vehicle images for all users
@@ -439,7 +439,7 @@ export default function AdminPanel() {
           <div className="space-y-6">
             <div>
               <Label className="text-base font-medium">Individual Image Settings</Label>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground break-words">
                 Configure each image angle individually. Available variables: {`{{SEED_IMAGE_URL}}, {{YEAR}}, {{MAKE}}, {{MODEL}}, {{TRIM}}, {{EXTERIOR_COLOR}}, {{INTERIOR_COLOR}}, {{MILEAGE}}, {{ENGINE}}, {{DRIVETRAIN}}, {{FUEL_TYPE}}, {{DEALERSHIP_NAME}}, {{VIEW_DESCRIPTION}}`}
               </p>
             </div>
@@ -516,10 +516,10 @@ Ultra-high-resolution, realistic automotive photography with natural dynamic ran
               return (
                 <Card key={imageConfig.key} className="border-l-4 border-l-primary/20">
                   <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <div>
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="flex-1">
                         <CardTitle className="text-lg">{imageConfig.label}</CardTitle>
-                        <CardDescription>{imageConfig.description}</CardDescription>
+                        <CardDescription className="text-sm">{imageConfig.description}</CardDescription>
                       </div>
                       <Switch
                         checked={currentSettings[imageConfig.key]?.enabled ?? (index < 2)}
@@ -542,7 +542,7 @@ Ultra-high-resolution, realistic automotive photography with natural dynamic ran
                   
                   {(currentSettings[imageConfig.key]?.enabled ?? (index < 2)) && (
                     <CardContent className="space-y-4 pt-0">
-                      <div>
+                      <div className="space-y-2">
                         <Label htmlFor={`${imageConfig.key}-view`}>View Description</Label>
                         <Input
                           id={`${imageConfig.key}-view`}
@@ -564,11 +564,11 @@ Ultra-high-resolution, realistic automotive photography with natural dynamic ran
                         />
                       </div>
                       
-                      <div>
+                      <div className="space-y-2">
                         <Label htmlFor={`${imageConfig.key}-prompt`}>Custom Prompt Template</Label>
                         <Textarea
                           id={`${imageConfig.key}-prompt`}
-                          rows={8}
+                          rows={6}
                           value={currentSettings[imageConfig.key]?.prompt || defaultPrompt}
                           onChange={(e) => {
                             const newSettings = {
@@ -583,7 +583,7 @@ Ultra-high-resolution, realistic automotive photography with natural dynamic ran
                             updateSetting('ai_image_generation_individual', newSettings);
                           }}
                           disabled={settingsLoading}
-                          className="font-mono text-xs"
+                          className="font-mono text-xs resize-y"
                         />
                       </div>
                     </CardContent>
