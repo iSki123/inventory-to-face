@@ -53,7 +53,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </header>
 
           {/* Main Content */}
-          <main className="flex-1 overflow-auto">
+          <main className="flex-1 overflow-x-hidden overflow-y-auto">
+{/* Changed overflow-auto to overflow-x-hidden overflow-y-auto to prevent horizontal scrolling */}
             {children}
           </main>
         </div>
